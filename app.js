@@ -158,3 +158,68 @@ fetch("data/videos.json", { cache: "no-cache" })
     if (m) openPlayer(m[1]);
   })
   .catch(() => { $("status").textContent = "שגיאה בטעינת הסרטונים"; });
+
+// ---- meeting schedule: read live from the published Google Sheet ----
+const SCHEDULE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v/pub?gid=211949928&single=true&output=csv";
+const SCHEDULE_VIEW = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v/pubhtml?gid=211949928&single=true";
+let meetingsAll = false;
+
+function parseCsv(text) {
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += ch;
+  }
+  row.push(cell); rows.push(row);
+  return rows;
+}
+
+function renderSchedule(meetings) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const upcoming = meetings.filter((m) => m.date >= today);
+  const el = $("schedule");
+  if (!upcoming.length) { el.hidden = true; return; }
+  const list = meetingsAll ? upcoming : upcoming.slice(0, 4);
+  const maps = (place) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="schedule-head">
+      <h2>האסיפות הקרובות</h2>
+      <small>המידע עלול להשתנות · <a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">ללוח המלא</a></small>
+    </div>
+    <div class="meetings">
+      ${list.map((m, i) => `<div class="meeting${i === 0 ? " next" : ""}">
+        ${i === 0 ? `<div class="tag">האסיפה הבאה</div>` : ""}
+        <div class="when">יום ${esc(m.day)} <span>${esc(m.dateText)}</span></div>
+        <div>${m.place ? `<a href="${maps(m.place)}" target="_blank" rel="noopener">${esc(m.place)}</a>` : "מקום יעודכן"}</div>
+        ${m.notes ? `<div class="extra">${esc(m.notes)}</div>` : ""}
+        ${m.duty ? `<div class="extra">תורנות: ${esc(m.duty)}</div>` : ""}
+      </div>`).join("")}
+    </div>
+    ${upcoming.length > 4 ? `<p><button class="link-btn" id="meetings-toggle">${meetingsAll ? "הצג פחות" : `הצג את כל ${upcoming.length} האסיפות הקרובות`}</button></p>` : ""}`;
+  $("meetings-toggle")?.addEventListener("click", () => { meetingsAll = !meetingsAll; renderSchedule(meetings); });
+}
+
+fetch(SCHEDULE_CSV)
+  .then((r) => r.text())
+  .then((text) => {
+    // columns: תורנות, הערות, מקום, תאריך (dd/mm/yy), יום
+    const meetings = parseCsv(text).map(([duty, notes, place, dateText, day]) => {
+      const m = (dateText || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (!m) return null;
+      const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+      return { duty: duty.trim(), notes: notes.trim(), place: place.trim(), day: (day || "").trim(),
+               dateText: `${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}/${y}`, date: new Date(y, m[2] - 1, m[1]) };
+    }).filter(Boolean);
+    renderSchedule(meetings);
+  })
+  .catch(() => {}); // the schedule is a bonus; the videos still work without it

@@ -174,3 +174,23 @@ dialog::backdrop { background: rgba(10, 8, 5, .82); }
   width: 36px; height: 36px; border-radius: 50%; border: 0;
   background: rgba(0, 0, 0, .6); color: #fff; cursor: pointer; font-size: 1rem;
 }
+
+/* schedule */
+.schedule { margin: 28px 0 0; }
+.schedule-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.schedule-head h2 { font-family: "Frank Ruhl Libre", serif; font-size: 1.5rem; margin: 0; }
+.schedule-head small { color: var(--muted); }
+.meetings { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.meeting {
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 16px; border-inline-start: 4px solid var(--line);
+}
+.meeting.next { border-inline-start-color: var(--accent); }
+.meeting .when { font-weight: 700; font-size: 1.05rem; }
+.meeting .when span { color: var(--muted); font-weight: 400; font-size: .9rem; }
+.meeting .tag { font-size: .75rem; font-weight: 700; color: var(--accent-ink); }
+.meeting a { color: var(--ink); text-decoration: none; border-bottom: 1px dashed var(--muted); }
+.meeting a:hover { color: var(--accent-ink); }
+.meeting .extra { color: var(--muted); font-size: .88rem; margin-top: 4px; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent-ink); cursor: pointer; font-size: .95rem; }
+.schedule-head a { color: var(--accent-ink); }
