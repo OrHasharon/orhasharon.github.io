@@ -234,13 +234,18 @@ dialog::backdrop { background: rgba(10, 8, 5, .82); }
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px;
   background: var(--surface); border-radius: 10px; box-shadow: var(--shadow);
   border-inline-start: 4px solid var(--hallel);
-  padding: 8px 14px; font-size: .95rem;
+  padding: 6px 14px; font-size: .95rem;
 }
 .groups .sched-label { color: var(--hallel); }
 .group { display: inline-flex; align-items: center; gap: 6px; }
-.group img { width: 26px; height: 26px; object-fit: contain; flex: none; }
+.group img { width: 40px; height: 40px; object-fit: contain; flex: none; }
 .group small { color: var(--muted); font-size: .85rem; }
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent-ink); cursor: pointer; font-size: .88rem; margin-inline-start: auto; }
 .link-btn:hover { text-decoration: underline; }
 
 @media (max-width: 420px) { .duty-table table { font-size: .8rem; } .duty-table th, .duty-table td { padding: 5px 4px; } }
+
+.group-text { line-height: 1.4; }
+@media (max-width: 600px) { .group { display: flex; width: 100%; } .group-text small { display: block; } }
+
+@media (max-width: 600px) { .group-text .sep { display: none; } }
