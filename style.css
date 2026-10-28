@@ -228,15 +228,17 @@ dialog::backdrop { background: rgba(10, 8, 5, .82); }
 .duty-table tr.all td { color: var(--muted); }
 .duty-table tr:first-child td { font-weight: 700; }
 
-/* home groups */
-.groups { margin: 24px 0 0; }
-.groups h2 { font-family: "Frank Ruhl Libre", serif; font-size: 1.5rem; margin: 0 0 12px; }
-.group-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-.group {
-  display: flex; align-items: center; gap: 14px;
-  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px;
+/* home groups: slim bar like the schedule */
+.groups {
+  margin: 10px 0 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px;
+  background: var(--surface); border-radius: 10px; box-shadow: var(--shadow);
+  border-inline-start: 4px solid var(--hallel);
+  padding: 8px 14px; font-size: .95rem;
 }
-.group img { width: 64px; height: 64px; flex: none; object-fit: contain; }
-.group h3 { margin: 0 0 2px; font-size: 1.15rem; }
-.group p { margin: 0; color: var(--muted); }.link-btn { background: none; border: 0; padding: 0; color: var(--accent-ink); cursor: pointer; font-size: .88rem; margin-inline-start: auto; }
+.groups .sched-label { color: var(--hallel); }
+.group { display: inline-flex; align-items: center; gap: 6px; }
+.group img { width: 26px; height: 26px; object-fit: contain; flex: none; }
+.group small { color: var(--muted); font-size: .85rem; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent-ink); cursor: pointer; font-size: .88rem; margin-inline-start: auto; }
 .link-btn:hover { text-decoration: underline; }

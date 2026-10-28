@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
   <script>try { const p = new URLSearchParams(location.search).get("p") || "brown"; if (p !== "brown") document.documentElement.dataset.p = p; } catch {}</script>
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=21">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -35,17 +35,9 @@
   <main class="wrap">
     <section id="schedule" class="schedule" aria-label="האסיפות הקרובות" hidden></section>
     <section class="groups" aria-label="קבוצות בית">
-      <h2>קבוצות בית</h2>
-      <div class="group-list">
-        <div class="group">
-          <img src="img/rosh-haayin.png" alt="" onerror="this.hidden=true">
-          <div><h3>ראש העין</h3><p>ימי ראשון ב־20:30 · לפרטים: אוריה ונעמי סתוי</p></div>
-        </div>
-        <div class="group">
-          <img src="img/netanya.png" alt="" onerror="this.hidden=true">
-          <div><h3>נתניה</h3><p>ימי שני ב־19:00 · לפרטים: נועם הנדרן</p></div>
-        </div>
-      </div>
+      <span class="sched-label">קבוצות בית</span>
+      <span class="group"><img src="img/rosh-haayin.png" alt="" onerror="this.hidden=true"><strong>ראש העין</strong> · ימי ראשון 20:30 <small>(אוריה ונעמי סתוי)</small></span>
+      <span class="group"><img src="img/netanya.png" alt="" onerror="this.hidden=true"><strong>נתניה</strong> · ימי שני 19:00 <small>(נועם הנדרן)</small></span>
     </section>
     <section id="latest" class="latest" aria-label="השבת האחרונה"></section>
 
@@ -81,6 +73,6 @@
     </div>
   </dialog>
 
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>
