@@ -162,7 +162,6 @@ fetch("data/videos.json", { cache: "no-cache" })
 // ---- meeting schedule: read live from the published Google Sheet ----
 const SCHEDULE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v/pub?gid=211949928&single=true&output=csv";
 const SCHEDULE_VIEW = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v/pubhtml?gid=211949928&single=true";
-let meetingsAll = false;
 
 function parseCsv(text) {
   const rows = []; let row = [], cell = "", q = false;
@@ -183,32 +182,28 @@ function parseCsv(text) {
   return rows;
 }
 
+function meetingKind(day) {
+  if (day.includes("שבת")) return "אסיפה";
+  if (day.includes("שישי")) return "קבלת שבת";
+  return `יום ${day}`;
+}
+
 function renderSchedule(meetings) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const upcoming = meetings.filter((m) => m.date >= today);
   const el = $("schedule");
   if (!upcoming.length) { el.hidden = true; return; }
-  const list = meetingsAll ? upcoming : upcoming.slice(0, 4);
   const maps = (place) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
+  const place = (m) => m.place ? `<a href="${maps(m.place)}" target="_blank" rel="noopener">${esc(m.place)}</a>` : "מקום יעודכן";
+  const short = (m) => m.dateText.slice(0, 5);
+  const [next, ...rest] = upcoming;
   el.hidden = false;
   el.innerHTML = `
-    <div class="schedule-head">
-      <h2>האסיפות הקרובות</h2>
-      <small>המידע עלול להשתנות · <a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">ללוח המלא</a></small>
-    </div>
-    <div class="meetings">
-      ${list.map((m, i) => `<div class="meeting${i === 0 ? " next" : ""}">
-        ${i === 0 ? `<div class="tag">האסיפה הבאה</div>` : ""}
-        <div class="when">יום ${esc(m.day)} <span>${esc(m.dateText)}</span></div>
-        <div>${m.place ? `<a href="${maps(m.place)}" target="_blank" rel="noopener">${esc(m.place)}</a>` : "מקום יעודכן"}</div>
-        ${m.notes ? `<div class="extra">${esc(m.notes)}</div>` : ""}
-        ${m.duty ? `<div class="extra">תורנות: ${esc(m.duty)}</div>` : ""}
-      </div>`).join("")}
-    </div>
-    ${upcoming.length > 4 ? `<p><button class="link-btn" id="meetings-toggle">${meetingsAll ? "הצג פחות" : `הצג את כל ${upcoming.length} האסיפות הקרובות`}</button></p>` : ""}`;
-  $("meetings-toggle")?.addEventListener("click", () => { meetingsAll = !meetingsAll; renderSchedule(meetings); });
+    <span class="sched-label">האסיפה הבאה</span>
+    <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
+    ${rest.length ? `<span class="sched-rest">אחר כך: ${rest.slice(0, 2).map((m) => `${meetingKind(m.day)} ${short(m)}, ${place(m)}`).join(" · ")}</span>` : ""}
+    <a class="sched-all" href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a>`;
 }
-
 fetch(SCHEDULE_CSV)
   .then((r) => r.text())
   .then((text) => {
