@@ -40,7 +40,7 @@ button { font: inherit; color: inherit; }
 
 /* header */
 .site-header {
-  background: linear-gradient(160deg, #3b2f22, #5a4529);
+  background: linear-gradient(160deg, var(--hdr1, #3b2f22), var(--hdr2, #5a4529));
   color: #fbf4e6;
   padding: 28px 0 26px;
 }
@@ -194,5 +194,29 @@ dialog::backdrop { background: rgba(10, 8, 5, .82); }
 .brand { display: flex; align-items: center; gap: 14px; }
 .logo { width: 64px; height: 64px; flex: none; border-radius: 50%; box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
 @media (max-width: 600px) { .logo { width: 52px; height: 52px; } }
-.verse { font-family: "Frank Ruhl Libre", serif; font-size: 1.02rem; line-height: 1.6; max-width: 46ch; margin-top: 6px; }
+.verse { font-family: "Frank Ruhl Libre", serif; font-size: 1.02rem; line-height: 1.6; margin-top: 6px; }
+@media (min-width: 960px) { .verse { white-space: nowrap; } }
 @media (max-width: 600px) { .verse { font-size: .92rem; } }
+
+/* palette previews: ?p=night | techelet | stone */
+:root[data-p="night"] {
+  --hdr1: #0f1a2e; --hdr2: #1d3257;
+  --bg: #f6f3ec; --line: #e6dfd0; --muted: #6f6a60; --ink: #1c1f26;
+  --accent: #c49a2c; --accent-ink: #8c6a12; --hallel: #2f6b8f;
+}
+:root[data-p="techelet"] {
+  --hdr1: #0a3359; --hdr2: #17609a;
+  --bg: #f3f7fa; --line: #dbe5ed; --muted: #5f6f7d; --ink: #18232d;
+  --accent: #d1a237; --accent-ink: #1d5f96; --hallel: #2f8a7d;
+}
+:root[data-p="stone"] {
+  --hdr1: #2f3a24; --hdr2: #56653a;
+  --bg: #f4efe4; --line: #e4dccb; --muted: #756c5c; --ink: #2a271f;
+  --accent: #b4622f; --accent-ink: #8f4a1f; --hallel: #56653a;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-p] { --bg: #13161c; --surface: #1d2129; --ink: #ece8df; --muted: #a29d92; --line: #343a45; }
+  :root[data-p="night"] { --accent-ink: #e0b955; --hallel: #6fa8cc; }
+  :root[data-p="techelet"] { --accent-ink: #7db8e6; --hallel: #6cc0b3; }
+  :root[data-p="stone"] { --accent-ink: #e08d58; --hallel: #a5b67c; }
+}
