@@ -194,3 +194,5 @@ dialog::backdrop { background: rgba(10, 8, 5, .82); }
 .brand { display: flex; align-items: center; gap: 14px; }
 .logo { width: 64px; height: 64px; flex: none; border-radius: 50%; box-shadow: 0 2px 10px rgba(0, 0, 0, .35); }
 @media (max-width: 600px) { .logo { width: 52px; height: 52px; } }
+.verse { font-family: "Frank Ruhl Libre", serif; font-size: 1.02rem; line-height: 1.6; max-width: 46ch; margin-top: 6px; }
+@media (max-width: 600px) { .verse { font-size: .92rem; } }
