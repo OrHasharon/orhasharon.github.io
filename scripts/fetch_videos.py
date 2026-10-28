@@ -154,7 +154,34 @@ def add_thumbs(videos):
         v["thumb"] = known.get(v["id"]) or best_thumb(v["id"])
 
 
+SCHEDULE_CSV = (
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v"
+    "/pub?gid=211949928&single=true&output=csv"
+)
+SCHEDULE_OUT = OUT.parent / "schedule.json"
+
+
+def track_schedule():
+    # Google doesn't expose the sheet's modified time, so record when its content last changed
+    import hashlib
+
+    try:
+        body = urllib.request.urlopen(SCHEDULE_CSV, timeout=30).read()
+    except Exception as exc:  # noqa: BLE001
+        print(f"schedule fetch failed: {exc}", file=sys.stderr)
+        return
+    digest = hashlib.sha256(body).hexdigest()
+    old = json.loads(SCHEDULE_OUT.read_text(encoding="utf-8")) if SCHEDULE_OUT.exists() else {}
+    if old.get("hash") != digest:
+        SCHEDULE_OUT.write_text(
+            json.dumps({"hash": digest, "changed": datetime.now().strftime("%Y-%m-%d")}),
+            encoding="utf-8",
+        )
+        print("schedule changed")
+
+
 def main():
+    track_schedule()
     try:
         videos, playlists = fetch_with_ytdlp()
         source = "yt-dlp"

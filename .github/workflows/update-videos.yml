@@ -1,4 +1,4 @@
-name: Update videos
+﻿name: Update videos
 
 on:
   schedule:
@@ -23,10 +23,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # ignore the timestamp-only change so we don't commit every run
-          if git diff --quiet -I '"updated"' -I '"source"' data/videos.json; then
-            echo "no new videos"
+          if git diff --quiet -I '"updated"' -I '"source"' data/ && [ -z "$(git ls-files --others --exclude-standard data/)" ]; then
+            echo "nothing new"
           else
-            git add data/videos.json
-            git commit -m "Update videos"
+            git add data/
+            git commit -m "Update videos/schedule"
             git push
           fi

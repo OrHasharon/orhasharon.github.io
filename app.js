@@ -182,13 +182,20 @@ function parseCsv(text) {
   return rows;
 }
 
+const SATURDAY_TIMES = "התאספות 10:40 · פתיחה בהלל 11:00";
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function meetingKind(day) {
   if (day.includes("שבת")) return "אסיפה";
   if (day.includes("שישי")) return "קבלת שבת";
   return `יום ${day}`;
 }
 
-function renderSchedule(meetings) {
+function renderSchedule(meetings, changed) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const upcoming = meetings.filter((m) => m.date >= today);
   const el = $("schedule");
@@ -196,17 +203,22 @@ function renderSchedule(meetings) {
   const maps = (place) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
   const place = (m) => m.place ? `<a href="${maps(m.place)}" target="_blank" rel="noopener">${esc(m.place)}</a>` : "מקום יעודכן";
   const short = (m) => m.dateText.slice(0, 5);
-  const [next, ...rest] = upcoming;
+  const next = upcoming[0];
   el.hidden = false;
   el.innerHTML = `
     <span class="sched-label">האסיפה הבאה</span>
     <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
-    ${rest.length ? `<span class="sched-rest">אחר כך: ${rest.slice(0, 2).map((m) => `${meetingKind(m.day)} ${short(m)}, ${place(m)}`).join(" · ")}</span>` : ""}
-    <a class="sched-all" href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a>`;
+    ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
+    <span class="sched-all">${changed ? `המידע מעודכן ל־${fmtDate(changed)} · ` : ""}<a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>`;
 }
-fetch(SCHEDULE_CSV)
-  .then((r) => r.text())
-  .then((text) => {
+Promise.all([
+  fetch(SCHEDULE_CSV).then((r) => r.text()),
+  fetch("data/schedule.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({})),
+])
+  .then(async ([text, tracked]) => {
+    // content differs from the last tracked version -> it was edited since, i.e. today
+    const hash = await sha256(text).catch(() => tracked.hash);
+    const changed = hash === tracked.hash ? tracked.changed : new Date().toISOString().slice(0, 10);
     // columns: תורנות, הערות, מקום, תאריך (dd/mm/yy), יום
     const meetings = parseCsv(text).map(([duty, notes, place, dateText, day]) => {
       const m = (dateText || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
@@ -215,6 +227,6 @@ fetch(SCHEDULE_CSV)
       return { duty: duty.trim(), notes: notes.trim(), place: place.trim(), day: (day || "").trim(),
                dateText: `${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}/${y}`, date: new Date(y, m[2] - 1, m[1]) };
     }).filter(Boolean);
-    renderSchedule(meetings);
+    renderSchedule(meetings, changed);
   })
   .catch(() => {}); // the schedule is a bonus; the videos still work without it
