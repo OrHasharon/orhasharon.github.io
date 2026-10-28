@@ -1,4 +1,4 @@
-"""Fetch the Kehilat Or Hasharon YouTube catalog into data/videos.json.
+﻿"""Fetch the Kehilat Or Hasharon YouTube catalog into data/videos.json.
 
 Runs daily from GitHub Actions. Uses yt-dlp for the full catalog + playlists;
 if YouTube blocks it, falls back to the channel RSS feed (latest 15) merged
@@ -136,6 +136,24 @@ def fetch_rss_merge():
     return list(known.values()), old["playlists"]
 
 
+def best_thumb(vid):
+    # a missing size isn't always obvious client-side, so resolve it once here
+    for size in ("maxresdefault", "sddefault", "hqdefault"):
+        req = urllib.request.Request(f"https://i.ytimg.com/vi/{vid}/{size}.jpg", method="HEAD")
+        try:
+            urllib.request.urlopen(req, timeout=15)
+            return size
+        except Exception:  # noqa: BLE001
+            continue
+    return "mqdefault"
+
+
+def add_thumbs(videos):
+    known = {v["id"]: v.get("thumb") for v in load_existing()["videos"]}
+    for v in videos:
+        v["thumb"] = known.get(v["id"]) or best_thumb(v["id"])
+
+
 def main():
     try:
         videos, playlists = fetch_with_ytdlp()
@@ -145,6 +163,7 @@ def main():
         videos, playlists = fetch_rss_merge()
         source = "rss"
 
+    add_thumbs(videos)
     videos.sort(key=lambda v: (v["date"] or "", v["type"] == "sermon"), reverse=True)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(

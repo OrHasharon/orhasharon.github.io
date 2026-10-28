@@ -119,7 +119,7 @@ h1 {
 .card:hover { transform: translateY(-2px); }
 .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .thumb { position: relative; aspect-ratio: 16 / 9; background: var(--line); }
-.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .dur {
   position: absolute; bottom: 8px; left: 8px;
   background: rgba(0, 0, 0, .75); color: #fff;

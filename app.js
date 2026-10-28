@@ -17,14 +17,22 @@ function fmtDur(sec) {
   const p = (n) => String(n).padStart(2, "0");
   return h ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
 }
-const thumb = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+const yt = (id, size) => `https://i.ytimg.com/vi/${id}/${size}.jpg`;
+const thumb = (id) => yt(id, "mqdefault");
+// Let the browser pick by display size; v.thumb is the largest size YouTube has for that video.
+const WIDTHS = { maxresdefault: 1280, sddefault: 640, hqdefault: 480 };
+function imgHtml(id, sizes = "(max-width: 560px) 100vw, 280px") {
+  const big = byId[id]?.thumb;
+  const srcset = WIDTHS[big] ? ` srcset="${thumb(id)} 320w, ${yt(id, big)} ${WIDTHS[big]}w" sizes="${sizes}"` : "";
+  return `<img loading="lazy" alt="" src="${thumb(id)}"${srcset}>`;
+}
 
-function cardHtml(v, { badge = false } = {}) {
+function cardHtml(v, { badge = false, sizes } = {}) {
   const title = v.type === "hallel" ? `הלל – ${fmtDate(v.date)}` : v.title;
   const meta = [fmtDate(v.date), v.series[0] && `<span class="series">${esc(v.series[0])}</span>`].filter(Boolean).join(" · ");
   return `<button class="card" data-id="${v.id}">
     <div class="thumb">
-      <img loading="lazy" src="${thumb(v.id)}" alt="">
+      ${imgHtml(v.id, sizes)}
       ${badge ? `<span class="badge ${v.type}">${v.type === "hallel" ? "הלל" : "דרשה"}</span>` : ""}
       ${v.duration ? `<span class="dur">${fmtDur(v.duration)}</span>` : ""}
     </div>
@@ -44,8 +52,8 @@ function renderLatest() {
   $("latest").innerHTML = `
     <div class="latest-head"><h2>השבת האחרונה</h2><span>${fmtDate(latestDate)}</span></div>
     <div class="latest-grid">
-      ${sermon ? cardHtml(sermon, { badge: true }) : ""}
-      ${hallel ? cardHtml(hallel, { badge: true }) : ""}
+      ${sermon ? cardHtml(sermon, { badge: true, sizes: "(max-width: 720px) 100vw, 720px" }) : ""}
+      ${hallel ? cardHtml(hallel, { badge: true, sizes: "(max-width: 720px) 100vw, 360px" }) : ""}
     </div>`;
 }
 
@@ -77,7 +85,7 @@ function render() {
     grid.innerHTML = list.map((p) => {
       const first = p.videoIds.map((id) => byId[id]).filter(Boolean).sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0];
       return `<button class="card series-card" data-series="${esc(p.title)}">
-        <div class="thumb" data-n="${p.videoIds.length}"><img loading="lazy" src="${thumb(first?.id || p.videoIds[0])}" alt=""></div>
+        <div class="thumb" data-n="${p.videoIds.length}">${imgHtml(first?.id || p.videoIds[0], "(max-width: 560px) 100vw, 360px")}</div>
         <div class="card-body"><p class="title">${esc(p.title)}</p>
         <div class="meta">${first ? "מ־" + fmtDate(first.date) : ""}</div></div>
       </button>`;
