@@ -88,13 +88,18 @@ def fetch_with_ytdlp():
             raise RuntimeError(f"only {len(videos)} videos returned - probably blocked")
 
         # titles with no date or a typo'd one (e.g. 2925): use the real upload date
+        # (YouTube often hides upload_date from cloud IPs, so prefer a date we already resolved)
         today = datetime.now().strftime("%Y-%m-%d")
+        known = {v["id"]: v.get("date") for v in load_existing()["videos"]}
         for v in videos.values():
-            if not v["date"] or v["date"] > today:
-                full = ydl.extract_info(f"https://www.youtube.com/watch?v={v['id']}", download=False) or {}
-                up = full.get("upload_date")
-                if up:
-                    v["date"] = f"{up[:4]}-{up[4:6]}-{up[6:]}"
+            if v["date"] and v["date"] <= today:
+                continue
+            if known.get(v["id"]) and known[v["id"]] <= today:
+                v["date"] = known[v["id"]]
+                continue
+            full = ydl.extract_info(f"https://www.youtube.com/watch?v={v['id']}", download=False) or {}
+            up = full.get("upload_date")
+            v["date"] = f"{up[:4]}-{up[4:6]}-{up[6:]}" if up else None
 
         playlists = []
         for pid in playlist_ids(ydl):
@@ -112,8 +117,12 @@ def fetch_with_ytdlp():
     return list(videos.values()), playlists
 
 
+def load_existing():
+    return json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {"videos": [], "playlists": []}
+
+
 def fetch_rss_merge():
-    old = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {"videos": [], "playlists": []}
+    old = load_existing()
     known = {v["id"]: v for v in old["videos"]}
     url = f"https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}"
     root = ET.fromstring(urllib.request.urlopen(url, timeout=30).read())
