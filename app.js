@@ -195,6 +195,8 @@ function meetingKind(day) {
   return `יום ${day}`;
 }
 
+let dutyOpen = false;
+
 function renderSchedule(meetings, changed) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const upcoming = meetings.filter((m) => m.date >= today);
@@ -204,29 +206,64 @@ function renderSchedule(meetings, changed) {
   const place = (m) => m.place ? `<a href="${maps(m.place)}" target="_blank" rel="noopener">${esc(m.place)}</a>` : "מקום יעודכן";
   const short = (m) => m.dateText.slice(0, 5);
   const next = upcoming[0];
+  const withDuty = upcoming.filter((m) => m.duty);
   el.hidden = false;
   el.innerHTML = `
-    <span class="sched-label">האסיפה הבאה</span>
-    <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
-    ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
-    <span class="sched-all">${changed ? `המידע מעודכן ל־${fmtDate(changed)} · ` : ""}<a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>`;
+    <div class="sched-row">
+      <span class="sched-label">האסיפה הבאה</span>
+      <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
+      ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
+      <span class="sched-all">${changed ? `המידע מעודכן ל־${fmtDate(changed)} · ` : ""}<a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>
+    </div>
+    ${withDuty.length ? `<div class="sched-row sched-duty">
+      <span class="sched-label">תורנות</span>
+      <span>${next.duty ? esc(next.duty) : "טרם שובץ"}</span>
+      <button class="link-btn" id="duty-toggle" aria-expanded="${dutyOpen}">${dutyOpen ? "הסתר שיבוץ" : "שיבוץ מלא"}</button>
+    </div>
+    <div class="duty-table"${dutyOpen ? "" : " hidden"}>
+      <table>
+        <thead><tr><th>תאריך</th><th>אסיפה</th><th>מקום</th><th>תורנות</th></tr></thead>
+        <tbody>${upcoming.map((m) => `<tr${m.duty === "כולם" ? ' class="all"' : ""}><td>${short(m)}</td><td>${meetingKind(m.day)}</td><td>${esc(m.place)}</td><td>${esc(m.duty || "")}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>` : ""}`;
+  $("duty-toggle")?.addEventListener("click", () => { dutyOpen = !dutyOpen; renderSchedule(meetings, changed); });
 }
+
+function parseSheet(text) {
+  // columns: תורנות, הערות, מקום, תאריך (dd/mm/yy), יום
+  return parseCsv(text).map(([duty = "", notes = "", place = "", dateText = "", day = ""]) => {
+    const m = dateText.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+    return { duty: duty.trim(), notes: notes.trim(), place: place.trim(), day: day.trim(), date: new Date(y, m[2] - 1, m[1]) };
+  }).filter(Boolean);
+}
+
+// the sheet wins; duty.json fills in a missing duty and dates past the sheet's end
+function mergeMeetings(sheet, roster) {
+  const key = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const byDate = new Map(sheet.map((m) => [key(m.date), m]));
+  for (const r of roster) {
+    const [y, mo, d] = r.date.split("-").map(Number);
+    const date = new Date(y, mo - 1, d);
+    const m = byDate.get(key(date));
+    if (m) { if (!m.duty) m.duty = r.duty; if (!m.place) m.place = r.place; }
+    else byDate.set(key(date), { duty: r.duty, notes: "", place: r.place, day: r.day, date });
+  }
+  return [...byDate.values()].sort((a, b) => a.date - b.date).map((m) => ({
+    ...m, dateText: `${String(m.date.getDate()).padStart(2, "0")}/${String(m.date.getMonth() + 1).padStart(2, "0")}/${m.date.getFullYear()}`,
+  }));
+}
+
 Promise.all([
-  fetch(SCHEDULE_CSV).then((r) => r.text()),
+  fetch(SCHEDULE_CSV).then((r) => r.text()).catch(() => ""),
   fetch("data/schedule.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({})),
+  fetch("data/duty.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({ meetings: [] })),
 ])
-  .then(async ([text, tracked]) => {
+  .then(async ([text, tracked, roster]) => {
     // content differs from the last tracked version -> it was edited since, i.e. today
-    const hash = await sha256(text).catch(() => tracked.hash);
+    const hash = text ? await sha256(text).catch(() => tracked.hash) : tracked.hash;
     const changed = hash === tracked.hash ? tracked.changed : new Date().toISOString().slice(0, 10);
-    // columns: תורנות, הערות, מקום, תאריך (dd/mm/yy), יום
-    const meetings = parseCsv(text).map(([duty, notes, place, dateText, day]) => {
-      const m = (dateText || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-      if (!m) return null;
-      const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
-      return { duty: duty.trim(), notes: notes.trim(), place: place.trim(), day: (day || "").trim(),
-               dateText: `${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}/${y}`, date: new Date(y, m[2] - 1, m[1]) };
-    }).filter(Boolean);
-    renderSchedule(meetings, changed);
+    renderSchedule(mergeMeetings(parseSheet(text), roster.meetings || []), changed);
   })
   .catch(() => {}); // the schedule is a bonus; the videos still work without it
