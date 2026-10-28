@@ -210,7 +210,7 @@ function renderSchedule(meetings, changed) {
   el.hidden = false;
   el.innerHTML = `
     <div class="sched-row">
-      <span class="sched-label">האסיפה הבאה</span>
+      <span class="sched-label">המפגש הבא</span>
       <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
       ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
       <span class="sched-all">${changed ? `המידע מעודכן ל־${fmtDate(changed)} · ` : ""}<a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>
