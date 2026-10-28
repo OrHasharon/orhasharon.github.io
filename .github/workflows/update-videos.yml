@@ -1,0 +1,32 @@
+name: Update videos
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -U yt-dlp
+      - run: python scripts/fetch_videos.py
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # ignore the timestamp-only change so we don't commit every run
+          if git diff --quiet -I '"updated"' -I '"source"' data/videos.json; then
+            echo "no new videos"
+          else
+            git add data/videos.json
+            git commit -m "Update videos"
+            git push
+          fi
