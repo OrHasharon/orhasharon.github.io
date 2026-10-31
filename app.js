@@ -184,11 +184,6 @@ function parseCsv(text) {
 
 const SATURDAY_TIMES = "התאספות 10:40 · פתיחה בהלל 11:00";
 
-async function sha256(text) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 function meetingKind(day) {
   if (day.includes("שבת")) return "אסיפה";
   if (day.includes("שישי")) return "קבלת שבת";
@@ -197,9 +192,17 @@ function meetingKind(day) {
 
 let dutyOpen = false;
 
-function renderSchedule(meetings, changed) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const upcoming = meetings.filter((m) => m.date >= today);
+// a meeting stays "next" until it's over: Saturday ends ~13:00, anything else at the end of its day
+function meetingEnd(m) {
+  const end = new Date(m.date);
+  if (meetingKind(m.day) === "אסיפה") end.setHours(13, 0, 0, 0);
+  else end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+function renderSchedule(meetings) {
+  const now = new Date();
+  const upcoming = meetings.filter((m) => meetingEnd(m) > now);
   const el = $("schedule");
   if (!upcoming.length) { el.hidden = true; return; }
   const maps = (place) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
@@ -213,7 +216,7 @@ function renderSchedule(meetings, changed) {
       <span class="sched-label">המפגש הבא</span>
       <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
       ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
-      <span class="sched-all">${changed ? `המידע מעודכן ל־${fmtDate(changed)} · ` : ""}<a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>
+      <span class="sched-all"><a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>
     </div>
     ${withDuty.length ? `<div class="sched-row sched-duty">
       <span class="sched-label">תורנות</span>
@@ -226,7 +229,7 @@ function renderSchedule(meetings, changed) {
         <tbody>${upcoming.map((m) => `<tr${m.duty === "כולם" ? ' class="all"' : ""}><td>${short(m)}</td><td>${meetingKind(m.day)}</td><td>${esc(m.place)}</td><td>${esc(m.duty || "")}</td></tr>`).join("")}</tbody>
       </table>
     </div>` : ""}`;
-  $("duty-toggle")?.addEventListener("click", () => { dutyOpen = !dutyOpen; renderSchedule(meetings, changed); });
+  $("duty-toggle")?.addEventListener("click", () => { dutyOpen = !dutyOpen; renderSchedule(meetings); });
 }
 
 function parseSheet(text) {
@@ -257,13 +260,16 @@ function mergeMeetings(sheet, roster) {
 
 Promise.all([
   fetch(SCHEDULE_CSV).then((r) => r.text()).catch(() => ""),
-  fetch("data/schedule.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({})),
   fetch("data/duty.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({ meetings: [] })),
 ])
-  .then(async ([text, tracked, roster]) => {
-    // content differs from the last tracked version -> it was edited since, i.e. today
-    const hash = text ? await sha256(text).catch(() => tracked.hash) : tracked.hash;
-    const changed = hash === tracked.hash ? tracked.changed : new Date().toISOString().slice(0, 10);
-    renderSchedule(mergeMeetings(parseSheet(text), roster.meetings || []), changed);
-  })
+  .then(([text, roster]) => renderSchedule(mergeMeetings(parseSheet(text), roster.meetings || [])))
   .catch(() => {}); // the schedule is a bonus; the videos still work without it
+
+// "updated as of": the last successful check of YouTube + the sheet (the schedule itself is read live)
+const fmtStamp = (d) => `${fmtDate(d.toLocaleDateString("en-CA"))} בשעה ${d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`;
+fetch("https://api.github.com/repos/OrHasharon/orhasharon.github.io/actions/workflows/update-videos.yml/runs?status=success&per_page=1")
+  .then((r) => r.json())
+  .then((d) => new Date(d.workflow_runs[0].updated_at))
+  .catch(() => fetch("data/videos.json").then((r) => r.json()).then((d) => new Date(d.updated)))
+  .then((d) => { $("freshness").textContent = `המידע מעודכן ל־${fmtStamp(d)}`; })
+  .catch(() => {});

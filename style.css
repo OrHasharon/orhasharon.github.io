@@ -275,3 +275,6 @@ body::before {
 .card { border: 1px solid var(--line); }
 .player-box { background: #111827; }
 .tabs button[aria-selected="true"] { color: #fff; }
+
+.freshness { margin: 18px 0 -10px; font-size: .82rem; color: var(--muted); }
+.freshness:empty { display: none; }
