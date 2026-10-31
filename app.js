@@ -161,7 +161,6 @@ fetch("data/videos.json", { cache: "no-cache" })
 
 // ---- meeting schedule: read live from the published Google Sheet ----
 const SCHEDULE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v/pub?gid=211949928&single=true&output=csv";
-const SCHEDULE_VIEW = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v/pubhtml?gid=211949928&single=true";
 
 function parseCsv(text) {
   const rows = []; let row = [], cell = "", q = false;
@@ -190,7 +189,7 @@ function meetingKind(day) {
   return `יום ${day}`;
 }
 
-let dutyOpen = false;
+let openPanel = null; // "schedule" | "duty" | null
 
 // a meeting stays "next" until it's over: Saturday ends ~13:00, anything else at the end of its day
 function meetingEnd(m) {
@@ -209,29 +208,40 @@ function renderSchedule(meetings) {
   const place = (m) => m.place ? `<a href="${maps(m.place)}" target="_blank" rel="noopener">${esc(m.place)}</a>` : "מקום יעודכן";
   const short = (m) => m.dateText.slice(0, 5);
   const next = upcoming[0];
-  const withDuty = upcoming.filter((m) => m.duty);
+  const hasDuty = upcoming.some((m) => m.duty);
+  const hasNotes = upcoming.some((m) => m.notes);
+  const toggle = (id, label, open) =>
+    `<button class="link-btn" data-panel="${id}" aria-expanded="${open}">${open ? "הסתר" : label}</button>`;
+  const table = (head, rows) => `<div class="duty-table"><table><thead><tr>${head.map((h) => `<th${h === "שעות" ? <tbody>${rows}</tbody></table></div>`;
+
+  const schedulePanel = openPanel === "schedule" ? table(
+    ["תאריך", "מפגש", "מקום", "שעות", ...(hasNotes ? ["הערות"] : [])],
+    upcoming.map((m) => `<tr${m === next ? ' class="next"' : ""}><td>יום ${esc(m.day)} ${short(m)}</td><td>${meetingKind(m.day)}</td><td>${place(m)}</td>
+      <td class="col-times">${meetingKind(m.day) === "אסיפה" ? "התאספות 10:40 · הלל 11:00" : ""}</td>${hasNotes ? `<td>${esc(m.notes)}</td>` : ""}</tr>`).join("")) : "";
+  const dutyPanel = openPanel === "duty" ? table(
+    ["תאריך", "מפגש", "תורנות"],
+    upcoming.map((m) => `<tr class="${m === next ? "next" : ""}${m.duty === "כולם" ? " all" : ""}"><td>${short(m)}</td><td>${meetingKind(m.day)}</td><td>${esc(m.duty || "טרם שובץ")}</td></tr>`).join("")) : "";
+
   el.hidden = false;
   el.innerHTML = `
     <div class="sched-row">
       <span class="sched-label">המפגש הבא</span>
       <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
       ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
-      <span class="sched-all"><a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>
+      ${toggle("schedule", "לוח מלא", openPanel === "schedule")}
     </div>
-    ${withDuty.length ? `<div class="sched-row sched-duty">
+    ${schedulePanel}
+    ${hasDuty ? `<div class="sched-row sched-duty">
       <span class="sched-label">תורנות</span>
       <span>${next.duty ? esc(next.duty) : "טרם שובץ"}</span>
-      <button class="link-btn" id="duty-toggle" aria-expanded="${dutyOpen}">${dutyOpen ? "הסתר שיבוץ" : "שיבוץ מלא"}</button>
+      ${toggle("duty", "שיבוץ מלא", openPanel === "duty")}
     </div>
-    <div class="duty-table"${dutyOpen ? "" : " hidden"}>
-      <table>
-        <thead><tr><th>תאריך</th><th>אסיפה</th><th>מקום</th><th>תורנות</th></tr></thead>
-        <tbody>${upcoming.map((m) => `<tr${m.duty === "כולם" ? ' class="all"' : ""}><td>${short(m)}</td><td>${meetingKind(m.day)}</td><td>${esc(m.place)}</td><td>${esc(m.duty || "")}</td></tr>`).join("")}</tbody>
-      </table>
-    </div>` : ""}`;
-  $("duty-toggle")?.addEventListener("click", () => { dutyOpen = !dutyOpen; renderSchedule(meetings); });
+    ${dutyPanel}` : ""}`;
+  el.querySelectorAll("[data-panel]").forEach((b) => b.addEventListener("click", () => {
+    openPanel = openPanel === b.dataset.panel ? null : b.dataset.panel;
+    renderSchedule(meetings);
+  }));
 }
-
 function parseSheet(text) {
   // columns: תורנות, הערות, מקום, תאריך (dd/mm/yy), יום
   return parseCsv(text).map(([duty = "", notes = "", place = "", dateText = "", day = ""]) => {
