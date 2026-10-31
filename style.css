@@ -249,3 +249,29 @@ dialog::backdrop { background: rgba(10, 8, 5, .82); }
 @media (max-width: 600px) { .group { display: flex; width: 100%; } .group-text small { display: block; } }
 
 @media (max-width: 600px) { .group-text .sep { display: none; } }
+
+/* ---- night background (img/background.jpg) ---- */
+:root, :root:not([data-p]) {
+  --bg: #0a0f1c;
+  --surface: rgba(16, 22, 38, .78);
+  --ink: #eef1f6;
+  --muted: #a3adbd;
+  --line: rgba(255, 255, 255, .12);
+  --accent: #d6a54c;
+  --accent-ink: #e8c070;
+  --hallel: #7cc4b2;
+  --shadow: 0 4px 24px rgba(0, 0, 0, .35);
+}
+body { background: #0a0f1c; }
+/* fixed layer instead of background-attachment: fixed, which iOS ignores */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background: #0a0f1c url("img/background.jpg") center bottom / cover no-repeat;
+}
+.site-header { background: linear-gradient(rgba(0, 0, 0, .35), rgba(0, 0, 0, 0)); }
+.card, .schedule, .groups, #search, .chip, .more {
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.card { border: 1px solid var(--line); }
+.player-box { background: #111827; }
+.tabs button[aria-selected="true"] { color: #fff; }
