@@ -212,7 +212,8 @@ function renderSchedule(meetings) {
   const hasNotes = upcoming.some((m) => m.notes);
   const toggle = (id, label, open) =>
     `<button class="link-btn" data-panel="${id}" aria-expanded="${open}">${open ? "הסתר" : label}</button>`;
-  const table = (head, rows) => `<div class="duty-table"><table><thead><tr>${head.map((h) => `<th${h === "שעות" ? <tbody>${rows}</tbody></table></div>`;
+  const th = (h) => `<th${h === "שעות" ? ' class="col-times"' : ""}>${h}</th>`;
+  const table = (head, rows) => `<div class="duty-table"><table><thead><tr>${head.map(th).join("")}</tr></thead><tbody>${rows}</tbody></table></div>`;
 
   const schedulePanel = openPanel === "schedule" ? table(
     ["תאריך", "מפגש", "מקום", "שעות", ...(hasNotes ? ["הערות"] : [])],
