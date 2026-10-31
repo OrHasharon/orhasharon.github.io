@@ -278,3 +278,6 @@ body::before {
 
 .freshness { margin: 18px 0 -10px; font-size: .82rem; color: var(--muted); }
 .freshness:empty { display: none; }
+
+.duty-src { margin: 8px 0 0; font-size: .8rem; }
+.duty-src a { color: var(--muted); border: 0; }

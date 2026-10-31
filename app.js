@@ -210,25 +210,26 @@ function renderSchedule(meetings) {
   const short = (m) => m.dateText.slice(0, 5);
   const next = upcoming[0];
   const withDuty = upcoming.filter((m) => m.duty);
+  const hasNotes = upcoming.some((m) => m.notes);
   el.hidden = false;
   el.innerHTML = `
     <div class="sched-row">
       <span class="sched-label">המפגש הבא</span>
       <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
       ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
-      <span class="sched-all"><a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לוח מלא</a></span>
+      <button class="link-btn" id="duty-toggle" aria-expanded="${dutyOpen}">${dutyOpen ? "הסתר לוח" : "לוח מלא"}</button>
     </div>
     ${withDuty.length ? `<div class="sched-row sched-duty">
       <span class="sched-label">תורנות</span>
       <span>${next.duty ? esc(next.duty) : "טרם שובץ"}</span>
-      <button class="link-btn" id="duty-toggle" aria-expanded="${dutyOpen}">${dutyOpen ? "הסתר שיבוץ" : "שיבוץ מלא"}</button>
-    </div>
+    </div>` : ""}
     <div class="duty-table"${dutyOpen ? "" : " hidden"}>
       <table>
-        <thead><tr><th>תאריך</th><th>אסיפה</th><th>מקום</th><th>תורנות</th></tr></thead>
-        <tbody>${upcoming.map((m) => `<tr${m.duty === "כולם" ? ' class="all"' : ""}><td>${short(m)}</td><td>${meetingKind(m.day)}</td><td>${esc(m.place)}</td><td>${esc(m.duty || "")}</td></tr>`).join("")}</tbody>
+        <thead><tr><th>תאריך</th><th>מפגש</th><th>מקום</th>${hasNotes ? "<th>הערות</th>" : ""}<th>תורנות</th></tr></thead>
+        <tbody>${upcoming.map((m) => `<tr${m.duty === "כולם" ? ' class="all"' : ""}><td>${short(m)}</td><td>${meetingKind(m.day)}</td><td>${esc(m.place)}</td>${hasNotes ? `<td>${esc(m.notes)}</td>` : ""}<td>${esc(m.duty || "")}</td></tr>`).join("")}</tbody>
       </table>
-    </div>` : ""}`;
+      <p class="duty-src"><a href="${SCHEDULE_VIEW}" target="_blank" rel="noopener">לגיליון המקורי</a></p>
+    </div>`;
   $("duty-toggle")?.addEventListener("click", () => { dutyOpen = !dutyOpen; renderSchedule(meetings); });
 }
 
