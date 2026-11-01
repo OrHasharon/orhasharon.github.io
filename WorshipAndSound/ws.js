@@ -5,7 +5,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { sche
 
 const SLOTS = [
   { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => !!m.lead_frequency, why: "לא מסומן/ת כמוביל/ת הלל" },
-  { role: "musician", label: "נגנים", max: Infinity, eligible: (m) => !!m.instruments, why: "לא רשומים כלים" },
+  { role: "musician", label: "נגנים ושירה", max: Infinity, eligible: (m) => !!m.instruments, why: "לא רשומים כלים" },
   { role: "sound", label: "סאונד", max: 1, eligible: (m) => m.sound, why: "לא מסומן/ת כאיש/ת סאונד" },
   { role: "setup", label: "הקמת סאונד", max: 2, eligible: (m) => m.setup, why: "לא מסומן/ת כמקים/ה" },
 ];
@@ -15,6 +15,9 @@ const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PA
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const byId = (id) => state.members.find((m) => m.id === id);
+const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", "🪈"]];
+const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
+const instHtml = (inst) => inst ? ` <small>(${icon(inst)} ${esc(inst)})</small>` : "";
 const instrumentsOf = (m) => (m.instruments || "").split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
 function toast(text) {
@@ -48,13 +51,28 @@ async function refreshSignups() {
 
 // ---------- sign-up ----------
 const takenIn = (date, role) => state.signups.filter((s) => s.meeting_date === date && s.role === role);
-const names = (date, role) => takenIn(date, role).map((s) => esc(byId(s.member_id)?.name || "?") + (s.instrument ? ` <small>(${esc(s.instrument)})</small>` : "")).join(", ");
+// people + picker for one role at one meeting; shared by the table (desktop) and the cards (phone)
+function slotCell(mt, slot) {
+  const taken = takenIn(mt.iso, slot.role);
+  const people = taken.map((s) => `<span class="person">${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
+  let action = "";
+  const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
+  if (picking) {
+    action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${instrumentsOf(picking).map((o) => `<option value="${esc(o)}">${icon(o)} ${esc(o)}</option>`).join("")}</select>`;
+  } else if (taken.length < slot.max) {
+    const free = state.members.filter((m) => slot.eligible(m) && !taken.some((s) => s.member_id === m.id));
+    if (free.length) action = `<select class="assign" data-role="${slot.role}" data-date="${mt.iso}"><option value="">+ שיבוץ</option>${free.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>`;
+  }
+  const missing = !taken.length && slot.role !== "musician";
+  return { missing, taken, html: `<div class="slot-people">${people || (missing ? `<span class="empty">חסר</span>` : "")}${action}</div>` };
+}
 
 function summaryTable(upcoming) {
-  const cell = (mt, slot) => names(mt.iso, slot.role) || (slot.role === "musician" ? "" : `<span class="empty">חסר</span>`);
-  return `<div class="summary"><h2>סיכום שיבוצים</h2><div class="duty-table"><table>
-    <thead><tr><th>תאריך</th><th>מפגש</th>${SLOTS.map((s) => `<th>${s.label}</th>`).join("")}</tr></thead>
-    <tbody>${upcoming.map((mt, i) => `<tr${i === 0 ? ' class="next"' : ""}><td>${mt.dateText.slice(0, 5)}</td><td>${meetingKind(mt.day)}</td>${SLOTS.map((s) => `<td>${cell(mt, s)}</td>`).join("")}</tr>`).join("")}</tbody>
+  return `<div class="summary"><div class="duty-table"><table>
+    <thead><tr><th>תאריך</th>${SLOTS.map((s) => `<th>${s.label}</th>`).join("")}</tr></thead>
+    <tbody>${upcoming.map((mt, i) => `<tr${i === 0 ? ' class="next"' : ""}>
+      <td class="when"><strong>${mt.dateText.slice(0, 5)}</strong><small>${meetingKind(mt.day)}</small></td>
+      ${SLOTS.map((s) => { const c = slotCell(mt, s); return `<td class="${c.missing ? "missing" : ""}">${c.html}</td>`; }).join("")}</tr>`).join("")}</tbody>
   </table></div></div>`;
 }
 
@@ -62,27 +80,18 @@ function renderSignup() {
   const upcoming = upcomingMeetings(state.meetings);
   if (!upcoming.length) { $("signup").innerHTML = `<p class="status">אין מפגשים קרובים בלוח</p>`; $("more").hidden = true; return; }
   $("signup").innerHTML = summaryTable(upcoming) +
-    `<h2 class="section-title">שיבוץ לפי מפגש</h2><div class="meetings-list">${upcoming.slice(0, state.shown).map((mt, i) => meetingCard(mt, i === 0)).join("")}</div>`;
+    `<div class="cards-view"><div class="meetings-list">${upcoming.slice(0, state.shown).map((mt, i) => meetingCard(mt, i === 0)).join("")}</div></div>`;
   $("more").hidden = upcoming.length <= state.shown;
 }
 
 function meetingCard(mt, isNext) {
-  const rows = SLOTS.map((slot) => {
-    const taken = takenIn(mt.iso, slot.role);
-    const people = taken.map((s) => `<span class="person">${esc(byId(s.member_id)?.name || "?")}${s.instrument ? ` <small>(${esc(s.instrument)})</small>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
-    let action = "";
-    const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
-    if (picking) {
-      action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${instrumentsOf(picking).map((o) => `<option>${esc(o)}</option>`).join("")}</select>`;
-    } else if (taken.length < slot.max) {
-      const free = state.members.filter((m) => slot.eligible(m) && !taken.some((s) => s.member_id === m.id));
-      if (free.length) action = `<select class="assign" data-role="${slot.role}" data-date="${mt.iso}"><option value="">+ שיבוץ</option>${free.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>`;
-    }
-    const missing = !taken.length && slot.role !== "musician";
-    const cap = slot.max === Infinity ? "" : `<small>${taken.length}/${slot.max}</small>`;
-    return `<div class="slot${missing ? " missing" : ""}"><div class="slot-name">${slot.label}${cap}</div>
-      <div class="slot-people">${people || (missing ? `<span class="empty">חסר</span>` : "")}${action}</div></div>`;
-  }).join("");
+  const slotHtml = (slot) => {
+    const c = slotCell(mt, slot);
+    const cap = slot.max === Infinity ? "" : `<small>${c.taken.length}/${slot.max}</small>`;
+    return `<div class="slot${c.missing ? " missing" : ""}"><div class="slot-name">${slot.label}${cap}</div>${c.html}</div>`;
+  };
+  const group = (roles) => `<div class="slot-group">${SLOTS.filter((s) => roles.includes(s.role)).map(slotHtml).join("")}</div>`;
+  const rows = `<div class="slot-groups">${group(["leader", "musician"])}${group(["sound", "setup"])}</div>`;
   return `<article class="meeting-card${isNext ? " next" : ""}">
     <div class="meeting-head">${isNext ? `<span class="tag">המפגש הבא</span>` : ""}
       <h3>${meetingKind(mt.day)} · יום ${esc(mt.day)} ${mt.dateText.slice(0, 5)}</h3><span>${esc(mt.place)}</span></div>
@@ -111,14 +120,6 @@ async function removeSignup(id) {
 }
 
 // ---------- team ----------
-function ledRecently(memberId) {
-  const now = new Date();
-  const monthStart = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
-  const quarterStart = isoDate(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1));
-  const leads = state.signups.filter((s) => s.member_id === memberId && s.role === "leader");
-  return { month: leads.filter((s) => s.meeting_date >= monthStart).length, quarter: leads.filter((s) => s.meeting_date >= quarterStart).length };
-}
-
 function memberForm(m = {}) {
   return `<form data-member="${m.id || "new"}">
     <label class="field">שם<input name="name" required value="${esc(m.name)}"></label>
@@ -134,7 +135,6 @@ function memberForm(m = {}) {
 
 function memberCard(m) {
   if (state.editing === m.id) return `<div class="member">${memberForm(m)}</div>`;
-  const led = ledRecently(m.id);
   const tags = [
     m.lead_frequency && `<span class="role-tag lead">מדריך/ה הלל · ${esc(m.lead_frequency)}</span>`,
     m.sound && `<span class="role-tag sound">סאונד</span>`,
@@ -143,8 +143,7 @@ function memberCard(m) {
   return `<div class="member">
     <button class="link-btn edit" data-edit="${m.id}">עריכה</button>
     <h3>${esc(m.name)}</h3>
-    ${m.instruments ? `<p>🎵 ${esc(m.instruments)}</p>` : ""}
-    ${m.lead_frequency ? `<p>הדריך/ה החודש: ${led.month} · ברבעון: ${led.quarter}</p>` : ""}
+    ${instrumentsOf(m).map((x) => `<p class="inst">${icon(x)} ${esc(x)}</p>`).join("")}
     ${m.notes ? `<p>${esc(m.notes)}</p>` : ""}
     <div class="roles">${tags}</div>
   </div>`;
