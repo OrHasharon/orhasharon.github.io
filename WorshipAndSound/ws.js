@@ -1,4 +1,4 @@
-// WorshipAndSound: self sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
+// WorshipAndSound: sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "or_hasharon_worship" } });
@@ -10,16 +10,12 @@ const SLOTS = [
   { role: "setup", label: "הקמת סאונד", max: 2, eligible: (m) => m.setup, why: "לא מסומן/ת כמקים/ה" },
 ];
 const PAGE = 6;
-const ME_KEY = "ws-me";
 
-const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PAGE, editing: null, picking: null };
+const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PAGE, editing: null, picking: null }; // picking = {date, member} while choosing an instrument
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const byId = (id) => state.members.find((m) => m.id === id);
 const instrumentsOf = (m) => (m.instruments || "").split(/[,/]/).map((s) => s.trim()).filter(Boolean);
-
-let me = null;
-try { me = Number(localStorage.getItem(ME_KEY)) || null; } catch {}
 
 function toast(text) {
   document.querySelector(".toast")?.remove();
@@ -50,45 +46,37 @@ async function refreshSignups() {
   if (!error) state.signups = data;
 }
 
-// ---------- who am I ----------
-function renderMe() {
-  const sel = $("me");
-  sel.innerHTML = `<option value="">בחר/י את השם שלך…</option>` +
-    state.members.map((m) => `<option value="${m.id}"${m.id === me ? " selected" : ""}>${esc(m.name)}</option>`).join("");
-  $("me-hint").textContent = me ? "לחיצה על \"+ אני\" משבצת אותך, ועל ✕ מבטלת" : "בחירת השם מאפשרת לשבץ את עצמך";
-}
-$("me").addEventListener("change", (e) => {
-  me = Number(e.target.value) || null;
-  try { me ? localStorage.setItem(ME_KEY, me) : localStorage.removeItem(ME_KEY); } catch {}
-  if (me) sb.from("usage_logs").insert({ visitor_name: byId(me)?.name, action: "identify" }).then(() => {});
-  renderMe(); render();
-});
-
 // ---------- sign-up ----------
+const takenIn = (date, role) => state.signups.filter((s) => s.meeting_date === date && s.role === role);
+const names = (date, role) => takenIn(date, role).map((s) => esc(byId(s.member_id)?.name || "?") + (s.instrument ? ` <small>(${esc(s.instrument)})</small>` : "")).join(", ");
+
+function summaryTable(upcoming) {
+  const cell = (mt, slot) => names(mt.iso, slot.role) || (slot.role === "musician" ? "" : `<span class="empty">חסר</span>`);
+  return `<div class="summary"><h2>סיכום שיבוצים</h2><div class="duty-table"><table>
+    <thead><tr><th>תאריך</th><th>מפגש</th>${SLOTS.map((s) => `<th>${s.label}</th>`).join("")}</tr></thead>
+    <tbody>${upcoming.map((mt, i) => `<tr${i === 0 ? ' class="next"' : ""}><td>${mt.dateText.slice(0, 5)}</td><td>${meetingKind(mt.day)}</td>${SLOTS.map((s) => `<td>${cell(mt, s)}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table></div></div>`;
+}
+
 function renderSignup() {
   const upcoming = upcomingMeetings(state.meetings);
   if (!upcoming.length) { $("signup").innerHTML = `<p class="status">אין מפגשים קרובים בלוח</p>`; $("more").hidden = true; return; }
-  $("signup").innerHTML = `<div class="meetings-list">${upcoming.slice(0, state.shown).map((mt, i) => meetingCard(mt, i === 0)).join("")}</div>`;
+  $("signup").innerHTML = summaryTable(upcoming) +
+    `<h2 class="section-title">שיבוץ לפי מפגש</h2><div class="meetings-list">${upcoming.slice(0, state.shown).map((mt, i) => meetingCard(mt, i === 0)).join("")}</div>`;
   $("more").hidden = upcoming.length <= state.shown;
 }
 
 function meetingCard(mt, isNext) {
   const rows = SLOTS.map((slot) => {
-    const taken = state.signups.filter((s) => s.meeting_date === mt.iso && s.role === slot.role);
-    const mineHere = taken.some((s) => s.member_id === me);
-    const full = taken.length >= slot.max;
-    const people = taken.map((s) => {
-      const m = byId(s.member_id);
-      const mine = s.member_id === me;
-      return `<span class="person${mine ? " mine" : ""}">${esc(m?.name || "?")}${s.instrument ? ` <small>(${esc(s.instrument)})</small>` : ""}${mine ? `<button data-remove="${s.id}" title="ביטול השיבוץ" aria-label="ביטול">✕</button>` : ""}</span>`;
-    }).join("");
+    const taken = takenIn(mt.iso, slot.role);
+    const people = taken.map((s) => `<span class="person">${esc(byId(s.member_id)?.name || "?")}${s.instrument ? ` <small>(${esc(s.instrument)})</small>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
     let action = "";
-    const pickingHere = state.picking && state.picking.date === mt.iso;
-    if (slot.role === "musician" && pickingHere) {
-      const opts = instrumentsOf(byId(me));
-      action = `<select class="inst-pick" data-date="${mt.iso}"><option value="">על מה תנגן/י?</option>${opts.map((o) => `<option>${esc(o)}</option>`).join("")}</select>`;
-    } else if (!mineHere && !full) {
-      action = `<button class="join" data-join="${slot.role}" data-date="${mt.iso}">+ אני</button>`;
+    const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
+    if (picking) {
+      action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${instrumentsOf(picking).map((o) => `<option>${esc(o)}</option>`).join("")}</select>`;
+    } else if (taken.length < slot.max) {
+      const free = state.members.filter((m) => slot.eligible(m) && !taken.some((s) => s.member_id === m.id));
+      if (free.length) action = `<select class="assign" data-role="${slot.role}" data-date="${mt.iso}"><option value="">+ שיבוץ</option>${free.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>`;
     }
     const missing = !taken.length && slot.role !== "musician";
     const cap = slot.max === Infinity ? "" : `<small>${taken.length}/${slot.max}</small>`;
@@ -101,26 +89,24 @@ function meetingCard(mt, isNext) {
     ${rows}</article>`;
 }
 
-async function join(role, date, instrument = null) {
-  if (!me) { toast("קודם בחר/י את השם שלך למעלה"); $("me").focus(); return; }
-  const m = byId(me);
-  const slot = SLOTS.find((s) => s.role === role);
-  if (!slot.eligible(m)) { toast(`${m.name} ${slot.why}. אפשר לעדכן בלשונית "הצוות"`); return; }
+async function assign(role, date, memberId, instrument = null) {
+  const m = byId(memberId);
   if (role === "musician" && !instrument) {
     const opts = instrumentsOf(m);
-    if (opts.length > 1) { state.picking = { date }; render(); return; }
+    if (opts.length > 1) { state.picking = { date, member: memberId }; render(); return; }
     instrument = opts[0];
   }
-  const { error } = await sb.from("signups").insert({ meeting_date: date, role, member_id: me, instrument });
+  const { error } = await sb.from("signups").insert({ meeting_date: date, role, member_id: memberId, instrument });
   state.picking = null;
-  if (error) toast(error.code === "23505" ? "כבר משובץ/ת בתפקיד הזה" : "השיבוץ נכשל, נסו שוב");
-  else toast(`שובצת: ${slot.label} · ${date.split("-").reverse().slice(0, 2).join("/")}`);
+  const slot = SLOTS.find((s) => s.role === role);
+  if (error) toast(error.code === "23505" ? `${m.name} כבר משובץ/ת בתפקיד הזה` : "השיבוץ נכשל, נסו שוב");
+  else toast(`${m.name} שובץ/ה: ${slot.label} · ${date.split("-").reverse().slice(0, 2).join("/")}`);
   await refreshSignups(); render();
 }
 
 async function removeSignup(id) {
   const { error } = await sb.from("signups").delete().eq("id", id);
-  if (error) toast("הביטול נכשל, נסו שוב"); else toast("השיבוץ בוטל");
+  if (error) toast("ההסרה נכשלה, נסו שוב"); else toast("הוסר מהשיבוץ");
   await refreshSignups(); render();
 }
 
@@ -190,7 +176,7 @@ async function saveMember(form) {
   if (error) { toast(error.code === "23505" ? "השם הזה כבר קיים בצוות" : "השמירה נכשלה, נסו שוב"); return; }
   toast("נשמר");
   state.editing = null;
-  await loadAll(); renderMe(); render();
+  await loadAll(); render();
 }
 
 async function deactivate(id) {
@@ -198,9 +184,8 @@ async function deactivate(id) {
   if (!confirm(`להסיר את ${m.name} מהצוות? (השיבוצים הקיימים יישארו)`)) return;
   const { error } = await sb.from("members").update({ active: false, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) { toast("ההסרה נכשלה"); return; }
-  if (me === id) { me = null; try { localStorage.removeItem(ME_KEY); } catch {} }
   state.editing = null;
-  await loadAll(); renderMe(); render();
+  await loadAll(); render();
 }
 
 // ---------- shell ----------
@@ -215,14 +200,16 @@ document.addEventListener("click", (e) => {
   const t = e.target;
   const tab = t.closest(".tabs button");
   if (tab) { state.tab = tab.dataset.tab; state.editing = null; render(); return; }
-  if (t.closest("[data-join]")) { const b = t.closest("[data-join]"); join(b.dataset.join, b.dataset.date); return; }
   if (t.closest("[data-remove]")) { removeSignup(Number(t.closest("[data-remove]").dataset.remove)); return; }
   if (t.closest("[data-edit]")) { const v = t.closest("[data-edit]").dataset.edit; state.editing = v === "new" ? "new" : Number(v); render(); return; }
   if (t.closest("[data-cancel]")) { state.editing = null; render(); return; }
   if (t.closest("[data-deactivate]")) { deactivate(Number(t.closest("[data-deactivate]").dataset.deactivate)); return; }
 });
 document.addEventListener("change", (e) => {
-  if (e.target.matches(".inst-pick") && e.target.value) join("musician", e.target.dataset.date, e.target.value);
+  const el = e.target;
+  if (!el.matches(".assign") || !el.value) return;
+  if (el.matches(".inst-pick")) assign("musician", el.dataset.date, Number(el.dataset.member), el.value);
+  else assign(el.dataset.role, el.dataset.date, Number(el.value));
 });
 document.addEventListener("submit", (e) => {
   if (e.target.matches("form[data-member]")) { e.preventDefault(); saveMember(e.target); }
@@ -231,10 +218,9 @@ $("more").addEventListener("click", () => { state.shown += PAGE; render(); });
 
 loadAll()
   .then(() => {
-    if (me && !byId(me)) me = null; // removed from the team since last visit
     $("status").textContent = "";
-    renderMe(); render();
-    sb.from("usage_logs").insert({ visitor_name: byId(me)?.name || null, action: "page_view" }).then(() => {});
+    render();
+    sb.from("usage_logs").insert({ action: "page_view" }).then(() => {});
   })
   .catch((err) => {
     console.error(err);

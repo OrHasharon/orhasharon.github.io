@@ -5,11 +5,11 @@
   border-inline-start: 4px solid var(--accent); padding: 10px 14px;
 }
 .whoami label { font-weight: 700; color: var(--accent-ink); }
-.whoami select, .field input, .field select, .inst-pick {
+.assign, .field input, .field select {
   font: inherit; color: var(--ink); background: rgba(255, 255, 255, .06);
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
 }
-.whoami select option, .inst-pick option, .field select option { background: #111827; }
+.assign option, .field select option { background: #111827; color: #eef1f6; }
 .hint { color: var(--muted); font-size: .85rem; }
 
 .meetings-list { display: grid; gap: 14px; }
@@ -76,3 +76,10 @@
   background: #111827; border: 1px solid var(--line); color: var(--ink);
   padding: 10px 18px; border-radius: 10px; box-shadow: var(--shadow); z-index: 10;
 }
+
+.tabs { margin-top: 22px; }
+.assign { padding: 3px 10px; border-radius: 999px; border: 1px dashed var(--accent); color: var(--accent-ink); cursor: pointer; font-size: .88rem; }
+.summary h2, .section-title { font-family: "Frank Ruhl Libre", serif; font-size: 1.3rem; margin: 6px 0 10px; }
+.section-title { margin-top: 26px; }
+.summary .duty-table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 10px; margin: 0; }
+.summary td small { color: var(--muted); }
