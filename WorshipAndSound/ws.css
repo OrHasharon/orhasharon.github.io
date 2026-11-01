@@ -108,3 +108,55 @@
 .summary td .empty { display: none; }
 .summary td.missing .assign { border-style: solid; }
 .summary td.when { white-space: nowrap; }
+
+/* sign-in */
+.account { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+#who { color: #fbf4e6; opacity: .85; font-size: .9rem; }
+#who .link-btn { color: var(--accent-ink); }
+.login {
+  margin: 40px auto; max-width: 440px; text-align: center;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 28px 24px;
+}
+.login h2 { font-family: "Frank Ruhl Libre", serif; margin: 0 0 8px; }
+.login p { color: var(--muted); margin: 0 0 18px; }
+.btn.google { font-size: 1rem; padding: 10px 22px; }
+
+/* users */
+.users-table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 10px; }
+.add-user { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+.add-user input[type=email] { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 240px; }
+.noaccess { margin-top: 14px; color: var(--ink); }
+
+/* songs */
+.songs-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+#song-search { flex: 1; min-width: 200px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; }
+.file-btn { cursor: pointer; }
+.song-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.song-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: start;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; font: inherit; color: var(--ink);
+}
+.song-row:hover { border-color: var(--accent); }
+.song-row small { color: var(--accent-ink); font-weight: 700; }
+.song-view { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.song-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
+.song-head h2 { font-family: "Frank Ruhl Libre", serif; margin: 0; font-size: 1.5rem; flex: 1; }
+.song-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); }
+.song-tools .btn.ghost { padding: 4px 10px; }
+.chordpro { font-size: 1.1rem; line-height: 1.25; }
+.cp-line { display: flex; flex-wrap: wrap; align-items: flex-end; min-height: 1.4em; margin: 2px 0 6px; white-space: pre-wrap; }
+.cp-line[dir="auto"] { unicode-bidi: plaintext; }
+.cp-empty { min-height: .8em; }
+.seg { display: inline-flex; flex-direction: column; }
+.seg .ch { color: var(--accent-ink); font-weight: 700; font-size: .9em; direction: ltr; unicode-bidi: isolate; min-height: 1.2em; padding-inline-end: 4px; text-align: start; }
+.seg .ly { white-space: pre; }
+.song-form { display: grid; gap: 10px; }
+.song-form textarea, .draft textarea { font: inherit; font-size: .95rem; color: var(--ink); background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+.chordpro.preview { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px; font-size: 1rem; max-height: 320px; overflow: auto; }
+.draft { border-top: 1px solid var(--line); padding: 10px 0; }
+.draft summary { cursor: pointer; padding: 4px 0; }
+.draft .field { margin-top: 8px; }
+
+.cp-line[dir=rtl] .seg .ch { text-align: right; }
+.cp-line[dir=ltr] .seg .ch { text-align: left; }

@@ -1,0 +1,296 @@
+// Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js.
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const songsState = { loaded: false, list: [], query: "", view: "list", current: null, shift: 0, drafts: [], importing: false };
+
+// ---------- chords ----------
+const CHORD_RE = /^[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-G][#b]?)?$/;
+const FILLER_RE = /^(?:\||\/|-|–|x\d+|\(|\)|\.+)$/i;
+const isChordLine = (text) => {
+  const toks = text.trim().split(/\s+/).filter(Boolean);
+  return toks.length > 0 && toks.some((t) => CHORD_RE.test(t)) && toks.every((t) => CHORD_RE.test(t) || FILLER_RE.test(t));
+};
+const SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const noteIndex = (n) => { const i = SHARPS.indexOf(n); return i >= 0 ? i : FLATS.indexOf(n); };
+function transposeNote(n, shift, flats) {
+  const i = noteIndex(n);
+  if (i < 0) return n;
+  return (flats ? FLATS : SHARPS)[(i + shift + 120) % 12];
+}
+function transposeChord(ch, shift) {
+  if (!shift) return ch;
+  const m = ch.match(/^([A-G][#b]?)(.*?)(?:\/([A-G][#b]?))?$/);
+  if (!m) return ch;
+  const flats = ch.includes("b");
+  return transposeNote(m[1], shift, flats) + m[2] + (m[3] ? "/" + transposeNote(m[3], shift, flats) : "");
+}
+const firstChord = (content) => (content.match(/\[([^\]]+)\]/) || [])[1] || null;
+
+const HEB = /[֐-׿]/;
+
+// ---------- render ChordPro ----------
+function renderChordPro(content, shift = 0) {
+  return content.split("\n").map((line) => {
+    if (!line.trim()) return `<div class="cp-line cp-empty"></div>`;
+    // direction comes from the lyrics, not the (Latin) chords
+    const dir = HEB.test(line.replace(/\[[^\]]*\]/g, "")) ? "rtl" : "ltr";
+    if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(line)}</div>`;
+    const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
+    let html = parts[0] ? `<span class="seg"><span class="ch"></span><span class="ly">${esc(parts[0])}</span></span>` : "";
+    for (let i = 1; i < parts.length; i += 2) {
+      const lyr = parts[i + 1] || "";
+      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[i], shift))}</span><span class="ly">${lyr ? esc(lyr) : "&nbsp;"}</span></span>`;
+    }
+    return `<div class="cp-line" dir="${dir}">${html}</div>`;
+  }).join("");
+}
+
+// ---------- PDF -> songs ----------
+const median = (arr) => { const a = [...arr].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
+
+async function pdfToSongs(file) {
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const songs = [];
+  let totalText = 0;
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const items = tc.items.filter((it) => it.str && it.str.trim()).map((it) => ({
+      str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height,
+    }));
+    totalText += items.length;
+    if (!items.length) continue;
+    // group into lines by baseline
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    const lines = [];
+    for (const it of items) {
+      const line = lines.find((l) => Math.abs(l.y - it.y) < Math.max(2, it.h * 0.45));
+      if (line) line.items.push(it); else lines.push({ y: it.y, items: [it] });
+    }
+    lines.sort((a, b) => b.y - a.y);
+    const hMed = median(items.map((i) => i.h));
+    const out = lines.map((l) => toLine(l));
+    // titles = clearly bigger text that isn't chords
+    let current = null;
+    out.forEach((ln, idx) => {
+      const isTitle = !ln.chords && ln.h > hMed * 1.25 && ln.text.length < 60;
+      if (isTitle || (!current && idx === 0)) {
+        if (isTitle && current && !current.lines.length) { current.title += " " + ln.text; return; }
+        current = { title: ln.text, lines: [] };
+        songs.push(current);
+        if (isTitle || idx === 0) return;
+      }
+      if (!current) { current = { title: `עמוד ${p}`, lines: [] }; songs.push(current); }
+      current.lines.push(ln);
+    });
+  }
+  if (!totalText) return null; // scanned images, no text layer
+  return songs.map((s) => ({ title: s.title.trim(), content: mergeChordLines(s.lines), include: true })).filter((s) => s.content.trim());
+}
+
+// one PDF line -> {text, rtl, chords?: [{name, xL, xR}], chars: position map}
+function toLine(l) {
+  const rtl = l.items.some((i) => HEB.test(i.str));
+  const items = [...l.items].sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
+  const cw = median(items.map((i) => i.w / Math.max(1, i.str.length))) || 4;
+  let text = "";
+  const pos = []; // for each char of text: its x center
+  let prevEdge = null;
+  for (const it of items) {
+    const edgeStart = rtl ? it.x + it.w : it.x;
+    if (prevEdge !== null) {
+      const gap = rtl ? prevEdge - edgeStart : edgeStart - prevEdge;
+      const spaces = Math.max(gap > cw * 0.3 ? 1 : 0, Math.round(gap / cw));
+      for (let s = 0; s < spaces; s++) { text += " "; pos.push(rtl ? prevEdge - (s + 0.5) * cw : prevEdge + (s + 0.5) * cw); }
+    }
+    const icw = it.w / Math.max(1, it.str.length);
+    [...it.str].forEach((ch, k) => { text += ch; pos.push(rtl ? it.x + it.w - (k + 0.5) * icw : it.x + (k + 0.5) * icw); });
+    prevEdge = rtl ? it.x : it.x + it.w;
+  }
+  const h = Math.max(...l.items.map((i) => i.h));
+  if (isChordLine(text)) {
+    const chords = [];
+    for (const m of text.matchAll(/\S+/g)) {
+      if (!CHORD_RE.test(m[0])) continue;
+      const xs = pos.slice(m.index, m.index + m[0].length);
+      chords.push({ name: m[0], xL: Math.min(...xs), xR: Math.max(...xs) });
+    }
+    return { text: text.trim(), rtl, chords, h };
+  }
+  return { text, rtl, pos, h };
+}
+
+// chord line + following lyric line -> "[Am]lyr[G]ics"
+function mergeChordLines(lines) {
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (!ln.chords) { out.push(ln.text.trimEnd()); continue; }
+    const next = lines[i + 1];
+    if (!next || next.chords) { out.push(ln.chords.map((c) => `[${c.name}]`).join(" ")); continue; }
+    // insert each chord before the lyric char nearest to where the chord starts
+    const inserts = ln.chords.map((c) => {
+      const anchor = next.rtl ? c.xR : c.xL;
+      let best = 0, bestD = Infinity;
+      next.pos.forEach((x, k) => { const d = Math.abs(x - anchor); if (d < bestD) { bestD = d; best = k; } });
+      return { at: best, name: c.name };
+    }).sort((a, b) => b.at - a.at);
+    let t = next.text;
+    for (const ins of inserts) t = t.slice(0, ins.at) + `[${ins.name}]` + t.slice(ins.at);
+    out.push(t.trimEnd());
+    i++;
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// ---------- data ----------
+async function loadSongs() {
+  const { data, error } = await sb.from("songs").select("*").order("title");
+  if (error) { toast("טעינת השירים נכשלה"); return; }
+  songsState.list = data;
+  songsState.loaded = true;
+}
+
+// ---------- views ----------
+function renderSongs() {
+  const el = $("songs");
+  if (!songsState.loaded) { el.innerHTML = `<p class="status">טוען שירים…</p>`; loadSongs().then(renderSongs); return; }
+  const v = songsState.view;
+  if (v === "song") return renderSongView(el);
+  if (v === "edit") return renderSongEdit(el);
+  if (v === "import") return renderImport(el);
+  const q = songsState.query.trim();
+  const list = songsState.list.filter((s) => !q || s.title.includes(q) || s.content.includes(q));
+  el.innerHTML = `<div class="songs-bar">
+      <input id="song-search" type="search" placeholder="חיפוש שיר או מילים…" value="${esc(songsState.query)}">
+      <button class="btn" data-song-new>+ שיר חדש</button>
+      <label class="btn ghost file-btn">ייבוא מ-PDF<input type="file" accept="application/pdf" id="pdf-file" hidden></label>
+    </div>
+    ${songsState.importing ? `<p class="status">קורא את הקובץ…</p>` : ""}
+    <div class="song-list">${list.map((s) => `<button class="song-row" data-song="${s.id}"><span>${esc(s.title)}</span>${s.song_key ? `<small dir="ltr">${esc(s.song_key)}</small>` : ""}</button>`).join("") ||
+      `<p class="status">${songsState.list.length ? "לא נמצאו שירים" : "עדיין אין שירים. אפשר להוסיף שיר או לייבא מ-PDF."}</p>`}</div>`;
+  const search = $("song-search");
+  search.addEventListener("input", () => { songsState.query = search.value; renderSongs(); $("song-search").focus(); });
+}
+
+function renderSongView(el) {
+  const s = songsState.current;
+  const key = s.song_key ? transposeChord(s.song_key, songsState.shift) : null;
+  el.innerHTML = `<div class="song-view">
+    <div class="song-head">
+      <button class="link-btn" data-song-back>→ לכל השירים</button>
+      <h2>${esc(s.title)}</h2>
+      <div class="song-tools">
+        ${key ? `<span>סולם: <b dir="ltr">${esc(key)}</b></span>` : ""}
+        <button class="btn ghost" data-shift="-1">−½</button><button class="btn ghost" data-shift="1">+½</button>
+        ${songsState.shift ? `<button class="link-btn" data-shift="0">מקורי</button>` : ""}
+        <button class="btn ghost" data-song-edit>עריכה</button>
+      </div>
+    </div>
+    <div class="chordpro">${renderChordPro(s.content, songsState.shift)}</div>
+  </div>`;
+}
+
+function renderSongEdit(el) {
+  const s = songsState.current || { title: "", song_key: "", content: "" };
+  el.innerHTML = `<div class="song-view"><form class="song-form">
+    <div class="song-head"><button type="button" class="link-btn" data-song-back>→ ביטול</button><h2>${s.id ? "עריכת שיר" : "שיר חדש"}</h2></div>
+    <label class="field">שם השיר<input name="title" required value="${esc(s.title)}"></label>
+    <label class="field">סולם<input name="song_key" value="${esc(s.song_key || "")}" dir="ltr" placeholder="Am"></label>
+    <label class="field">מילים ואקורדים (אקורד בסוגריים מרובעים לפני ההברה: [Am]שלום [G]עולם)
+      <textarea name="content" rows="16" dir="auto">${esc(s.content)}</textarea></label>
+    <div class="chordpro preview">${renderChordPro(s.content)}</div>
+    <div class="form-actions"><button class="btn" type="submit">שמירה</button>
+      ${s.id ? `<button class="btn ghost" type="button" data-song-delete="${s.id}">מחיקת השיר</button>` : ""}</div>
+  </form></div>`;
+  const ta = el.querySelector("textarea");
+  ta.addEventListener("input", () => { el.querySelector(".preview").innerHTML = renderChordPro(ta.value); });
+}
+
+function renderImport(el) {
+  const d = songsState.drafts;
+  el.innerHTML = `<div class="song-view">
+    <div class="song-head"><button class="link-btn" data-song-back>→ ביטול</button><h2>ייבוא מ-PDF: נמצאו ${d.length} שירים</h2></div>
+    <p class="hint">בדקו כל שיר, תקנו את השם או המילים אם צריך, וסמנו מה לשמור.</p>
+    ${d.map((s, i) => `<details class="draft"${i < 3 ? " open" : ""}>
+      <summary><label><input type="checkbox" data-draft-inc="${i}"${s.include ? " checked" : ""}> <b>${esc(s.title)}</b></label></summary>
+      <label class="field">שם השיר<input data-draft-title="${i}" value="${esc(s.title)}"></label>
+      <label class="field">מילים ואקורדים<textarea data-draft-content="${i}" rows="10" dir="auto">${esc(s.content)}</textarea></label>
+      <div class="chordpro preview" data-draft-preview="${i}">${renderChordPro(s.content)}</div>
+    </details>`).join("")}
+    <div class="form-actions"><button class="btn" data-import-save>שמירת ${d.filter((s) => s.include).length} שירים</button></div>
+  </div>`;
+}
+
+// ---------- events ----------
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.closest("[data-song]")) {
+    songsState.current = songsState.list.find((s) => s.id === Number(t.closest("[data-song]").dataset.song));
+    songsState.view = "song"; songsState.shift = 0; renderSongs(); scrollTo(0, 0); return;
+  }
+  if (t.closest("[data-song-back]")) { songsState.view = songsState.current && songsState.view === "edit" && songsState.current.id ? "song" : "list"; if (songsState.view === "list") songsState.current = null; renderSongs(); return; }
+  if (t.closest("[data-song-new]")) { songsState.current = null; songsState.view = "edit"; renderSongs(); return; }
+  if (t.closest("[data-song-edit]")) { songsState.view = "edit"; renderSongs(); return; }
+  if (t.closest("[data-shift]")) { const n = Number(t.closest("[data-shift]").dataset.shift); songsState.shift = n ? songsState.shift + n : 0; renderSongs(); return; }
+  if (t.closest("[data-song-delete]")) {
+    if (!confirm(`למחוק את "${songsState.current.title}"?`)) return;
+    const { error } = await sb.from("songs").delete().eq("id", songsState.current.id);
+    if (error) { toast("המחיקה נכשלה"); return; }
+    toast("השיר נמחק"); songsState.current = null; songsState.view = "list"; await loadSongs(); renderSongs(); return;
+  }
+  if (t.closest("[data-import-save]")) {
+    const rows = songsState.drafts.filter((s) => s.include && s.title.trim() && s.content.trim())
+      .map((s) => ({ title: s.title.trim(), content: s.content, song_key: firstChord(s.content), source: songsState.importFile }));
+    if (!rows.length) { toast("לא סומנו שירים"); return; }
+    const { error } = await sb.from("songs").insert(rows);
+    if (error) { toast("השמירה נכשלה"); return; }
+    toast(`נשמרו ${rows.length} שירים`); songsState.drafts = []; songsState.view = "list"; await loadSongs(); renderSongs();
+  }
+});
+
+document.addEventListener("change", async (e) => {
+  const t = e.target;
+  if (t.id === "pdf-file" && t.files[0]) {
+    const file = t.files[0];
+    if (!window.pdfjsLib) { toast("קורא ה-PDF לא נטען, נסו לרענן"); return; }
+    songsState.importing = true; renderSongs();
+    try {
+      const drafts = await pdfToSongs(file);
+      songsState.importing = false;
+      if (drafts === null) { toast("ה-PDF הזה סרוק כתמונה ואין בו טקסט, אי אפשר לקרוא ממנו אקורדים"); renderSongs(); return; }
+      if (!drafts.length) { toast("לא נמצאו שירים בקובץ"); renderSongs(); return; }
+      songsState.drafts = drafts; songsState.importFile = file.name; songsState.view = "import"; renderSongs();
+    } catch (err) {
+      console.error(err); songsState.importing = false; toast("קריאת הקובץ נכשלה"); renderSongs();
+    }
+    return;
+  }
+  if (t.matches("[data-draft-inc]")) { songsState.drafts[t.dataset.draftInc].include = t.checked; const b = document.querySelector("[data-import-save]"); if (b) b.textContent = `שמירת ${songsState.drafts.filter((s) => s.include).length} שירים`; }
+});
+
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.matches("[data-draft-title]")) songsState.drafts[t.dataset.draftTitle].title = t.value;
+  if (t.matches("[data-draft-content]")) {
+    songsState.drafts[t.dataset.draftContent].content = t.value;
+    document.querySelector(`[data-draft-preview="${t.dataset.draftContent}"]`).innerHTML = renderChordPro(t.value);
+  }
+});
+
+document.addEventListener("submit", async (e) => {
+  if (!e.target.matches(".song-form")) return;
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const row = { title: f.get("title").trim(), song_key: f.get("song_key").trim() || firstChord(f.get("content")), content: f.get("content"), updated_at: new Date().toISOString() };
+  const cur = songsState.current;
+  const { data, error } = cur?.id
+    ? await sb.from("songs").update(row).eq("id", cur.id).select().single()
+    : await sb.from("songs").insert(row).select().single();
+  if (error) { toast("השמירה נכשלה"); return; }
+  toast("השיר נשמר");
+  await loadSongs();
+  songsState.current = songsState.list.find((s) => s.id === data.id) || data;
+  songsState.view = "song"; songsState.shift = 0; renderSongs();
+});

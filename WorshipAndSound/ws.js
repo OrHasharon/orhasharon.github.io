@@ -1,4 +1,4 @@
-// WorshipAndSound: sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
+// WorshipAndSound (Google sign-in required): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "or_hasharon_worship" } });
@@ -54,7 +54,7 @@ const takenIn = (date, role) => state.signups.filter((s) => s.meeting_date === d
 // people + picker for one role at one meeting; shared by the table (desktop) and the cards (phone)
 function slotCell(mt, slot) {
   const taken = takenIn(mt.iso, slot.role);
-  const people = taken.map((s) => `<span class="person">${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
+  const people = taken.map((s) => `<span class="person"${s.added_by ? ` title="שובץ ע״י ${esc(s.added_by)}"` : ""}>${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
   let action = "";
   const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
   if (picking) {
@@ -169,6 +169,7 @@ async function saveMember(form) {
     sound: f.has("sound"), setup: f.has("setup"),
     notes: f.get("notes").trim() || null,
     updated_at: new Date().toISOString(),
+    updated_by: user?.email || null,
   };
   const id = form.dataset.member;
   const { error } = id === "new" ? await sb.from("members").insert(row) : await sb.from("members").update(row).eq("id", Number(id));
@@ -187,12 +188,59 @@ async function deactivate(id) {
   await loadAll(); render();
 }
 
+// ---------- users (admins only) ----------
+let allowed = [];
+let isAdmin = false;
+
+async function loadUsers() {
+  const { data, error } = await sb.from("allowed_users").select("*").order("added_at");
+  if (!error) allowed = data;
+}
+
+function renderUsers() {
+  const self = (u) => u.email.toLowerCase() === user.email.toLowerCase();
+  $("users").innerHTML = `<div class="team-section"><h2>משתמשים מורשים</h2>
+    <p class="hint">רק כתובות שברשימה יכולות להיכנס אחרי התחברות עם Google.</p>
+    <div class="duty-table users-table"><table><thead><tr><th>מייל</th><th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
+    ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td><td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
+      <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
+    </tbody></table></div>
+    <form class="add-user"><input name="email" type="email" required placeholder="name@gmail.com" dir="ltr">
+      <label><input type="checkbox" name="admin"> מנהל/ת</label><button class="btn" type="submit">הוספה</button></form></div>`;
+}
+
+document.addEventListener("submit", async (e) => {
+  if (!e.target.matches(".add-user")) return;
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const email = f.get("email").trim().toLowerCase();
+  const { error } = await sb.from("allowed_users").insert({ email, is_admin: f.has("admin") });
+  toast(error ? (error.code === "23505" ? "הכתובת כבר ברשימה" : "ההוספה נכשלה") : `${email} נוסף/ה`);
+  await loadUsers(); render();
+});
+document.addEventListener("click", async (e) => {
+  const del = e.target.closest("[data-del-user]");
+  const adm = e.target.closest("[data-toggle-admin]");
+  if (del) {
+    if (!confirm(`להסיר את ${del.dataset.delUser}?`)) return;
+    const { error } = await sb.from("allowed_users").delete().eq("email", del.dataset.delUser);
+    toast(error ? "ההסרה נכשלה" : "הוסר/ה"); await loadUsers(); render();
+  } else if (adm) {
+    const u = allowed.find((x) => x.email === adm.dataset.toggleAdmin);
+    const { error } = await sb.from("allowed_users").update({ is_admin: !u.is_admin }).eq("email", u.email);
+    toast(error ? "העדכון נכשל" : "עודכן"); await loadUsers(); render();
+  }
+});
+
 // ---------- shell ----------
 function render() {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
-  $("signup").hidden = state.tab !== "signup";
-  $("team").hidden = state.tab !== "team";
-  if (state.tab === "signup") renderSignup(); else { $("more").hidden = true; renderTeam(); }
+  for (const id of ["signup", "team", "songs", "users"]) $(id).hidden = state.tab !== id;
+  $("more").hidden = true;
+  if (state.tab === "signup") renderSignup();
+  else if (state.tab === "team") renderTeam();
+  else if (state.tab === "songs") renderSongs();
+  else if (state.tab === "users") renderUsers();
 }
 
 document.addEventListener("click", (e) => {
@@ -215,15 +263,51 @@ document.addEventListener("submit", (e) => {
 });
 $("more").addEventListener("click", () => { state.shown += PAGE; render(); });
 
-loadAll()
-  .then(() => {
+// ---------- sign-in ----------
+let user = null;
+
+function showLogin() {
+  $("login").hidden = false;
+  document.querySelector(".tabs").hidden = true;
+  $("signup").hidden = $("team").hidden = $("more").hidden = true;
+  $("status").textContent = "";
+  $("who").innerHTML = "";
+}
+
+$("google").addEventListener("click", () => {
+  sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+});
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#logout")) sb.auth.signOut().then(() => location.reload());
+});
+
+async function start() {
+  const { data: { session } } = await sb.auth.getSession();
+  user = session?.user || null;
+  if (!user) { showLogin(); return; }
+  const { data: me, error: meErr } = await sb.from("allowed_users").select("email,is_admin").ilike("email", user.email).maybeSingle();
+  if (meErr || !me) {
+    showLogin();
+    $("google").hidden = true;
+    $("noaccess").hidden = false;
+    $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b>, אבל הכתובת עדיין לא ברשימת המורשים. בקשו מאוריה להוסיף אותה.<br><button class="link-btn" id="logout">התחברות עם חשבון אחר</button>`;
+    return;
+  }
+  isAdmin = me.is_admin;
+  document.querySelector('[data-tab="users"]').hidden = !isAdmin;
+  if (isAdmin) await loadUsers();
+  $("login").hidden = true;
+  document.querySelector(".tabs").hidden = false;
+  $("who").innerHTML = `${esc(user.user_metadata?.full_name || user.email)} · <button class="link-btn" id="logout">התנתקות</button>`;
+  $("status").textContent = "טוען…";
+  try {
+    await loadAll();
     $("status").textContent = "";
     render();
-    sb.from("usage_logs").insert({ action: "page_view" }).then(() => {});
-  })
-  .catch((err) => {
+    sb.from("usage_logs").insert({ visitor_name: user.email, action: "page_view" }).then(() => {});
+  } catch (err) {
     console.error(err);
-    $("status").textContent = err?.code === "PGRST106" || /schema/i.test(err?.message || "")
-      ? "המערכת עדיין לא מחוברת למסד הנתונים (נדרשת הגדרה ב-Supabase)"
-      : "שגיאה בטעינת הנתונים, נסו לרענן";
-  });
+    $("status").textContent = "שגיאה בטעינת הנתונים, נסו לרענן";
+  }
+}
+start();
