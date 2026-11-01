@@ -127,3 +127,5 @@
 .matrix .add-row td:last-child { text-align: start; }
 .matrix tbody tr:hover td { background: rgba(255,255,255,.03); }
 .matrix tbody tr:hover td.name { background: #161e2e; }
+
+.db-warning { background: rgba(214,165,76,.12); border: 1px solid var(--accent); color: var(--ink); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; }

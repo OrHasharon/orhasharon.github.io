@@ -147,7 +147,12 @@ function mergeChordLines(lines) {
 // ---------- data ----------
 async function loadSongs() {
   const { data, error } = await sb.from("songs").select("*").order("title");
-  if (error) { toast("טעינת השירים נכשלה"); return; }
+  if (error) {
+    songsState.missing = error.code === "PGRST205" || error.code === "42P01";
+    if (!songsState.missing) toast("טעינת השירים נכשלה");
+    songsState.loaded = true; songsState.list = [];
+    return;
+  }
   songsState.list = data;
   songsState.loaded = true;
 }
@@ -156,6 +161,7 @@ async function loadSongs() {
 function renderSongs() {
   const el = $("songs");
   if (!songsState.loaded) { el.innerHTML = `<p class="status">טוען שירים…</p>`; loadSongs().then(renderSongs); return; }
+  if (songsState.missing) { el.innerHTML = `<p class="db-warning">ספריית השירים עדיין לא פעילה: צריך להריץ ב-Supabase את הסקריפט team_matrix.sql. אחרי זה רעננו את הדף.</p>`; return; }
   const v = songsState.view;
   if (v === "song") return renderSongView(el);
   if (v === "edit") return renderSongEdit(el);

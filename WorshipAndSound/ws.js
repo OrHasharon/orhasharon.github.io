@@ -127,19 +127,22 @@ function freqSelect(m, field) {
   const opts = ["", ...FREQS, ...(v && !FREQS.includes(v) ? [v] : [])]; // keep an older free-text value visible
   return `<select class="freq" data-id="${m.id}" data-field="${field}">${opts.map((o) => `<option value="${esc(o)}"${o === v ? " selected" : ""}>${o ? esc(o) : "—"}</option>`).join("")}</select>`;
 }
-const box = (m, flag, on) => `<td class="cb"><input type="checkbox" data-id="${m.id}" data-flag="${esc(flag)}"${on ? " checked" : ""}></td>`;
+const box = (m, flag, on, off = false) => `<td class="cb"><input type="checkbox" data-id="${m.id}" data-flag="${esc(flag)}"${on ? " checked" : ""}${off ? " disabled" : ""}></td>`;
 
 function renderTeam() {
   const has = (m, inst) => instrumentsOf(m).includes(inst);
+  // can_lead / participation_frequency arrive with team_matrix.sql; until then those columns can't be saved
+  const ready = !state.members.length || "can_lead" in state.members[0];
   $("team").innerHTML = `<div class="team-section">
+    ${ready ? "" : `<p class="db-warning">עמודות "הנחייה" ו"תכיפות השתתפות" עדיין לא פעילות: צריך להריץ ב-Supabase את הסקריפט team_matrix.sql. אחרי זה רעננו את הדף.</p>`}
     <div class="matrix-wrap"><table class="matrix">
       <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}
         <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
       <tbody>${state.members.map((m) => `<tr>
         <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
-        ${box(m, "lead", m.can_lead ?? !!m.lead_frequency)}
+        ${box(m, "lead", m.can_lead ?? !!m.lead_frequency, !ready)}
         ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}
-        <td>${freqSelect(m, "lead_frequency")}</td><td>${freqSelect(m, "participation_frequency")}</td>
+        <td>${freqSelect(m, "lead_frequency")}</td><td>${ready ? freqSelect(m, "participation_frequency") : "—"}</td>
         ${box(m, "sound", m.sound).replace('class="cb"', 'class="cb sep"')}${box(m, "setup", m.setup)}
         <td><button class="link-btn del" data-deactivate="${m.id}" title="הסרה מהצוות" aria-label="הסרה">✕</button></td>
       </tr>`).join("")}
@@ -204,9 +207,11 @@ async function deactivate(id) {
 // ---------- shell ----------
 function render() {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
-  $("signup").hidden = state.tab !== "signup";
-  $("team").hidden = state.tab !== "team";
-  if (state.tab === "signup") renderSignup(); else { $("more").hidden = true; renderTeam(); }
+  for (const id of ["signup", "team", "songs"]) $(id).hidden = state.tab !== id;
+  $("more").hidden = true;
+  if (state.tab === "signup") renderSignup();
+  else if (state.tab === "team") renderTeam();
+  else renderSongs();
 }
 
 document.addEventListener("click", (e) => {
