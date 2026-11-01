@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="stylesheet" href="../style.css?v=35">
-  <link rel="stylesheet" href="ws.css?v=8">
+  <link rel="stylesheet" href="ws.css?v=9">
 </head>
 <body>
   <header class="site-header">
@@ -31,8 +31,13 @@
   <main class="wrap">
     <section id="login" class="login" hidden>
       <h2>כניסה לצוותי הלל וסאונד</h2>
-      <p>כדי לראות ולערוך את השיבוצים צריך להתחבר עם חשבון Google.</p>
-      <button id="google" class="btn google">התחברות עם Google</button>
+      <p>כדי לראות ולערוך את השיבוצים צריך להתחבר. הקלידו את כתובת המייל ותקבלו קישור כניסה.</p>
+      <form id="email-login" class="email-login">
+        <input type="email" name="email" required placeholder="name@gmail.com" dir="ltr" autocomplete="email">
+        <button class="btn" type="submit">שליחת קישור כניסה</button>
+      </form>
+      <p id="sent" class="sent" hidden></p>
+      <button id="google" class="btn ghost google" hidden>או התחברות עם Google</button>
       <p id="noaccess" class="noaccess" hidden></p>
     </section>
 
@@ -56,7 +61,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../schedule.js?v=35"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="ws.js?v=8"></script>
+  <script src="ws.js?v=9"></script>
   <script src="songs.js?v=1"></script>
 </body>
 </html>

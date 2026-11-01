@@ -1,4 +1,4 @@
-// WorshipAndSound (Google sign-in required): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
+// WorshipAndSound (sign-in required: email link, or Google once enabled): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "or_hasharon_worship" } });
@@ -213,7 +213,7 @@ async function loadUsers() {
 function renderUsers() {
   const self = (u) => u.email.toLowerCase() === user.email.toLowerCase();
   $("users").innerHTML = `<div class="team-section"><h2>משתמשים מורשים</h2>
-    <p class="hint">רק כתובות שברשימה יכולות להיכנס אחרי התחברות עם Google.</p>
+    <p class="hint">רק כתובות שברשימה יכולות להיכנס לאתר.</p>
     <div class="duty-table users-table"><table><thead><tr><th>מייל</th><th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
     ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td><td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
       <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
@@ -282,12 +282,27 @@ function showLogin() {
   $("who").innerHTML = "";
 }
 
-$("google").addEventListener("click", async () => {
-  // until Google is enabled in Supabase the redirect only shows a raw error page, so check first
-  const settings = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } }).then((r) => r.json()).catch(() => null);
-  if (settings && !settings.external?.google) { toast("ההתחברות עם Google עדיין בהגדרה. נסו שוב בקרוב"); return; }
-  sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+const redirectTo = location.origin + location.pathname;
+
+// email magic link: works without any Google Cloud setup
+$("email-login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = new FormData(e.target).get("email").trim().toLowerCase();
+  const btn = e.target.querySelector("button"); btn.disabled = true;
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+  btn.disabled = false;
+  if (error) {
+    toast(/rate|limit|seconds/i.test(error.message) ? "נשלחו יותר מדי מיילים לאחרונה, נסו שוב בעוד כמה דקות" : "השליחה נכשלה, בדקו את הכתובת ונסו שוב");
+    return;
+  }
+  $("sent").hidden = false;
+  $("sent").innerHTML = `נשלח מייל ל-<b dir="ltr">${esc(email)}</b>. פתחו אותו ולחצו על הקישור כדי להיכנס (אם לא הגיע, בדקו בתיקיית הספאם).`;
 });
+
+// Google button shows up only once Google sign-in is enabled in Supabase
+fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } }).then((r) => r.json())
+  .then((s) => { if (s.external?.google && !user) $("google").hidden = false; }).catch(() => {});
+$("google").addEventListener("click", () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo } }));
 document.addEventListener("click", (e) => {
   if (e.target.closest("#logout")) sb.auth.signOut().then(() => location.reload());
 });
@@ -299,6 +314,7 @@ async function start() {
   const { data: me, error: meErr } = await sb.from("allowed_users").select("email,is_admin").ilike("email", user.email).maybeSingle();
   if (meErr || !me) {
     showLogin();
+    $("email-login").hidden = true;
     $("google").hidden = true;
     $("noaccess").hidden = false;
     $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b>, אבל הכתובת עדיין לא ברשימת המורשים. בקשו מאוריה להוסיף אותה.<br><button class="link-btn" id="logout">התחברות עם חשבון אחר</button>`;

@@ -179,3 +179,8 @@
 .matrix .add-row td:last-child { text-align: start; }
 .matrix tbody tr:hover td { background: rgba(255,255,255,.03); }
 .matrix tbody tr:hover td.name { background: #161e2e; }
+
+.email-login { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.email-login input { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; min-width: 230px; flex: 1; }
+.sent { margin-top: 14px; color: var(--ink); }
+.btn.google { margin-top: 14px; }
