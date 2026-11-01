@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>צוותי הלל וסאונד · אור השרון</title>
+  <meta name="description" content="שיבוץ צוותי הלל וסאונד למפגשי קהילת אור השרון">
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="stylesheet" href="../style.css?v=35">
+  <link rel="stylesheet" href="ws.css?v=1">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div class="brand">
+        <img class="logo" src="../logo.png" alt="" width="64" height="64">
+        <div>
+          <h1>צוותי הלל וסאונד</h1>
+          <p class="tagline">שיבוץ למפגשים ופרטי הצוות</p>
+        </div>
+      </div>
+      <a class="yt-link" href="../">לאתר הקהילה</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="whoami">
+      <label for="me">מי אני:</label>
+      <select id="me"><option value="">בחר/י את השם שלך…</option></select>
+      <span class="hint" id="me-hint">בחירת השם מאפשרת לשבץ את עצמך</span>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="signup" aria-selected="true">שיבוץ</button>
+      <button role="tab" data-tab="team" aria-selected="false">הצוות</button>
+    </nav>
+
+    <section id="signup"></section>
+    <button id="more" class="more" hidden>הצג עוד מפגשים</button>
+    <section id="team" hidden></section>
+    <p id="status" class="status">טוען…</p>
+  </main>
+
+  <footer class="wrap footer"><a href="../">← חזרה לאתר קהילת אור השרון</a></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../schedule.js?v=35"></script>
+  <script src="ws.js?v=1"></script>
+</body>
+</html>

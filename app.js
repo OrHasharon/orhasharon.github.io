@@ -1,4 +1,4 @@
-﻿const PAGE = 24;
+const PAGE = 24;
 const state = { tab: "sermon", query: "", series: null, shown: PAGE };
 let data = { videos: [], playlists: [] };
 let byId = {};
@@ -159,49 +159,11 @@ fetch("data/videos.json", { cache: "no-cache" })
   })
   .catch(() => { $("status").textContent = "שגיאה בטעינת הסרטונים"; });
 
-// ---- meeting schedule: read live from the published Google Sheet ----
-const SCHEDULE_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkDNJ_HFYdjU4gqQ7gXajrO01CdF6pHFeaY_aC_Jn2GO3WUvIca15GhM7J6nHx5dl0vMCYLkm5U_3v/pub?gid=211949928&single=true&output=csv";
-
-function parseCsv(text) {
-  const rows = []; let row = [], cell = "", q = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (q) {
-      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
-      else if (ch === '"') q = false;
-      else cell += ch;
-    } else if (ch === '"') q = true;
-    else if (ch === ",") { row.push(cell); cell = ""; }
-    else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(cell); rows.push(row); row = []; cell = "";
-    } else cell += ch;
-  }
-  row.push(cell); rows.push(row);
-  return rows;
-}
-
-const SATURDAY_TIMES = "התאספות 10:40 · פתיחה בהלל 11:00";
-
-function meetingKind(day) {
-  if (day.includes("שבת")) return "אסיפה";
-  if (day.includes("שישי")) return "קבלת שבת";
-  return `יום ${day}`;
-}
-
+// ---- meeting schedule (data from schedule.js) ----
 let openPanel = null; // "schedule" | "duty" | null
 
-// a meeting stays "next" until it's over: Saturday ends ~13:00, anything else at the end of its day
-function meetingEnd(m) {
-  const end = new Date(m.date);
-  if (meetingKind(m.day) === "אסיפה") end.setHours(13, 0, 0, 0);
-  else end.setHours(23, 59, 59, 999);
-  return end;
-}
-
 function renderSchedule(meetings) {
-  const now = new Date();
-  const upcoming = meetings.filter((m) => meetingEnd(m) > now);
+  const upcoming = upcomingMeetings(meetings);
   const el = $("schedule");
   if (!upcoming.length) { el.hidden = true; return; }
   const maps = (place) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
@@ -243,37 +205,8 @@ function renderSchedule(meetings) {
     renderSchedule(meetings);
   }));
 }
-function parseSheet(text) {
-  // columns: תורנות, הערות, מקום, תאריך (dd/mm/yy), יום
-  return parseCsv(text).map(([duty = "", notes = "", place = "", dateText = "", day = ""]) => {
-    const m = dateText.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (!m) return null;
-    const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
-    return { duty: duty.trim(), notes: notes.trim(), place: place.trim(), day: day.trim(), date: new Date(y, m[2] - 1, m[1]) };
-  }).filter(Boolean);
-}
-
-// the sheet wins; duty.json fills in a missing duty and dates past the sheet's end
-function mergeMeetings(sheet, roster) {
-  const key = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-  const byDate = new Map(sheet.map((m) => [key(m.date), m]));
-  for (const r of roster) {
-    const [y, mo, d] = r.date.split("-").map(Number);
-    const date = new Date(y, mo - 1, d);
-    const m = byDate.get(key(date));
-    if (m) { if (!m.duty) m.duty = r.duty; if (!m.place) m.place = r.place; }
-    else byDate.set(key(date), { duty: r.duty, notes: "", place: r.place, day: r.day, date });
-  }
-  return [...byDate.values()].sort((a, b) => a.date - b.date).map((m) => ({
-    ...m, dateText: `${String(m.date.getDate()).padStart(2, "0")}/${String(m.date.getMonth() + 1).padStart(2, "0")}/${m.date.getFullYear()}`,
-  }));
-}
-
-Promise.all([
-  fetch(SCHEDULE_CSV).then((r) => r.text()).catch(() => ""),
-  fetch("data/duty.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({ meetings: [] })),
-])
-  .then(([text, roster]) => renderSchedule(mergeMeetings(parseSheet(text), roster.meetings || [])))
+loadMeetings()
+  .then(renderSchedule)
   .catch(() => {}); // the schedule is a bonus; the videos still work without it
 
 // "updated as of": the last successful check of YouTube + the sheet (the schedule itself is read live)
