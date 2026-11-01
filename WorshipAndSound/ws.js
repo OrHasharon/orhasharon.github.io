@@ -1,13 +1,10 @@
-// WorshipAndSound (sign-in required: email link, or Google once enabled): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
+// WorshipAndSound: sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  db: { schema: "or_hasharon_worship" },
-  auth: { detectSessionInUrl: false }, // handled in consumeAuthRedirect()
-});
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "or_hasharon_worship" } });
 
 const SLOTS = [
-  { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => m.can_lead, why: "לא מסומן/ת להנחייה" },
+  { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => !!m.lead_frequency, why: "לא מסומן/ת כמוביל/ת הלל" },
   { role: "musician", label: "נגנים ושירה", max: Infinity, eligible: (m) => !!m.instruments, why: "לא רשומים כלים" },
   { role: "sound", label: "סאונד", max: 1, eligible: (m) => m.sound, why: "לא מסומן/ת כאיש/ת סאונד" },
   { role: "setup", label: "הקמת סאונד", max: 2, eligible: (m) => m.setup, why: "לא מסומן/ת כמקים/ה" },
@@ -18,8 +15,6 @@ const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PA
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const byId = (id) => state.members.find((m) => m.id === id);
-const INSTRUMENTS = ["פסנתר", "שירה", "גיטרה", "תוף", "בס", "חליל", "כינור"];
-const FREQS = ["פעם בשבוע", "פעם בשבועיים", "פעם ב-3 שבועות", "פעם בחודש", "פעם ברבעון"];
 const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", "🪈"]];
 const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
 const instHtml = (inst) => inst ? ` <small>(${icon(inst)} ${esc(inst)})</small>` : "";
@@ -59,7 +54,7 @@ const takenIn = (date, role) => state.signups.filter((s) => s.meeting_date === d
 // people + picker for one role at one meeting; shared by the table (desktop) and the cards (phone)
 function slotCell(mt, slot) {
   const taken = takenIn(mt.iso, slot.role);
-  const people = taken.map((s) => `<span class="person"${s.added_by ? ` title="שובץ ע״י ${esc(s.added_by)}"` : ""}>${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
+  const people = taken.map((s) => `<span class="person">${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
   let action = "";
   const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
   if (picking) {
@@ -124,76 +119,64 @@ async function removeSignup(id) {
   await refreshSignups(); render();
 }
 
-// ---------- team: one editable row per person, like the team sheet ----------
-function freqSelect(m, field) {
-  const v = m[field] || "";
-  const opts = ["", ...FREQS, ...(v && !FREQS.includes(v) ? [v] : [])]; // keep an older free-text value visible
-  return `<select class="freq" data-id="${m.id}" data-field="${field}">${opts.map((o) => `<option value="${esc(o)}"${o === v ? " selected" : ""}>${o ? esc(o) : "—"}</option>`).join("")}</select>`;
+// ---------- team ----------
+function memberForm(m = {}) {
+  return `<form data-member="${m.id || "new"}">
+    <label class="field">שם<input name="name" required value="${esc(m.name)}"></label>
+    <label class="field">כלים (מופרדים בפסיק)<input name="instruments" value="${esc(m.instruments)}" placeholder="לדוגמה: גיטרה, בס"></label>
+    <label class="field">מדריך/ה הלל (תדירות, ריק = לא)<input name="lead_frequency" value="${esc(m.lead_frequency)}" placeholder="לדוגמה: פעם בחודש"></label>
+    <div class="checks"><label><input type="checkbox" name="sound"${m.sound ? " checked" : ""}> איש/ת סאונד</label>
+      <label><input type="checkbox" name="setup"${m.setup ? " checked" : ""}> מקים/ה סאונד</label></div>
+    <label class="field">הערות<input name="notes" value="${esc(m.notes)}"></label>
+    <div class="form-actions"><button class="btn" type="submit">שמירה</button><button class="btn ghost" type="button" data-cancel>ביטול</button>
+      ${m.id ? `<button class="btn ghost" type="button" data-deactivate="${m.id}">הסרה מהצוות</button>` : ""}</div>
+  </form>`;
 }
-const box = (m, flag, on) => `<td class="cb"><input type="checkbox" data-id="${m.id}" data-flag="${esc(flag)}"${on ? " checked" : ""}></td>`;
+
+function memberCard(m) {
+  if (state.editing === m.id) return `<div class="member">${memberForm(m)}</div>`;
+  const tags = [
+    m.lead_frequency && `<span class="role-tag lead">מדריך/ה הלל · ${esc(m.lead_frequency)}</span>`,
+    m.sound && `<span class="role-tag sound">סאונד</span>`,
+    m.setup && `<span class="role-tag sound">הקמת סאונד</span>`,
+  ].filter(Boolean).join("");
+  return `<div class="member">
+    <button class="link-btn edit" data-edit="${m.id}">עריכה</button>
+    <h3>${esc(m.name)}</h3>
+    ${instrumentsOf(m).map((x) => `<p class="inst">${icon(x)} ${esc(x)}</p>`).join("")}
+    ${m.notes ? `<p>${esc(m.notes)}</p>` : ""}
+    <div class="roles">${tags}</div>
+  </div>`;
+}
 
 function renderTeam() {
-  const has = (m, inst) => instrumentsOf(m).includes(inst);
-  $("team").innerHTML = `<div class="team-section">
-    <div class="matrix-wrap"><table class="matrix">
-      <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}
-        <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
-      <tbody>${state.members.map((m) => `<tr>
-        <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
-        ${box(m, "lead", m.can_lead)}
-        ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}
-        <td>${freqSelect(m, "lead_frequency")}</td><td>${freqSelect(m, "participation_frequency")}</td>
-        ${box(m, "sound", m.sound).replace('class="cb"', 'class="cb sep"')}${box(m, "setup", m.setup)}
-        <td><button class="link-btn del" data-deactivate="${m.id}" title="הסרה מהצוות" aria-label="הסרה">✕</button></td>
-      </tr>`).join("")}
-      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 6}"><button class="btn" data-add-member>הוספה</button></td></tr>
-      </tbody></table></div>
-    <p class="hint">כל שינוי נשמר מיד. לחיצה על שם מאפשרת לשנות אותו.</p></div>`;
+  const worship = state.members.filter((m) => m.instruments || m.lead_frequency);
+  const soundOnly = state.members.filter((m) => !m.instruments && !m.lead_frequency);
+  $("team").innerHTML = `
+    <div class="team-section"><h2>צוות הלל</h2><div class="team-grid">${worship.map(memberCard).join("")}</div></div>
+    <div class="team-section"><h2>צוות סאונד</h2><div class="team-grid">${soundOnly.map(memberCard).join("")}</div>
+      <p class="hint">חברי צוות הלל שעושים גם סאונד או הקמה מסומנים בכרטיס שלהם למעלה.</p></div>
+    <div class="team-section"><h2>הוספת חבר/ת צוות</h2>
+      ${state.editing === "new" ? `<div class="member">${memberForm()}</div>` : `<button class="join" data-edit="new">+ הוספה</button>`}</div>`;
 }
 
-async function updateMember(id, patch) {
-  const { error } = await sb.from("members").update({ ...patch, updated_at: new Date().toISOString(), updated_by: user?.email || null }).eq("id", id);
-  if (error) { toast(error.code === "23505" ? "השם הזה כבר קיים בצוות" : "השמירה נכשלה, נסו שוב"); await loadAll(); render(); return false; }
-  Object.assign(byId(id), patch);
+async function saveMember(form) {
+  const f = new FormData(form);
+  const row = {
+    name: f.get("name").trim(),
+    instruments: f.get("instruments").trim() || null,
+    lead_frequency: f.get("lead_frequency").trim() || null,
+    sound: f.has("sound"), setup: f.has("setup"),
+    notes: f.get("notes").trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  const id = form.dataset.member;
+  const { error } = id === "new" ? await sb.from("members").insert(row) : await sb.from("members").update(row).eq("id", Number(id));
+  if (error) { toast(error.code === "23505" ? "השם הזה כבר קיים בצוות" : "השמירה נכשלה, נסו שוב"); return; }
   toast("נשמר");
-  return true;
+  state.editing = null;
+  await loadAll(); render();
 }
-
-document.addEventListener("change", (e) => {
-  const t = e.target;
-  if (t.matches(".matrix input[type=checkbox]")) {
-    const m = byId(Number(t.dataset.id));
-    const flag = t.dataset.flag;
-    if (flag === "lead") updateMember(m.id, { can_lead: t.checked });
-    else if (flag === "sound" || flag === "setup") updateMember(m.id, { [flag]: t.checked });
-    else {
-      const inst = flag.slice(5);
-      const set = new Set(instrumentsOf(m));
-      t.checked ? set.add(inst) : set.delete(inst);
-      const ordered = [...INSTRUMENTS.filter((x) => set.has(x)), ...[...set].filter((x) => !INSTRUMENTS.includes(x))];
-      updateMember(m.id, { instruments: ordered.join(", ") || null });
-    }
-  } else if (t.matches(".matrix .freq")) {
-    updateMember(Number(t.dataset.id), { [t.dataset.field]: t.value || null });
-  }
-});
-
-document.addEventListener("click", async (e) => {
-  const rn = e.target.closest("[data-rename]");
-  if (rn) {
-    const m = byId(Number(rn.dataset.rename));
-    const name = prompt("שם חדש:", m.name);
-    if (name && name.trim() && name.trim() !== m.name && await updateMember(m.id, { name: name.trim() })) render();
-    return;
-  }
-  if (e.target.closest("[data-add-member]")) {
-    const name = $("new-member").value.trim();
-    if (!name) { $("new-member").focus(); return; }
-    const { error } = await sb.from("members").insert({ name, updated_by: user?.email || null });
-    if (error) { toast(error.code === "23505" ? "השם הזה כבר קיים בצוות" : "ההוספה נכשלה"); return; }
-    toast(`${name} נוסף/ה`); await loadAll(); render();
-  }
-});
 
 async function deactivate(id) {
   const m = byId(id);
@@ -204,59 +187,12 @@ async function deactivate(id) {
   await loadAll(); render();
 }
 
-// ---------- users (admins only) ----------
-let allowed = [];
-let isAdmin = false;
-
-async function loadUsers() {
-  const { data, error } = await sb.from("allowed_users").select("*").order("added_at");
-  if (!error) allowed = data;
-}
-
-function renderUsers() {
-  const self = (u) => u.email.toLowerCase() === user.email.toLowerCase();
-  $("users").innerHTML = `<div class="team-section"><h2>משתמשים מורשים</h2>
-    <p class="hint">רק כתובות שברשימה יכולות להיכנס לאתר.</p>
-    <div class="duty-table users-table"><table><thead><tr><th>מייל</th><th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
-    ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td><td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
-      <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
-    </tbody></table></div>
-    <form class="add-user"><input name="email" type="email" required placeholder="name@gmail.com" dir="ltr">
-      <label><input type="checkbox" name="admin"> מנהל/ת</label><button class="btn" type="submit">הוספה</button></form></div>`;
-}
-
-document.addEventListener("submit", async (e) => {
-  if (!e.target.matches(".add-user")) return;
-  e.preventDefault();
-  const f = new FormData(e.target);
-  const email = f.get("email").trim().toLowerCase();
-  const { error } = await sb.from("allowed_users").insert({ email, is_admin: f.has("admin") });
-  toast(error ? (error.code === "23505" ? "הכתובת כבר ברשימה" : "ההוספה נכשלה") : `${email} נוסף/ה`);
-  await loadUsers(); render();
-});
-document.addEventListener("click", async (e) => {
-  const del = e.target.closest("[data-del-user]");
-  const adm = e.target.closest("[data-toggle-admin]");
-  if (del) {
-    if (!confirm(`להסיר את ${del.dataset.delUser}?`)) return;
-    const { error } = await sb.from("allowed_users").delete().eq("email", del.dataset.delUser);
-    toast(error ? "ההסרה נכשלה" : "הוסר/ה"); await loadUsers(); render();
-  } else if (adm) {
-    const u = allowed.find((x) => x.email === adm.dataset.toggleAdmin);
-    const { error } = await sb.from("allowed_users").update({ is_admin: !u.is_admin }).eq("email", u.email);
-    toast(error ? "העדכון נכשל" : "עודכן"); await loadUsers(); render();
-  }
-});
-
 // ---------- shell ----------
 function render() {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
-  for (const id of ["signup", "team", "songs", "users"]) $(id).hidden = state.tab !== id;
-  $("more").hidden = true;
-  if (state.tab === "signup") renderSignup();
-  else if (state.tab === "team") renderTeam();
-  else if (state.tab === "songs") renderSongs();
-  else if (state.tab === "users") renderUsers();
+  $("signup").hidden = state.tab !== "signup";
+  $("team").hidden = state.tab !== "team";
+  if (state.tab === "signup") renderSignup(); else { $("more").hidden = true; renderTeam(); }
 }
 
 document.addEventListener("click", (e) => {
@@ -264,6 +200,8 @@ document.addEventListener("click", (e) => {
   const tab = t.closest(".tabs button");
   if (tab) { state.tab = tab.dataset.tab; state.editing = null; render(); return; }
   if (t.closest("[data-remove]")) { removeSignup(Number(t.closest("[data-remove]").dataset.remove)); return; }
+  if (t.closest("[data-edit]")) { const v = t.closest("[data-edit]").dataset.edit; state.editing = v === "new" ? "new" : Number(v); render(); return; }
+  if (t.closest("[data-cancel]")) { state.editing = null; render(); return; }
   if (t.closest("[data-deactivate]")) { deactivate(Number(t.closest("[data-deactivate]").dataset.deactivate)); return; }
 });
 document.addEventListener("change", (e) => {
@@ -272,105 +210,20 @@ document.addEventListener("change", (e) => {
   if (el.matches(".inst-pick")) assign("musician", el.dataset.date, Number(el.dataset.member), el.value);
   else assign(el.dataset.role, el.dataset.date, Number(el.value));
 });
+document.addEventListener("submit", (e) => {
+  if (e.target.matches("form[data-member]")) { e.preventDefault(); saveMember(e.target); }
+});
 $("more").addEventListener("click", () => { state.shown += PAGE; render(); });
 
-// ---------- sign-in ----------
-let user = null;
-
-function showLogin() {
-  $("login").hidden = false;
-  document.querySelector(".tabs").hidden = true;
-  $("signup").hidden = $("team").hidden = $("more").hidden = true;
-  $("status").textContent = "";
-  $("who").innerHTML = "";
-}
-
-const redirectTo = location.origin + location.pathname;
-
-// email magic link: works without any Google Cloud setup
-$("email-login").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const email = new FormData(e.target).get("email").trim().toLowerCase();
-  const btn = e.target.querySelector("button"); btn.disabled = true;
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
-  btn.disabled = false;
-  if (error) {
-    toast(/rate|limit|seconds/i.test(error.message) ? "נשלחו יותר מדי מיילים לאחרונה, נסו שוב בעוד כמה דקות" : "השליחה נכשלה, בדקו את הכתובת ונסו שוב");
-    return;
-  }
-  $("sent").hidden = false;
-  $("sent").innerHTML = `נשלח מייל ל-<b dir="ltr">${esc(email)}</b>. פתחו אותו ולחצו על הקישור כדי להיכנס (אם לא הגיע, בדקו בתיקיית הספאם).`;
-});
-
-// Google button shows up only once Google sign-in is enabled in Supabase
-fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } }).then((r) => r.json())
-  .then((s) => { if (s.external?.google && !user) $("google").hidden = false; }).catch(() => {});
-$("google").addEventListener("click", () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo } }));
-document.addEventListener("click", (e) => {
-  if (e.target.closest("#logout")) sb.auth.signOut().then(() => location.reload());
-});
-
-// the email link comes back as #access_token=… (or ?code=… / #error_description=…)
-async function consumeAuthRedirect() {
-  const hash = new URLSearchParams(location.hash.slice(1));
-  const query = new URLSearchParams(location.search);
-  let err = hash.get("error_description") || query.get("error_description");
-  try {
-    if (hash.get("access_token") && hash.get("refresh_token")) {
-      const { error } = await sb.auth.setSession({ access_token: hash.get("access_token"), refresh_token: hash.get("refresh_token") });
-      if (error) err = error.message;
-    } else if (query.get("code")) {
-      const { error } = await sb.auth.exchangeCodeForSession(query.get("code"));
-      if (error) err = error.message;
-    }
-  } catch (e) { err = e.message; }
-  if (location.hash || location.search) history.replaceState(null, "", location.pathname); // don't leave tokens in the address bar
-  return err;
-}
-
-function loginProblem(msg) {
-  if (!msg) return;
-  const friendly = /expired|invalid|not found|used/i.test(msg) ? "קישור הכניסה פג תוקף או שכבר השתמשו בו. שלחו קישור חדש ולחצו עליו פעם אחת." : `הכניסה נכשלה: ${msg}`;
-  $("sent").hidden = false;
-  $("sent").innerHTML = `<span class="login-error">${esc(friendly)}</span>`;
-}
-
-async function start() {
-  const authErr = await consumeAuthRedirect();
-  const { data: { session } } = await sb.auth.getSession();
-  user = session?.user || null;
-  if (!user) { showLogin(); loginProblem(authErr); return; }
-  const { data: me, error: meErr } = await sb.from("allowed_users").select("email,is_admin").ilike("email", user.email).maybeSingle();
-  if (meErr?.code === "PGRST205" || meErr?.code === "42P01") {
-    showLogin();
-    $("email-login").hidden = true; $("google").hidden = true;
-    $("noaccess").hidden = false;
-    $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b> ✓<br>אבל המערכת עדיין לא הוגדרה עד הסוף: צריך להריץ את סקריפט ההגדרה (auth_migration.sql) ב-Supabase. אחרי שהוא רץ, רעננו את הדף.<br><button class="link-btn" id="logout">התנתקות</button>`;
-    return;
-  }
-  if (meErr || !me) {
-    showLogin();
-    $("email-login").hidden = true;
-    $("google").hidden = true;
-    $("noaccess").hidden = false;
-    $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b>, אבל הכתובת עדיין לא ברשימת המורשים. בקשו מאוריה להוסיף אותה.<br><button class="link-btn" id="logout">התחברות עם חשבון אחר</button>`;
-    return;
-  }
-  isAdmin = me.is_admin;
-  document.querySelector('[data-tab="users"]').hidden = !isAdmin;
-  if (isAdmin) await loadUsers();
-  $("login").hidden = true;
-  document.querySelector(".tabs").hidden = false;
-  $("who").innerHTML = `${esc(user.user_metadata?.full_name || user.email)} · <button class="link-btn" id="logout">התנתקות</button>`;
-  $("status").textContent = "טוען…";
-  try {
-    await loadAll();
+loadAll()
+  .then(() => {
     $("status").textContent = "";
     render();
-    sb.from("usage_logs").insert({ visitor_name: user.email, action: "page_view" }).then(() => {});
-  } catch (err) {
+    sb.from("usage_logs").insert({ action: "page_view" }).then(() => {});
+  })
+  .catch((err) => {
     console.error(err);
-    $("status").textContent = "שגיאה בטעינת הנתונים, נסו לרענן";
-  }
-}
-start();
+    $("status").textContent = err?.code === "PGRST106" || /schema/i.test(err?.message || "")
+      ? "המערכת עדיין לא מחוברת למסד הנתונים (נדרשת הגדרה ב-Supabase)"
+      : "שגיאה בטעינת הנתונים, נסו לרענן";
+  });

@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="stylesheet" href="../style.css?v=35">
-  <link rel="stylesheet" href="ws.css?v=10">
+  <link rel="stylesheet" href="ws.css?v=20">
 </head>
 <body>
   <header class="site-header">
@@ -24,35 +24,20 @@
           <p class="tagline">שיבוץ למפגשים ופרטי הצוות</p>
         </div>
       </div>
-      <div class="account"><span id="who"></span><a class="yt-link" href="../">לאתר הקהילה</a></div>
+      <a class="yt-link" href="../">לאתר הקהילה</a>
     </div>
   </header>
 
   <main class="wrap">
-    <section id="login" class="login" hidden>
-      <h2>כניסה לצוותי הלל וסאונד</h2>
-      <p>כדי לראות ולערוך את השיבוצים צריך להתחבר. הקלידו את כתובת המייל ותקבלו קישור כניסה.</p>
-      <form id="email-login" class="email-login">
-        <input type="email" name="email" required placeholder="name@gmail.com" dir="ltr" autocomplete="email">
-        <button class="btn" type="submit">שליחת קישור כניסה</button>
-      </form>
-      <p id="sent" class="sent" hidden></p>
-      <button id="google" class="btn ghost google" hidden>או התחברות עם Google</button>
-      <p id="noaccess" class="noaccess" hidden></p>
-    </section>
 
-    <nav class="tabs" role="tablist" hidden>
+    <nav class="tabs" role="tablist">
       <button role="tab" data-tab="signup" aria-selected="true">שיבוץ</button>
       <button role="tab" data-tab="team" aria-selected="false">הצוות</button>
-      <button role="tab" data-tab="songs" aria-selected="false">שירים</button>
-      <button role="tab" data-tab="users" aria-selected="false" hidden>משתמשים</button>
     </nav>
 
     <section id="signup"></section>
     <button id="more" class="more" hidden>הצג עוד מפגשים</button>
     <section id="team" hidden></section>
-    <section id="songs" hidden></section>
-    <section id="users" hidden></section>
     <p id="status" class="status">טוען…</p>
   </main>
 
@@ -60,8 +45,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../schedule.js?v=35"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="ws.js?v=10"></script>
-  <script src="songs.js?v=1"></script>
+  <script src="ws.js?v=20"></script>
 </body>
 </html>
