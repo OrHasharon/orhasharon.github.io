@@ -1,7 +1,10 @@
-// WorshipAndSound: sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
+// WorshipAndSound (email sign-in + allow-list once login_migration.sql ran): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "or_hasharon_worship" } });
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  db: { schema: "or_hasharon_worship" },
+  auth: { detectSessionInUrl: false }, // handled in consumeAuthRedirect()
+});
 
 const SLOTS = [
   { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => m.can_lead ?? !!m.lead_frequency, why: "לא מסומן/ת להנחייה" },
@@ -204,14 +207,59 @@ async function deactivate(id) {
   await loadAll(); render();
 }
 
+// ---------- users (admins only) ----------
+let allowed = [];
+let isAdmin = false;
+
+async function loadUsers() {
+  const { data, error } = await sb.from("allowed_users").select("*").order("added_at");
+  if (!error) allowed = data;
+}
+
+function renderUsers() {
+  const self = (u) => u.email.toLowerCase() === user.email.toLowerCase();
+  $("users").innerHTML = `<div class="team-section"><h2>משתמשים מורשים</h2>
+    <p class="hint">רק כתובות שברשימה יכולות להיכנס לאתר.</p>
+    <div class="duty-table users-table"><table><thead><tr><th>מייל</th><th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
+    ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td><td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
+      <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
+    </tbody></table></div>
+    <form class="add-user"><input name="email" type="email" required placeholder="name@gmail.com" dir="ltr">
+      <label><input type="checkbox" name="admin"> מנהל/ת</label><button class="btn" type="submit">הוספה</button></form></div>`;
+}
+
+document.addEventListener("submit", async (e) => {
+  if (!e.target.matches(".add-user")) return;
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const email = f.get("email").trim().toLowerCase();
+  const { error } = await sb.from("allowed_users").insert({ email, is_admin: f.has("admin") });
+  toast(error ? (error.code === "23505" ? "הכתובת כבר ברשימה" : "ההוספה נכשלה") : `${email} נוסף/ה`);
+  await loadUsers(); render();
+});
+document.addEventListener("click", async (e) => {
+  const del = e.target.closest("[data-del-user]");
+  const adm = e.target.closest("[data-toggle-admin]");
+  if (del) {
+    if (!confirm(`להסיר את ${del.dataset.delUser}?`)) return;
+    const { error } = await sb.from("allowed_users").delete().eq("email", del.dataset.delUser);
+    toast(error ? "ההסרה נכשלה" : "הוסר/ה"); await loadUsers(); render();
+  } else if (adm) {
+    const u = allowed.find((x) => x.email === adm.dataset.toggleAdmin);
+    const { error } = await sb.from("allowed_users").update({ is_admin: !u.is_admin }).eq("email", u.email);
+    toast(error ? "העדכון נכשל" : "עודכן"); await loadUsers(); render();
+  }
+});
+
 // ---------- shell ----------
 function render() {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
-  for (const id of ["signup", "team", "songs"]) $(id).hidden = state.tab !== id;
+  for (const id of ["signup", "team", "songs", "users"]) $(id).hidden = state.tab !== id;
   $("more").hidden = true;
   if (state.tab === "signup") renderSignup();
   else if (state.tab === "team") renderTeam();
-  else renderSongs();
+  else if (state.tab === "songs") renderSongs();
+  else renderUsers();
 }
 
 document.addEventListener("click", (e) => {
@@ -229,15 +277,124 @@ document.addEventListener("change", (e) => {
 });
 $("more").addEventListener("click", () => { state.shown += PAGE; render(); });
 
-loadAll()
-  .then(() => {
+// ---------- sign-in ----------
+let user = null;
+
+function showLogin() {
+  $("login").hidden = false;
+  document.querySelector(".tabs").hidden = true;
+  $("signup").hidden = $("team").hidden = $("more").hidden = true;
+  $("status").textContent = "";
+  $("who").innerHTML = "";
+}
+
+const redirectTo = location.origin + location.pathname;
+
+// email magic link: works without any Google Cloud setup
+$("email-login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = new FormData(e.target).get("email").trim().toLowerCase();
+  const btn = e.target.querySelector("button"); btn.disabled = true;
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+  btn.disabled = false;
+  if (error) {
+    toast(/rate|limit|seconds/i.test(error.message) ? "נשלחו יותר מדי מיילים לאחרונה, נסו שוב בעוד כמה דקות" : "השליחה נכשלה, בדקו את הכתובת ונסו שוב");
+    return;
+  }
+  $("sent").hidden = false;
+  $("sent").innerHTML = `נשלח מייל ל-<b dir="ltr">${esc(email)}</b>. פתחו אותו ולחצו על הקישור כדי להיכנס (אם לא הגיע, בדקו בתיקיית הספאם).`;
+});
+
+// Google button shows up only once Google sign-in is enabled in Supabase
+fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } }).then((r) => r.json())
+  .then((s) => { if (s.external?.google && !user) $("google").hidden = false; }).catch(() => {});
+$("google").addEventListener("click", () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo } }));
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#logout")) sb.auth.signOut().then(() => location.reload());
+});
+
+// the email link comes back as #access_token=… (or ?code=… / #error_description=…)
+async function consumeAuthRedirect() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const query = new URLSearchParams(location.search);
+  let err = hash.get("error_description") || query.get("error_description");
+  try {
+    if (hash.get("access_token") && hash.get("refresh_token")) {
+      const { error } = await sb.auth.setSession({ access_token: hash.get("access_token"), refresh_token: hash.get("refresh_token") });
+      if (error) err = error.message;
+    } else if (query.get("code")) {
+      const { error } = await sb.auth.exchangeCodeForSession(query.get("code"));
+      if (error) err = error.message;
+    }
+  } catch (e) { err = e.message; }
+  if (location.hash || location.search) history.replaceState(null, "", location.pathname); // don't leave tokens in the address bar
+  return err;
+}
+
+function loginProblem(msg) {
+  if (!msg) return;
+  const friendly = /expired|invalid|not found|used/i.test(msg) ? "קישור הכניסה פג תוקף או שכבר השתמשו בו. שלחו קישור חדש ולחצו עליו פעם אחת." : `הכניסה נכשלה: ${msg}`;
+  $("sent").hidden = false;
+  $("sent").innerHTML = `<span class="login-error">${esc(friendly)}</span>`;
+}
+
+// Before login_migration.sql runs there is no allowed_users table: keep the site open (as before).
+async function loginEnabled() {
+  const { error } = await sb.from("allowed_users").select("email").limit(1);
+  return !(error && (error.code === "PGRST205" || error.code === "42P01"));
+}
+
+async function startOpen() {
+  $("login").hidden = true;
+  document.querySelector(".tabs").hidden = false;
+  try {
+    await loadAll();
     $("status").textContent = "";
     render();
     sb.from("usage_logs").insert({ action: "page_view" }).then(() => {});
-  })
-  .catch((err) => {
+  } catch (err) {
     console.error(err);
-    $("status").textContent = err?.code === "PGRST106" || /schema/i.test(err?.message || "")
-      ? "המערכת עדיין לא מחוברת למסד הנתונים (נדרשת הגדרה ב-Supabase)"
-      : "שגיאה בטעינת הנתונים, נסו לרענן";
-  });
+    $("status").textContent = "שגיאה בטעינת הנתונים, נסו לרענן";
+  }
+}
+
+async function start() {
+  if (!(await loginEnabled())) { await consumeAuthRedirect(); return startOpen(); }
+  const authErr = await consumeAuthRedirect();
+  const { data: { session } } = await sb.auth.getSession();
+  user = session?.user || null;
+  if (!user) { showLogin(); loginProblem(authErr); return; }
+  const { data: me, error: meErr } = await sb.from("allowed_users").select("email,is_admin").ilike("email", user.email).maybeSingle();
+  if (meErr?.code === "PGRST205" || meErr?.code === "42P01") {
+    showLogin();
+    $("email-login").hidden = true; $("google").hidden = true;
+    $("noaccess").hidden = false;
+    $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b> ✓<br>אבל המערכת עדיין לא הוגדרה עד הסוף: צריך להריץ את סקריפט ההגדרה (auth_migration.sql) ב-Supabase. אחרי שהוא רץ, רעננו את הדף.<br><button class="link-btn" id="logout">התנתקות</button>`;
+    return;
+  }
+  if (meErr || !me) {
+    showLogin();
+    $("email-login").hidden = true;
+    $("google").hidden = true;
+    $("noaccess").hidden = false;
+    $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b>, אבל הכתובת עדיין לא ברשימת המורשים. בקשו מאוריה להוסיף אותה.<br><button class="link-btn" id="logout">התחברות עם חשבון אחר</button>`;
+    return;
+  }
+  isAdmin = me.is_admin;
+  document.querySelector('[data-tab="users"]').hidden = !isAdmin;
+  if (isAdmin) await loadUsers();
+  $("login").hidden = true;
+  document.querySelector(".tabs").hidden = false;
+  $("who").innerHTML = `${esc(user.user_metadata?.full_name || user.email)} · <button class="link-btn" id="logout">התנתקות</button>`;
+  $("status").textContent = "טוען…";
+  try {
+    await loadAll();
+    $("status").textContent = "";
+    render();
+    sb.from("usage_logs").insert({ visitor_name: user.email, action: "page_view" }).then(() => {});
+  } catch (err) {
+    console.error(err);
+    $("status").textContent = "שגיאה בטעינת הנתונים, נסו לרענן";
+  }
+}
+start();

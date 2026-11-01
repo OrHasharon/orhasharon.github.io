@@ -64,7 +64,7 @@ function renderChordPro(content, shift = 0, { chords = true } = {}) {
 
 // "76. תודה לך אבי (capo 2)" -> title "תודה לך אבי" + {capo: 2}
 function cleanTitle(raw) {
-  let title = raw.replace(/^\s*\d+\s*[.)\-]\s*/, "").trim();
+  let title = raw.replace(/^\s*\d+\s*[.)\-]\s*/, "").replace(/\s*[.(]\s*\d{1,4}\s*$/, "").trim();
   // RTL text extraction can mirror the brackets, so accept either side
   const capo = title.match(/[()]?\s*(?:capo|קאפו)\s*(\d+)\s*[()]?/i);
   if (capo) title = title.replace(capo[0], "").replace(/[()]\s*[()]/g, "").replace(/^[\s()]+|[\s()]+$/g, "").trim();
@@ -78,6 +78,7 @@ async function pdfToSongs(file) {
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
   const songs = [];
   let totalText = 0;
+  const all = []; // every line of the document, in reading order
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
@@ -94,23 +95,24 @@ async function pdfToSongs(file) {
       if (line) line.items.push(it); else lines.push({ y: it.y, items: [it] });
     }
     lines.sort((a, b) => b.y - a.y);
-    const hMed = median(items.map((i) => i.h));
-    const out = lines.map((l) => toLine(l));
-    // titles = clearly bigger text that isn't chords
-    let current = null;
-    out.forEach((ln, idx) => {
-      const isTitle = !ln.chords && ln.h > hMed * 1.25 && ln.text.length < 60;
-      if (isTitle || (!current && idx === 0)) {
-        if (isTitle && current && !current.lines.length) { current.title += " " + ln.text; return; }
-        current = { title: ln.text, lines: [] };
-        songs.push(current);
-        if (isTitle || idx === 0) return;
-      }
-      if (!current) { current = { title: `עמוד ${p}`, lines: [] }; songs.push(current); }
-      current.lines.push(ln);
-    });
+    for (const l of lines) all.push({ ...toLine(l), page: p });
   }
   if (!totalText) return null; // scanned images, no text layer
+
+  // Songbook style: "76. שם השיר" starts a song, everything under it (also on later pages) is the song.
+  // Otherwise fall back to big text (compared with the lyrics, not the smaller chord lines).
+  const NUMBERED = /^\s*\d{1,4}\s*[.)]\s*\S|\S\s*[.(]\s*\d{1,4}\s*$/;
+  const numbered = all.filter((l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80);
+  const lyricH = median(all.filter((l) => !l.chords).map((l) => l.h));
+  const isTitle = numbered.length
+    ? (l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80
+    : (l) => !l.chords && l.h > lyricH * 1.2 && l.text.trim().length < 60;
+  let current = null;
+  for (const ln of all) {
+    if (isTitle(ln)) { current = { title: ln.text.trim(), lines: [] }; songs.push(current); continue; }
+    if (!current) { current = { title: `עמוד ${ln.page}`, lines: [] }; songs.push(current); }
+    current.lines.push(ln);
+  }
   return songs.map((s) => {
     const { title, capo } = cleanTitle(s.title);
     const body = mergeChordLines(s.lines);

@@ -202,3 +202,28 @@
   .song-body .seg .ch { color: #b00020 !important; }
   .song-body, .cp-section, .song-artist { color: #000 !important; }
 }
+
+/* sign-in */
+.account { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+#who { color: #fbf4e6; opacity: .85; font-size: .9rem; }
+#who .link-btn { color: var(--accent-ink); }
+.login {
+  margin: 40px auto; max-width: 440px; text-align: center;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 28px 24px;
+}
+.login h2 { font-family: "Frank Ruhl Libre", serif; margin: 0 0 8px; }
+.login p { color: var(--muted); margin: 0 0 18px; }
+.btn.google { font-size: 1rem; padding: 10px 22px; }
+
+/* users */
+.users-table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 10px; }
+.add-user { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+.add-user input[type=email] { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 240px; }
+.noaccess { margin-top: 14px; color: var(--ink); }
+
+.email-login { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.email-login input { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; min-width: 230px; flex: 1; }
+.sent { margin-top: 14px; color: var(--ink); }
+.btn.google { margin-top: 14px; }
+.login-error { color: #ffb4a8; }
