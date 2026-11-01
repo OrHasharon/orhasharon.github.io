@@ -1,4 +1,4 @@
--- WorshipAndSound: team table like Uriya's sheet (lead checkbox + participation frequency) and the sheet's data.
+﻿-- WorshipAndSound: team table like Uriya's sheet (lead checkbox + participation frequency) and the sheet's data.
 -- Run once in Supabase: SQL Editor -> New query -> paste -> Run. Safe to re-run.
 alter table or_hasharon_worship.members add column if not exists can_lead boolean not null default false;
 alter table or_hasharon_worship.members add column if not exists participation_frequency text;
@@ -13,7 +13,7 @@ update or_hasharon_worship.members set instruments = 'פסנתר'             wh
 update or_hasharon_worship.members set instruments = 'פסנתר, תוף'        where name = 'יונתן רוז';
 update or_hasharon_worship.members set instruments = 'שירה, גיטרה'       where name = 'רולנד שיפרס';
 update or_hasharon_worship.members set instruments = 'כינור'             where name = 'איילת הנדרן';
-update or_hasharon_worship.members set instruments = 'שירה, גיטרה, בס', participation_frequency = 'פעמיים שלוש' where name = 'נועם לבונטי';
+update or_hasharon_worship.members set instruments = 'שירה, גיטרה, בס', can_lead = true, participation_frequency = 'פעמיים שלוש' where name = 'נועם לבונטי';
 insert into or_hasharon_worship.members (name, instruments) values
   ('יאווה', 'שירה'), ('טל שפר', 'שירה'), ('נעם לביא', 'שירה'), ('אלי', 'תוף')
   on conflict (name) do nothing;
