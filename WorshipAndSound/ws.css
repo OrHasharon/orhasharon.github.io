@@ -160,3 +160,22 @@
 
 .cp-line[dir=rtl] .seg .ch { text-align: right; }
 .cp-line[dir=ltr] .seg .ch { text-align: left; }
+
+/* team matrix */
+.matrix-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.matrix { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.matrix th { font-weight: 500; color: var(--muted); padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: center; line-height: 1.3; white-space: nowrap; }
+.matrix td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.matrix .name { text-align: start; position: sticky; right: 0; background: #111827; z-index: 1; white-space: nowrap; }
+.matrix th.name { color: var(--ink); }
+.matrix .rename { color: var(--ink); font-weight: 700; font-size: .95rem; }
+.matrix .cb input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.matrix .sep { border-inline-start: 2px solid var(--line); }
+.matrix .freq { font: inherit; font-size: .85rem; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.matrix .freq option { background: #111827; }
+.matrix .del { color: var(--muted); }
+.matrix .del:hover { color: #ff8a80; }
+.matrix .add-row input { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; width: 130px; }
+.matrix .add-row td:last-child { text-align: start; }
+.matrix tbody tr:hover td { background: rgba(255,255,255,.03); }
+.matrix tbody tr:hover td.name { background: #161e2e; }
