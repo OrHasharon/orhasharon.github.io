@@ -4,7 +4,7 @@ const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "or_hasharon_worship" } });
 
 const SLOTS = [
-  { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => !!m.lead_frequency, why: "לא מסומן/ת כמוביל/ת הלל" },
+  { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => m.can_lead ?? !!m.lead_frequency, why: "לא מסומן/ת להנחייה" },
   { role: "musician", label: "נגנים ושירה", max: Infinity, eligible: (m) => !!m.instruments, why: "לא רשומים כלים" },
   { role: "sound", label: "סאונד", max: 1, eligible: (m) => m.sound, why: "לא מסומן/ת כאיש/ת סאונד" },
   { role: "setup", label: "הקמת סאונד", max: 2, eligible: (m) => m.setup, why: "לא מסומן/ת כמקים/ה" },
@@ -15,6 +15,8 @@ const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PA
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const byId = (id) => state.members.find((m) => m.id === id);
+const INSTRUMENTS = ["פסנתר", "שירה", "גיטרה", "תוף", "בס", "חליל", "כינור"];
+const FREQS = ["פעם בשבוע", "פעם בשבועיים", "פעם ב-3 שבועות", "פעם בחודש", "פעם ברבעון"];
 const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", "🪈"]];
 const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
 const instHtml = (inst) => inst ? ` <small>(${icon(inst)} ${esc(inst)})</small>` : "";
@@ -119,64 +121,76 @@ async function removeSignup(id) {
   await refreshSignups(); render();
 }
 
-// ---------- team ----------
-function memberForm(m = {}) {
-  return `<form data-member="${m.id || "new"}">
-    <label class="field">שם<input name="name" required value="${esc(m.name)}"></label>
-    <label class="field">כלים (מופרדים בפסיק)<input name="instruments" value="${esc(m.instruments)}" placeholder="לדוגמה: גיטרה, בס"></label>
-    <label class="field">מדריך/ה הלל (תדירות, ריק = לא)<input name="lead_frequency" value="${esc(m.lead_frequency)}" placeholder="לדוגמה: פעם בחודש"></label>
-    <div class="checks"><label><input type="checkbox" name="sound"${m.sound ? " checked" : ""}> איש/ת סאונד</label>
-      <label><input type="checkbox" name="setup"${m.setup ? " checked" : ""}> מקים/ה סאונד</label></div>
-    <label class="field">הערות<input name="notes" value="${esc(m.notes)}"></label>
-    <div class="form-actions"><button class="btn" type="submit">שמירה</button><button class="btn ghost" type="button" data-cancel>ביטול</button>
-      ${m.id ? `<button class="btn ghost" type="button" data-deactivate="${m.id}">הסרה מהצוות</button>` : ""}</div>
-  </form>`;
+// ---------- team: one editable row per person, like the team sheet ----------
+function freqSelect(m, field) {
+  const v = m[field] || "";
+  const opts = ["", ...FREQS, ...(v && !FREQS.includes(v) ? [v] : [])]; // keep an older free-text value visible
+  return `<select class="freq" data-id="${m.id}" data-field="${field}">${opts.map((o) => `<option value="${esc(o)}"${o === v ? " selected" : ""}>${o ? esc(o) : "—"}</option>`).join("")}</select>`;
 }
-
-function memberCard(m) {
-  if (state.editing === m.id) return `<div class="member">${memberForm(m)}</div>`;
-  const tags = [
-    m.lead_frequency && `<span class="role-tag lead">מדריך/ה הלל · ${esc(m.lead_frequency)}</span>`,
-    m.sound && `<span class="role-tag sound">סאונד</span>`,
-    m.setup && `<span class="role-tag sound">הקמת סאונד</span>`,
-  ].filter(Boolean).join("");
-  return `<div class="member">
-    <button class="link-btn edit" data-edit="${m.id}">עריכה</button>
-    <h3>${esc(m.name)}</h3>
-    ${instrumentsOf(m).map((x) => `<p class="inst">${icon(x)} ${esc(x)}</p>`).join("")}
-    ${m.notes ? `<p>${esc(m.notes)}</p>` : ""}
-    <div class="roles">${tags}</div>
-  </div>`;
-}
+const box = (m, flag, on) => `<td class="cb"><input type="checkbox" data-id="${m.id}" data-flag="${esc(flag)}"${on ? " checked" : ""}></td>`;
 
 function renderTeam() {
-  const worship = state.members.filter((m) => m.instruments || m.lead_frequency);
-  const soundOnly = state.members.filter((m) => !m.instruments && !m.lead_frequency);
-  $("team").innerHTML = `
-    <div class="team-section"><h2>צוות הלל</h2><div class="team-grid">${worship.map(memberCard).join("")}</div></div>
-    <div class="team-section"><h2>צוות סאונד</h2><div class="team-grid">${soundOnly.map(memberCard).join("")}</div>
-      <p class="hint">חברי צוות הלל שעושים גם סאונד או הקמה מסומנים בכרטיס שלהם למעלה.</p></div>
-    <div class="team-section"><h2>הוספת חבר/ת צוות</h2>
-      ${state.editing === "new" ? `<div class="member">${memberForm()}</div>` : `<button class="join" data-edit="new">+ הוספה</button>`}</div>`;
+  const has = (m, inst) => instrumentsOf(m).includes(inst);
+  $("team").innerHTML = `<div class="team-section">
+    <div class="matrix-wrap"><table class="matrix">
+      <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}
+        <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
+      <tbody>${state.members.map((m) => `<tr>
+        <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
+        ${box(m, "lead", m.can_lead ?? !!m.lead_frequency)}
+        ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}
+        <td>${freqSelect(m, "lead_frequency")}</td><td>${freqSelect(m, "participation_frequency")}</td>
+        ${box(m, "sound", m.sound).replace('class="cb"', 'class="cb sep"')}${box(m, "setup", m.setup)}
+        <td><button class="link-btn del" data-deactivate="${m.id}" title="הסרה מהצוות" aria-label="הסרה">✕</button></td>
+      </tr>`).join("")}
+      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 6}"><button class="btn" data-add-member>הוספה</button></td></tr>
+      </tbody></table></div>
+    <p class="hint">כל שינוי נשמר מיד. לחיצה על שם מאפשרת לשנות אותו.</p></div>`;
 }
 
-async function saveMember(form) {
-  const f = new FormData(form);
-  const row = {
-    name: f.get("name").trim(),
-    instruments: f.get("instruments").trim() || null,
-    lead_frequency: f.get("lead_frequency").trim() || null,
-    sound: f.has("sound"), setup: f.has("setup"),
-    notes: f.get("notes").trim() || null,
-    updated_at: new Date().toISOString(),
-  };
-  const id = form.dataset.member;
-  const { error } = id === "new" ? await sb.from("members").insert(row) : await sb.from("members").update(row).eq("id", Number(id));
-  if (error) { toast(error.code === "23505" ? "השם הזה כבר קיים בצוות" : "השמירה נכשלה, נסו שוב"); return; }
+async function updateMember(id, patch) {
+  const { error } = await sb.from("members").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) { toast(error.code === "23505" ? "השם הזה כבר קיים בצוות" : "השמירה נכשלה, נסו שוב"); await loadAll(); render(); return false; }
+  Object.assign(byId(id), patch);
   toast("נשמר");
-  state.editing = null;
-  await loadAll(); render();
+  return true;
 }
+
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.matches(".matrix input[type=checkbox]")) {
+    const m = byId(Number(t.dataset.id));
+    const flag = t.dataset.flag;
+    if (flag === "lead") updateMember(m.id, { can_lead: t.checked });
+    else if (flag === "sound" || flag === "setup") updateMember(m.id, { [flag]: t.checked });
+    else {
+      const inst = flag.slice(5);
+      const set = new Set(instrumentsOf(m));
+      t.checked ? set.add(inst) : set.delete(inst);
+      const ordered = [...INSTRUMENTS.filter((x) => set.has(x)), ...[...set].filter((x) => !INSTRUMENTS.includes(x))];
+      updateMember(m.id, { instruments: ordered.join(", ") || null });
+    }
+  } else if (t.matches(".matrix .freq")) {
+    updateMember(Number(t.dataset.id), { [t.dataset.field]: t.value || null });
+  }
+});
+
+document.addEventListener("click", async (e) => {
+  const rn = e.target.closest("[data-rename]");
+  if (rn) {
+    const m = byId(Number(rn.dataset.rename));
+    const name = prompt("שם חדש:", m.name);
+    if (name && name.trim() && name.trim() !== m.name && await updateMember(m.id, { name: name.trim() })) render();
+    return;
+  }
+  if (e.target.closest("[data-add-member]")) {
+    const name = $("new-member").value.trim();
+    if (!name) { $("new-member").focus(); return; }
+    const { error } = await sb.from("members").insert({ name });
+    if (error) { toast(error.code === "23505" ? "השם הזה כבר קיים בצוות" : "ההוספה נכשלה"); return; }
+    toast(`${name} נוסף/ה`); await loadAll(); render();
+  }
+});
 
 async function deactivate(id) {
   const m = byId(id);
@@ -200,8 +214,6 @@ document.addEventListener("click", (e) => {
   const tab = t.closest(".tabs button");
   if (tab) { state.tab = tab.dataset.tab; state.editing = null; render(); return; }
   if (t.closest("[data-remove]")) { removeSignup(Number(t.closest("[data-remove]").dataset.remove)); return; }
-  if (t.closest("[data-edit]")) { const v = t.closest("[data-edit]").dataset.edit; state.editing = v === "new" ? "new" : Number(v); render(); return; }
-  if (t.closest("[data-cancel]")) { state.editing = null; render(); return; }
   if (t.closest("[data-deactivate]")) { deactivate(Number(t.closest("[data-deactivate]").dataset.deactivate)); return; }
 });
 document.addEventListener("change", (e) => {
@@ -209,9 +221,6 @@ document.addEventListener("change", (e) => {
   if (!el.matches(".assign") || !el.value) return;
   if (el.matches(".inst-pick")) assign("musician", el.dataset.date, Number(el.dataset.member), el.value);
   else assign(el.dataset.role, el.dataset.date, Number(el.value));
-});
-document.addEventListener("submit", (e) => {
-  if (e.target.matches("form[data-member]")) { e.preventDefault(); saveMember(e.target); }
 });
 $("more").addEventListener("click", () => { state.shown += PAGE; render(); });
 
