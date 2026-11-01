@@ -1,7 +1,10 @@
 // WorshipAndSound (sign-in required: email link, or Google once enabled): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { db: { schema: "or_hasharon_worship" } });
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  db: { schema: "or_hasharon_worship" },
+  auth: { detectSessionInUrl: false }, // handled in consumeAuthRedirect()
+});
 
 const SLOTS = [
   { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => m.can_lead, why: "לא מסומן/ת להנחייה" },
@@ -307,11 +310,44 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#logout")) sb.auth.signOut().then(() => location.reload());
 });
 
+// the email link comes back as #access_token=… (or ?code=… / #error_description=…)
+async function consumeAuthRedirect() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const query = new URLSearchParams(location.search);
+  let err = hash.get("error_description") || query.get("error_description");
+  try {
+    if (hash.get("access_token") && hash.get("refresh_token")) {
+      const { error } = await sb.auth.setSession({ access_token: hash.get("access_token"), refresh_token: hash.get("refresh_token") });
+      if (error) err = error.message;
+    } else if (query.get("code")) {
+      const { error } = await sb.auth.exchangeCodeForSession(query.get("code"));
+      if (error) err = error.message;
+    }
+  } catch (e) { err = e.message; }
+  if (location.hash || location.search) history.replaceState(null, "", location.pathname); // don't leave tokens in the address bar
+  return err;
+}
+
+function loginProblem(msg) {
+  if (!msg) return;
+  const friendly = /expired|invalid|not found|used/i.test(msg) ? "קישור הכניסה פג תוקף או שכבר השתמשו בו. שלחו קישור חדש ולחצו עליו פעם אחת." : `הכניסה נכשלה: ${msg}`;
+  $("sent").hidden = false;
+  $("sent").innerHTML = `<span class="login-error">${esc(friendly)}</span>`;
+}
+
 async function start() {
+  const authErr = await consumeAuthRedirect();
   const { data: { session } } = await sb.auth.getSession();
   user = session?.user || null;
-  if (!user) { showLogin(); return; }
+  if (!user) { showLogin(); loginProblem(authErr); return; }
   const { data: me, error: meErr } = await sb.from("allowed_users").select("email,is_admin").ilike("email", user.email).maybeSingle();
+  if (meErr?.code === "PGRST205" || meErr?.code === "42P01") {
+    showLogin();
+    $("email-login").hidden = true; $("google").hidden = true;
+    $("noaccess").hidden = false;
+    $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b> ✓<br>אבל המערכת עדיין לא הוגדרה עד הסוף: צריך להריץ את סקריפט ההגדרה (auth_migration.sql) ב-Supabase. אחרי שהוא רץ, רעננו את הדף.<br><button class="link-btn" id="logout">התנתקות</button>`;
+    return;
+  }
   if (meErr || !me) {
     showLogin();
     $("email-login").hidden = true;
