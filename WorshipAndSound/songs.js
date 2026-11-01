@@ -1,7 +1,9 @@
 // Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js.
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-const songsState = { loaded: false, list: [], query: "", view: "list", current: null, shift: 0, drafts: [], importing: false };
+const songsState = { loaded: false, list: [], query: "", view: "list", current: null, shift: 0, noCapo: false, present: false, presentChords: false, drafts: [], importing: false };
+let songScale = 1;
+try { songScale = Number(localStorage.getItem("ws-song-scale")) || 1; } catch {}
 
 // ---------- chords ----------
 const CHORD_RE = /^[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-G][#b]?)?$/;
@@ -30,20 +32,43 @@ const firstChord = (content) => (content.match(/\[([^\]]+)\]/) || [])[1] || null
 const HEB = /[֐-׿]/;
 
 // ---------- render ChordPro ----------
-function renderChordPro(content, shift = 0) {
+// directives: {capo: 2} {artist: ...}; a line that is only {…} is a section label, e.g. {פזמון}
+const META_RE = /^\{\s*(capo|artist|key)\s*:\s*(.*?)\s*\}$/i;
+function songMeta(content) {
+  const meta = {};
+  for (const line of content.split("\n")) { const m = line.trim().match(META_RE); if (m) meta[m[1].toLowerCase()] = m[2]; }
+  return meta;
+}
+
+function renderChordPro(content, shift = 0, { chords = true } = {}) {
   return content.split("\n").map((line) => {
-    if (!line.trim()) return `<div class="cp-line cp-empty"></div>`;
+    const t = line.trim();
+    if (!t) return `<div class="cp-line cp-empty"></div>`;
+    if (META_RE.test(t)) return "";
+    const label = t.match(/^\{(.+)\}$/);
+    if (label) return `<div class="cp-section" dir="auto">[${esc(label[1])}]</div>`;
     // direction comes from the lyrics, not the (Latin) chords
-    const dir = HEB.test(line.replace(/\[[^\]]*\]/g, "")) ? "rtl" : "ltr";
+    const lyricsOnly = line.replace(/\[[^\]]*\]/g, "");
+    const dir = HEB.test(lyricsOnly) ? "rtl" : "ltr";
     if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(line)}</div>`;
+    if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(lyricsOnly)}</div>` : "";
     const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
     let html = parts[0] ? `<span class="seg"><span class="ch"></span><span class="ly">${esc(parts[0])}</span></span>` : "";
-    for (let i = 1; i < parts.length; i += 2) {
-      const lyr = parts[i + 1] || "";
-      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[i], shift))}</span><span class="ly">${lyr ? esc(lyr) : "&nbsp;"}</span></span>`;
+    for (let k = 1; k < parts.length; k += 2) {
+      const lyr = parts[k + 1] || "";
+      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[k], shift))}</span><span class="ly">${lyr ? esc(lyr) : "&nbsp;"}</span></span>`;
     }
-    return `<div class="cp-line" dir="${dir}">${html}</div>`;
+    return `<div class="cp-line${lyricsOnly.trim() ? "" : " cp-chords-only"}" dir="${dir}">${html}</div>`;
   }).join("");
+}
+
+// "76. תודה לך אבי (capo 2)" -> title "תודה לך אבי" + {capo: 2}
+function cleanTitle(raw) {
+  let title = raw.replace(/^\s*\d+\s*[.)\-]\s*/, "").trim();
+  // RTL text extraction can mirror the brackets, so accept either side
+  const capo = title.match(/[()]?\s*(?:capo|קאפו)\s*(\d+)\s*[()]?/i);
+  if (capo) title = title.replace(capo[0], "").replace(/[()]\s*[()]/g, "").replace(/^[\s()]+|[\s()]+$/g, "").trim();
+  return { title, capo: capo ? capo[1] : null };
 }
 
 // ---------- PDF -> songs ----------
@@ -86,7 +111,11 @@ async function pdfToSongs(file) {
     });
   }
   if (!totalText) return null; // scanned images, no text layer
-  return songs.map((s) => ({ title: s.title.trim(), content: mergeChordLines(s.lines), include: true })).filter((s) => s.content.trim());
+  return songs.map((s) => {
+    const { title, capo } = cleanTitle(s.title);
+    const body = mergeChordLines(s.lines);
+    return { title, content: (capo ? `{capo: ${capo}}\n` : "") + body, include: true };
+  }).filter((s) => s.content.trim());
 }
 
 // one PDF line -> {text, rtl, chords?: [{name, xL, xR}], chars: position map}
@@ -182,19 +211,32 @@ function renderSongs() {
 
 function renderSongView(el) {
   const s = songsState.current;
-  const key = s.song_key ? transposeChord(s.song_key, songsState.shift) : null;
-  el.innerHTML = `<div class="song-view">
-    <div class="song-head">
-      <button class="link-btn" data-song-back>→ לכל השירים</button>
-      <h2>${esc(s.title)}</h2>
-      <div class="song-tools">
-        ${key ? `<span>סולם: <b dir="ltr">${esc(key)}</b></span>` : ""}
-        <button class="btn ghost" data-shift="-1">−½</button><button class="btn ghost" data-shift="1">+½</button>
-        ${songsState.shift ? `<button class="link-btn" data-shift="0">מקורי</button>` : ""}
-        <button class="btn ghost" data-song-edit>עריכה</button>
-      </div>
+  const meta = songMeta(s.content);
+  const capo = Number(meta.capo) || 0;
+  const shift = songsState.shift + (songsState.noCapo ? capo : 0); // without capo: sounding chords = shapes + capo
+  const baseKey = s.song_key || firstChord(s.content);
+  const key = baseKey ? transposeChord(baseKey, shift) : null;
+  el.innerHTML = `<div class="song-view${songsState.present ? " present" : ""}" style="--song-scale:${songScale}">
+    <div class="song-top">
+      <button class="link-btn no-print" data-song-back>→ לכל השירים</button>
+      <h2 class="song-title">${esc(s.title)}</h2>
+      ${meta.artist ? `<p class="song-artist">${esc(meta.artist)}</p>` : ""}
     </div>
-    <div class="chordpro">${renderChordPro(s.content, songsState.shift)}</div>
+    <div class="song-toolbar no-print">
+      <div class="tool-group" title="גודל טקסט"><button class="tool" data-scale="1">א+</button><button class="tool" data-scale="-1">א−</button></div>
+      <div class="tool-group" title="סולם">${key ? `<span class="tool-label">סולם <b dir="ltr">${esc(key)}</b></span>` : `<span class="tool-label">סולם</span>`}
+        <button class="tool" data-shift="-1" title="חצי טון למטה">−½</button><button class="tool" data-shift="1" title="חצי טון למעלה">+½</button>
+        ${songsState.shift ? `<button class="tool link" data-shift="0">מקורי</button>` : ""}</div>
+      ${capo ? `<div class="tool-group"><span class="tool-label">קאפו ${capo}</span>
+        <button class="tool${songsState.noCapo ? " on" : ""}" data-nocapo>${songsState.noCapo ? "חזרה לאקורדי קאפו" : "בלי קאפו"}</button></div>` : ""}
+      <div class="tool-group">
+        <button class="tool" data-print title="הדפסה">🖨️</button>
+        <button class="tool" data-present title="מצגת">📽️ מצגת</button>
+        <button class="tool" data-song-edit>עריכה</button></div>
+    </div>
+    ${songsState.present ? `<div class="present-bar"><button class="tool" data-present-chords>${songsState.presentChords ? "הסתרת אקורדים" : "הצגת אקורדים"}</button>
+      <button class="tool" data-scale="1">א+</button><button class="tool" data-scale="-1">א−</button><button class="tool" data-present>יציאה</button></div>` : ""}
+    <div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: !songsState.present || songsState.presentChords })}</div>
   </div>`;
 }
 
@@ -204,7 +246,7 @@ function renderSongEdit(el) {
     <div class="song-head"><button type="button" class="link-btn" data-song-back>→ ביטול</button><h2>${s.id ? "עריכת שיר" : "שיר חדש"}</h2></div>
     <label class="field">שם השיר<input name="title" required value="${esc(s.title)}"></label>
     <label class="field">סולם<input name="song_key" value="${esc(s.song_key || "")}" dir="ltr" placeholder="Am"></label>
-    <label class="field">מילים ואקורדים (אקורד בסוגריים מרובעים לפני ההברה: [Am]שלום [G]עולם)
+    <label class="field">מילים ואקורדים: אקורד בסוגריים מרובעים לפני ההברה, [Am]שלום [G]עולם · כותרת חלק: {פזמון} · קאפו: {capo: 2} · כותב: {artist: שם}
       <textarea name="content" rows="16" dir="auto">${esc(s.content)}</textarea></label>
     <div class="chordpro preview">${renderChordPro(s.content)}</div>
     <div class="form-actions"><button class="btn" type="submit">שמירה</button>
@@ -234,12 +276,26 @@ document.addEventListener("click", async (e) => {
   const t = e.target;
   if (t.closest("[data-song]")) {
     songsState.current = songsState.list.find((s) => s.id === Number(t.closest("[data-song]").dataset.song));
-    songsState.view = "song"; songsState.shift = 0; renderSongs(); scrollTo(0, 0); return;
+    songsState.view = "song"; songsState.shift = 0; songsState.noCapo = false; songsState.present = false; renderSongs(); scrollTo(0, 0); return;
   }
   if (t.closest("[data-song-back]")) { songsState.view = songsState.current && songsState.view === "edit" && songsState.current.id ? "song" : "list"; if (songsState.view === "list") songsState.current = null; renderSongs(); return; }
   if (t.closest("[data-song-new]")) { songsState.current = null; songsState.view = "edit"; renderSongs(); return; }
   if (t.closest("[data-song-edit]")) { songsState.view = "edit"; renderSongs(); return; }
   if (t.closest("[data-shift]")) { const n = Number(t.closest("[data-shift]").dataset.shift); songsState.shift = n ? songsState.shift + n : 0; renderSongs(); return; }
+  if (t.closest("[data-scale]")) {
+    songScale = Math.min(2.4, Math.max(0.7, +(songScale + 0.15 * Number(t.closest("[data-scale]").dataset.scale)).toFixed(2)));
+    try { localStorage.setItem("ws-song-scale", songScale); } catch {}
+    document.querySelector(".song-view")?.style.setProperty("--song-scale", songScale); return;
+  }
+  if (t.closest("[data-nocapo]")) { songsState.noCapo = !songsState.noCapo; renderSongs(); return; }
+  if (t.closest("[data-print]")) { window.print(); return; }
+  if (t.closest("[data-present-chords]")) { songsState.presentChords = !songsState.presentChords; renderSongs(); return; }
+  if (t.closest("[data-present]")) {
+    songsState.present = !songsState.present;
+    if (songsState.present) document.documentElement.requestFullscreen?.().catch(() => {});
+    else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    renderSongs(); return;
+  }
   if (t.closest("[data-song-delete]")) {
     if (!confirm(`למחוק את "${songsState.current.title}"?`)) return;
     const { error } = await sb.from("songs").delete().eq("id", songsState.current.id);
@@ -299,4 +355,9 @@ document.addEventListener("submit", async (e) => {
   await loadSongs();
   songsState.current = songsState.list.find((s) => s.id === data.id) || data;
   songsState.view = "song"; songsState.shift = 0; renderSongs();
+});
+
+// leaving fullscreen with Esc also leaves presentation mode
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && songsState.present) { songsState.present = false; renderSongs(); }
 });

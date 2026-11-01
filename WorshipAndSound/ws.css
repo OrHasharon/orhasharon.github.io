@@ -129,3 +129,76 @@
 .matrix tbody tr:hover td.name { background: #161e2e; }
 
 .db-warning { background: rgba(214,165,76,.12); border: 1px solid var(--accent); color: var(--ink); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; }
+
+/* songs */
+.songs-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+#song-search { flex: 1; min-width: 200px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; }
+.file-btn { cursor: pointer; }
+.song-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.song-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: start;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; font: inherit; color: var(--ink);
+}
+.song-row:hover { border-color: var(--accent); }
+.song-row small { color: var(--accent-ink); font-weight: 700; }
+.song-view { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.song-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
+.song-head h2 { font-family: "Frank Ruhl Libre", serif; margin: 0; font-size: 1.5rem; flex: 1; }
+.song-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); }
+.song-tools .btn.ghost { padding: 4px 10px; }
+.chordpro { font-size: 1.1rem; line-height: 1.25; }
+.cp-line { display: flex; flex-wrap: wrap; align-items: flex-end; min-height: 1.4em; margin: 2px 0 6px; white-space: pre-wrap; }
+.cp-line[dir="auto"] { unicode-bidi: plaintext; }
+.cp-empty { min-height: .8em; }
+.seg { display: inline-flex; flex-direction: column; }
+.seg .ch { color: var(--accent-ink); font-weight: 700; font-size: .9em; direction: ltr; unicode-bidi: isolate; min-height: 1.2em; padding-inline-end: 4px; text-align: start; }
+.seg .ly { white-space: pre; }
+.song-form { display: grid; gap: 10px; }
+.song-form textarea, .draft textarea { font: inherit; font-size: .95rem; color: var(--ink); background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+.chordpro.preview { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px; font-size: 1rem; max-height: 320px; overflow: auto; }
+.draft { border-top: 1px solid var(--line); padding: 10px 0; }
+.draft summary { cursor: pointer; padding: 4px 0; }
+.draft .field { margin-top: 8px; }
+
+.cp-line[dir=rtl] .seg .ch { text-align: right; }
+.cp-line[dir=ltr] .seg .ch { text-align: left; }
+.cp-line[dir=rtl] .seg .ch { text-align: right; }
+.cp-line[dir=ltr] .seg .ch { text-align: left; }
+
+/* song page (Project Yuval style) */
+.song-view { --song-scale: 1; }
+.song-top { margin-bottom: 10px; }
+.song-title { font-family: "Frank Ruhl Libre", serif; font-size: 2.2rem; line-height: 1.15; margin: 6px 0 2px; color: var(--accent-ink); }
+.song-artist { margin: 0; color: var(--muted); font-size: 1.15rem; }
+.song-toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.tool-group { display: inline-flex; align-items: center; gap: 4px; }
+.tool-label { color: var(--muted); font-size: .9rem; margin-inline-end: 4px; }
+.tool-label b { color: var(--accent-ink); }
+.tool { font: inherit; font-size: .95rem; cursor: pointer; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
+.tool:hover { border-color: var(--accent); }
+.tool.on { background: var(--accent); color: #1b1408; border-color: var(--accent); }
+.tool.link { background: none; border: 0; color: var(--accent-ink); }
+.song-body { font-size: calc(1.25rem * var(--song-scale)); line-height: 1.2; }
+.song-body .cp-line { margin: 0 0 .55em; }
+.song-body .seg .ch { font-size: .62em; color: #ff8f7a; font-weight: 700; letter-spacing: .02em; min-height: 1.15em; }
+.song-body .cp-chords-only .seg .ly { display: none; }
+.song-body .cp-chords-only .seg .ch { font-size: .75em; padding-inline-end: .8em; }
+.cp-section { color: var(--muted); margin: 1.1em 0 .35em; font-size: .85em; }
+/* presentation */
+.song-view.present { position: fixed; inset: 0; z-index: 50; overflow: auto; border-radius: 0; border: 0; background: #05070d; padding: 4vh 6vw; }
+.song-view.present .song-toolbar, .song-view.present [data-song-back] { display: none; }
+.song-view.present .song-title { text-align: center; font-size: calc(2.6rem * var(--song-scale)); }
+.song-view.present .song-artist { text-align: center; }
+.song-view.present .song-body { font-size: calc(2.4rem * var(--song-scale)); text-align: center; }
+.song-view.present .cp-line { justify-content: center; }
+.present-bar { position: fixed; bottom: 14px; left: 14px; display: flex; gap: 6px; opacity: .35; z-index: 51; }
+.present-bar:hover { opacity: 1; }
+/* print: clean black on white, song only */
+@media print {
+  body { background: #fff !important; }
+  body::before, .site-header, .tabs, .footer, .no-print, .toast, #more, .present-bar { display: none !important; }
+  .song-view { background: #fff !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; color: #000; }
+  .song-title { color: #000 !important; }
+  .song-body .seg .ch { color: #b00020 !important; }
+  .song-body, .cp-section, .song-artist { color: #000 !important; }
+}
