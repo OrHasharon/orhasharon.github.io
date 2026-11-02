@@ -410,6 +410,7 @@ function renderSongView(el) {
       ${capo ? `<div class="tool-group"><span class="tool-label">קאפו ${capo}</span>
         <button class="tool${songsState.noCapo ? " on" : ""}" data-nocapo>${songsState.noCapo ? "חזרה לאקורדי קאפו" : "בלי קאפו"}</button></div>` : ""}
       <div class="tool-group">
+        <button class="tool" data-add-setlist>➕ לסשן הלל</button>
         <button class="tool" data-print title="הדפסה">🖨️</button>
         <button class="tool" data-present title="מצגת">📽️ מצגת</button>
         <button class="tool" data-song-edit>עריכה</button></div>

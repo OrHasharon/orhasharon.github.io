@@ -76,7 +76,7 @@ function summaryTable(upcoming) {
   return `<div class="summary"><div class="duty-table"><table>
     <thead><tr><th>תאריך</th>${SLOTS.map((s) => `<th>${s.label}</th>`).join("")}</tr></thead>
     <tbody>${upcoming.map((mt, i) => `<tr${i === 0 ? ' class="next"' : ""}>
-      <td class="when"><strong>${mt.dateText.slice(0, 5)}</strong><small>${meetingKind(mt.day)}</small></td>
+      <td class="when"><strong>${mt.dateText.slice(0, 5)}</strong><small>${meetingKind(mt.day)}</small>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</td>
       ${SLOTS.map((s) => { const c = slotCell(mt, s); return `<td class="${c.missing ? "missing" : ""}">${c.html}</td>`; }).join("")}</tr>`).join("")}</tbody>
   </table></div></div>`;
 }
@@ -99,7 +99,7 @@ function meetingCard(mt, isNext) {
   const rows = `<div class="slot-groups">${group(["leader", "musician"])}${group(["sound", "setup"])}</div>`;
   return `<article class="meeting-card${isNext ? " next" : ""}">
     <div class="meeting-head">${isNext ? `<span class="tag">המפגש הבא</span>` : ""}
-      <h3>${meetingKind(mt.day)} · יום ${esc(mt.day)} ${mt.dateText.slice(0, 5)}</h3><span>${esc(mt.place)}</span></div>
+      <h3>${meetingKind(mt.day)} · יום ${esc(mt.day)} ${mt.dateText.slice(0, 5)}</h3><span>${esc(mt.place)}</span>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</div>
     ${rows}</article>`;
 }
 
@@ -376,6 +376,7 @@ async function startOpen() {
     await loadAll();
     $("status").textContent = "";
     render();
+    if (typeof loadSetlist === "function") loadSetlist().then(render);
     sb.from("usage_logs").insert({ action: "page_view" }).then(() => {});
   } catch (err) {
     console.error(err);
@@ -416,6 +417,7 @@ async function start() {
     await loadAll();
     $("status").textContent = "";
     render();
+    if (typeof loadSetlist === "function") loadSetlist().then(render);
     sb.from("usage_logs").insert({ visitor_name: user.email, action: "page_view" }).then(() => {});
   } catch (err) {
     console.error(err);
