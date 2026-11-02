@@ -190,11 +190,15 @@ async function buildPptx(iso) {
     const out = [];
     for (const st of lyricStanzas(it.songs.content)) {
       const long = st.lines.some((l) => l.length > 34);
-      for (const part of chunks(st.lines, long ? 3 : 4)) {
+      for (const part of chunks(st.lines, 4)) {
         out.push(await clone(TPL.song, (xml) => {
           const [titleSp, lyricSp] = shapes(xml).filter((sp) => /<a:t>/.test(sp));
           let x = xml.replace(titleSp, setParagraphs(titleSp, [it.songs.title], (ps) => ps[0]));
-          return x.replace(lyricSp, setParagraphs(lyricSp, part, (ps) => ps[0]));
+          // David 54 like the template; long lines shrink so each line stays on one line (876pt box, ~0.5em per letter)
+          const longest = Math.max(...part.map((l) => l.replace(/[֑-ׇ]/g, "").length));
+          const size = Math.max(30, Math.min(54, Math.floor(876 / (0.5 * longest))));
+          const lyr = setParagraphs(lyricSp, part, (ps) => ps[0]).replace(/sz="\d+"/g, `sz="${size * 100}"`);
+          return x.replace(lyricSp, lyr);
         }));
       }
     }
