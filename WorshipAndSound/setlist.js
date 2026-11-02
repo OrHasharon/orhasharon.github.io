@@ -45,7 +45,8 @@ function renderSetlistDialog() {
         <input class="sl-note" data-sl-note="${it.id}" value="${esc(it.notes || "")}" placeholder="הערה (למשל: פזמון פעמיים, מעבר ל-D)">
       </li>`).join("")}</ol>` : `<p class="status">עדיין אין שירים בסשן. מוסיפים מלשונית "שירים" ← פתיחת שיר ← "לסשן הלל".</p>`}
     <div class="sl-actions">
-      <button class="btn" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
+      <button class="btn" data-sl-live ${items.length ? "" : "disabled"}>▶ מצב הלל (מסך מלא)</button>
+      <button class="btn ghost" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
       <a id="sl-download" class="link-btn" hidden></a>
     </div>
   </div>`;
@@ -319,3 +320,95 @@ document.addEventListener("change", async (e) => {
   toast(error ? "שמירת ההערה נכשלה" : "ההערה נשמרה");
   const it = setlist.items.find((i) => i.id === Number(n.dataset.slNote)); if (it && !error) it.notes = n.value.trim() || null;
 });
+
+// ---------- live worship mode: the whole session full screen, for the musicians ----------
+const live = { on: false, idx: 0, shift: {}, noCapo: {}, chords: true, zoom: 1 };
+try { live.zoom = Number(localStorage.getItem("ws-live-zoom")) || 1; } catch {}
+
+function liveEl() {
+  let el = document.getElementById("live-view");
+  if (!el) { el = document.createElement("div"); el.id = "live-view"; el.className = "live-view"; el.hidden = true; document.body.append(el); }
+  return el;
+}
+
+function renderLive() {
+  const items = itemsFor(setlist.openDate).filter((i) => i.songs);
+  const el = liveEl();
+  if (!live.on || !items.length) { el.hidden = true; return; }
+  live.idx = Math.max(0, Math.min(live.idx, items.length - 1));
+  const it = items[live.idx], song = it.songs, meta = songMeta(song.content);
+  const capo = Number(meta.capo) || 0;
+  const shift = (live.shift[it.id] || 0) + (live.noCapo[it.id] ? capo : 0);
+  const base = song.song_key || firstChord(song.content);
+  const key = base ? transposeChord(base, shift) : "";
+  const next = items[live.idx + 1];
+  el.hidden = false;
+  el.style.setProperty("--live-zoom", live.zoom);
+  el.innerHTML = `
+    <div class="live-bar">
+      <span class="live-pos">${live.idx + 1} / ${items.length}</span>
+      <strong class="live-title">${esc(song.title)}</strong>
+      ${it.notes ? `<span class="live-note">📝 ${esc(it.notes)}</span>` : ""}
+      <span class="live-tools">
+        <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b></span>
+        <button class="tool" data-live="key-1" title="חצי טון למטה">−½</button><button class="tool" data-live="key+1" title="חצי טון למעלה">+½</button>
+        ${live.shift[it.id] ? `<button class="tool link" data-live="key0">מקורי</button>` : ""}
+        ${capo ? `<button class="tool${live.noCapo[it.id] ? " on" : ""}" data-live="capo">${live.noCapo[it.id] ? "עם קאפו " + capo : "בלי קאפו"}</button>` : ""}
+        <button class="tool" data-live="zoom+1" title="הגדלה">🔍+</button><button class="tool" data-live="zoom-1" title="הקטנה">🔍−</button>
+        <button class="tool${live.chords ? " on" : ""}" data-live="chords">אקורדים</button>
+        <button class="tool" data-live="exit">✕ יציאה</button>
+      </span>
+    </div>
+    <div class="live-body"><div class="chordpro song-body">${renderChordPro(song.content, shift, { chords: live.chords })}</div></div>
+    <div class="live-nav">
+      <button class="tool" data-live="prev" ${live.idx ? "" : "disabled"}>→ הקודם</button>
+      <span class="live-next">${next ? `הבא: ${esc(next.songs.title)}` : "שיר אחרון"}</span>
+      <button class="tool" data-live="next" ${next ? "" : "disabled"}>הבא ←</button>
+    </div>`;
+  el.querySelector(".live-body").scrollTop = 0;
+}
+
+function liveAction(a) {
+  const items = itemsFor(setlist.openDate).filter((i) => i.songs);
+  const it = items[live.idx];
+  if (a === "exit") { live.on = false; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
+  else if (a === "next") live.idx++;
+  else if (a === "prev") live.idx--;
+  else if (a.startsWith("key")) { const n = Number(a.slice(3)); live.shift[it.id] = n ? (live.shift[it.id] || 0) + n : 0; }
+  else if (a === "capo") live.noCapo[it.id] = !live.noCapo[it.id];
+  else if (a.startsWith("zoom")) {
+    live.zoom = Math.min(3, Math.max(0.6, +(live.zoom + 0.15 * Number(a.slice(4))).toFixed(2)));
+    try { localStorage.setItem("ws-live-zoom", live.zoom); } catch {}
+  }
+  else if (a === "chords") live.chords = !live.chords;
+  renderLive();
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-sl-live]")) {
+    dialogEl().close();
+    Object.assign(live, { on: true, idx: 0 });
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    renderLive(); return;
+  }
+  const b = e.target.closest("[data-live]");
+  if (b) liveAction(b.dataset.live);
+});
+// keyboard / foot pedal: arrows or PageUp/PageDown change song, +/- zoom, Esc leaves
+document.addEventListener("keydown", (e) => {
+  if (!live.on) return;
+  if (["ArrowLeft", "PageDown", " "].includes(e.key)) { e.preventDefault(); liveAction("next"); }
+  else if (["ArrowRight", "PageUp"].includes(e.key)) { e.preventDefault(); liveAction("prev"); }
+  else if (e.key === "+" || e.key === "=") liveAction("zoom+1");
+  else if (e.key === "-") liveAction("zoom-1");
+  else if (e.key === "Escape") liveAction("exit");
+});
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && live.on) { live.on = false; renderLive(); } });
+// swipe on a phone/tablet
+let touchX = null;
+document.addEventListener("touchstart", (e) => { if (live.on) touchX = e.touches[0].clientX; }, { passive: true });
+document.addEventListener("touchend", (e) => {
+  if (!live.on || touchX === null) return;
+  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+  if (Math.abs(dx) > 70) liveAction(dx > 0 ? "next" : "prev"); // RTL: swipe right = next song
+}, { passive: true });

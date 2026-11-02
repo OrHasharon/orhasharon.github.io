@@ -301,3 +301,18 @@
 
 .person.pending { border-style: dashed; opacity: .8; }
 .matrix .mail { font: inherit; font-size: .82rem; color: var(--ink); background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; width: 170px; }
+
+/* live worship mode */
+.live-view { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #05070d; color: var(--ink); --live-zoom: 1; }
+[data-theme="light"] .live-view { background: #f7f6f2; }
+.live-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.live-pos { color: var(--muted); font-size: .9rem; }
+.live-title { font-family: "Frank Ruhl Libre", serif; font-size: 1.4rem; color: var(--accent-ink); }
+.live-note { color: var(--hallel); font-size: .95rem; }
+.live-tools { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.live-body { flex: 1; overflow: auto; padding: 2vh 5vw; }
+.live-body .song-body { font-size: calc(1.9rem * var(--live-zoom)); }
+.live-nav { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-top: 1px solid var(--line); }
+.live-next { flex: 1; text-align: center; color: var(--muted); }
+.live-nav .tool { font-size: 1.05rem; padding: 8px 18px; }
+.live-nav .tool:disabled { opacity: .3; }

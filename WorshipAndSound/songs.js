@@ -6,10 +6,10 @@ let songScale = 1;
 try { songScale = Number(localStorage.getItem("ws-song-scale")) || 1; } catch {}
 
 // ---------- chords ----------
-const CHORD_RE = /^[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-G][#b]?)?$/;
+const CHORD_RE = /^[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-Ga-g][#b]?)?$/;
 const FILLER_RE = /^(?:\||\/|-|–|x\d+|\(|\)|\.+)$/i;
 const isChordLine = (text) => {
-  const toks = text.trim().split(/\s+/).filter(Boolean);
+  const toks = text.trim().split(/\s+/).map((t) => (/^[()]?[A-G]/.test(t) ? t.replace(/^[()]+|[()]+$/g, "") : t)).filter(Boolean);
   return toks.length > 0 && toks.some((t) => CHORD_RE.test(t)) && toks.every((t) => CHORD_RE.test(t) || FILLER_RE.test(t));
 };
 const SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -221,7 +221,7 @@ function splitColumns(items, width) {
 }
 
 // "Am7D" / "EmAm" -> ["Am7", "D"] / ["Em", "Am"] when the whole token is made of chords
-const CHORD_PIECE = /[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-G][#b]?)?/g;
+const CHORD_PIECE = /[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-Ga-g][#b]?)?/g;
 function splitGlued(tok) {
   if (CHORD_RE.test(tok)) return [{ name: tok, at: 0 }];
   const parts = [...tok.matchAll(CHORD_PIECE)];
@@ -238,7 +238,9 @@ function toLine(l) {
   const base = [];
   // zero-width pieces with a letter (e.g. "ְָך") are the wrapped end of the line's last word: they go at the end
   const tails = [];
-  for (const it of l.items) {
+  for (const it0 of l.items) {
+    // a wrapped word end stored inside the item between spaces ("עַמּ ְָך בִּרְכָת"): glue it back to its word
+    const it = { ...it0, str: it0.str.replace(/ ([֑-ׇ]+)([ךםןףץ])(?=[\s,.;:!?)(]|$)/g, (_, mk, L) => { const a = [...mk]; const own = a.pop(); return a.join("") + L + own; }) };
     const chars = [...it.str];
     const letters = chars.filter((ch) => !IS_MARK.test(ch));
     if (it.w < 0.5 && letters.join("").trim()) { tails.push(it); continue; }
@@ -324,23 +326,45 @@ function toLine(l) {
     text = cs.map((c) => c.ch).join("");
     pos.splice(0, pos.length, ...cs.map((c) => c.x));
   }
+  if (HEB.test(text)) {
+    const re = /([\u05D0-\u05EA][\u0591-\u05C7]*) ([\u0591-\u05C7]+)([\u05D0-\u05EA])(?=[\s,.;:!?)]|$)/g;
+    let m;
+    while ((m = re.exec(text))) {
+      const marks = [...m[2]], own = marks.pop();
+      const fixed = m[1] + marks.join("") + m[3] + own;
+      const at = m.index;
+      text = text.slice(0, at) + fixed + text.slice(at + m[0].length);
+      pos.splice(at + m[1].length, 1); // the removed space
+      re.lastIndex = at + fixed.length;
+    }
+  }
   const h = Math.max(...l.items.map((i) => i.h));
   if (!HEB.test(text)) {
+    // the whole row left to right, each char with its x (a chord may be split into pieces: "E" + "m")
+    const row = [];
+    let lastEnd = null;
+    for (const it of [...l.items].sort((a, b) => a.x - b.x)) {
+      if (!it.str) continue;
+      const icw = it.w / Math.max(1, it.str.length);
+      if (lastEnd !== null && it.x - lastEnd > Math.max(1.5, icw * 0.3)) row.push({ ch: " ", x: lastEnd });
+      [...it.str].forEach((ch, k) => row.push({ ch, x: it.x + k * icw, w: icw }));
+      lastEnd = it.x + it.w;
+    }
+    const rowText = row.map((r) => r.ch).join("");
     const chords = [];
     let ok = true, any = false;
-    for (const it of [...l.items].sort((a, b) => a.x - b.x)) {
-      const icw = it.w / Math.max(1, it.str.length);
-      for (const m of it.str.matchAll(/\S+/g)) {
-        if (FILLER_RE.test(m[0])) continue;
-        const pieces = splitGlued(m[0]);
-        if (!pieces) { ok = false; break; }
-        for (const pc of pieces) {
-          const x0 = it.x + (m.index + pc.at) * icw;
-          chords.push({ name: pc.name, xL: x0, xR: x0 + pc.name.length * icw });
-          any = true;
-        }
+    for (const m of rowText.matchAll(/\S+/g)) {
+      if (FILLER_RE.test(m[0])) continue;
+      const lead = m[0].match(/^[()]*/)[0].length;
+      const bare = m[0].replace(/^[()]+|[()]+$/g, "");
+      if (!bare) continue;
+      const pieces = splitGlued(bare);
+      if (!pieces) { ok = false; break; }
+      for (const pc of pieces) {
+        const a = row[m.index + lead + pc.at], z = row[m.index + lead + pc.at + pc.name.length - 1];
+        chords.push({ name: pc.name, xL: a.x, xR: z.x + (z.w || 0) });
+        any = true;
       }
-      if (!ok) break;
     }
     if (ok && any) return { text: chords.map((c) => c.name).join(" "), rtl, chords, h };
   }
