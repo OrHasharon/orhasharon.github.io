@@ -365,7 +365,17 @@ function renderLive() {
       <span class="live-next">${next ? `הבא: ${esc(next.songs.title)}` : "שיר אחרון"}</span>
       <button class="tool" data-live="next" ${next ? "" : "disabled"}>הבא ←</button>
     </div>`;
-  el.querySelector(".live-body").scrollTop = 0;
+  fitLive(el);
+}
+
+// one column if it fits; else it flows into the second column; if two columns aren't enough, shrink the font
+function fitLive(el) {
+  const body = el.querySelector(".live-body .song-body");
+  if (!body) return;
+  body.style.fontSize = "";
+  const fits = () => body.scrollWidth <= body.clientWidth + 2;
+  let size = parseFloat(getComputedStyle(body).fontSize);
+  for (let k = 0; k < 30 && !fits() && size > 12; k++) { size *= 0.94; body.style.fontSize = size + "px"; }
 }
 
 function liveAction(a) {
@@ -412,3 +422,5 @@ document.addEventListener("touchend", (e) => {
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
   if (Math.abs(dx) > 70) liveAction(dx > 0 ? "next" : "prev"); // RTL: swipe right = next song
 }, { passive: true });
+
+window.addEventListener("resize", () => { if (live.on) fitLive(liveEl()); });

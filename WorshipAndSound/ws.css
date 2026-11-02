@@ -319,3 +319,8 @@
 
 [data-theme="light"] .summary .duty-table, [data-theme="light"] .matrix-wrap, [data-theme="light"] .meeting-card, [data-theme="light"] .song-view, [data-theme="light"] .login { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 [data-theme="light"] .matrix .name { background: rgba(255, 255, 255, .55); }
+
+/* live mode: a long song continues in a second column instead of scrolling */
+.live-body { overflow: hidden; }
+.live-body .song-body { height: 100%; column-count: 2; column-fill: auto; column-gap: 6vw; column-rule: 1px solid var(--line); }
+.live-body .cp-line, .live-body .cp-section { break-inside: avoid; }

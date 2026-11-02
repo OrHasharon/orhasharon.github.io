@@ -346,7 +346,9 @@ function toLine(l) {
     for (const it of [...l.items].sort((a, b) => a.x - b.x)) {
       if (!it.str) continue;
       const icw = it.w / Math.max(1, it.str.length);
-      if (lastEnd !== null && it.x - lastEnd > Math.max(1.5, icw * 0.3)) row.push({ ch: " ", x: lastEnd });
+      // "C" + "#m" is one chord even if the PDF leaves a small gap between the pieces
+      const joins = /^[#b]|^(?:m|maj|min|sus|dim|aug|add|\d)/.test(it.str) && /[A-G#b]$/.test(row.map((r) => r.ch).join(""));
+      if (lastEnd !== null && !joins && it.x - lastEnd > Math.max(1.5, icw * 0.3)) row.push({ ch: " ", x: lastEnd });
       [...it.str].forEach((ch, k) => row.push({ ch, x: it.x + k * icw, w: icw }));
       lastEnd = it.x + it.w;
     }
