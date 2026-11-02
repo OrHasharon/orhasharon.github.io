@@ -293,7 +293,7 @@ body::before {
 /* ---- light mode ---- */
 :root[data-theme="light"] {
   --bg: #f4f1ea;
-  --surface: rgba(255, 255, 255, .88);
+  --surface: rgba(255, 255, 255, .45);
   --ink: #1f2430;
   --muted: #5c6473;
   --line: rgba(20, 30, 50, .13);
@@ -313,3 +313,5 @@ body::before {
 [data-theme="light"] .tabs button[aria-selected="true"] { color: var(--ink); }
 [data-theme="light"] .player-box { background: #fff; }
 [data-theme="light"] .card { border-color: var(--line); }
+
+[data-theme="light"] .card, [data-theme="light"] .schedule, [data-theme="light"] .groups { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
