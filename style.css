@@ -304,7 +304,7 @@ body::before {
 }
 [data-theme="light"] body { background: #f4f1ea; color: var(--ink); }
 [data-theme="light"] body::before {
-  background: #eef1f4 url("img/background-light.jpg") center bottom / cover no-repeat;
+  background: #eef1f4 url("img/background-light.png") center bottom / cover no-repeat;
 }
 [data-theme="light"] .site-header { background: none; color: var(--ink); }
 [data-theme="light"] .yt-link { border-color: var(--line); }

@@ -286,7 +286,7 @@
 
 /* ---- light mode (sub-site) ---- */
 [data-theme="light"] body::before {
-  background: #eef1f4 url("../img/background-light.jpg") center bottom / cover no-repeat;
+  background: #eef1f4 url("../img/background-light.png") center bottom / cover no-repeat;
 }
 [data-theme="light"] #who { color: var(--ink); }
 [data-theme="light"] .assign option, [data-theme="light"] .field select option, [data-theme="light"] .matrix .freq option { background: #fff; color: var(--ink); }
