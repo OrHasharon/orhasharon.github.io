@@ -106,47 +106,148 @@ async function imageData(url, width) {
   return c.toDataURL("image/png"); // PptxGenJS stores images as .png
 }
 
-// Layout copied from the community's own deck (מצגות הלל ואסיפה - ארכיון/2026-10-17.pptx), 16:9, positions in inches
+// The deck is built from template.pptx (a clean copy of the community's own 2026-10-17 deck).
+// Its slides, in order: 0 welcome, 1 blank, 2 song (prototype), 3 "זאת עשו לזכרי", 4 children's blessing,
+// 5 testimonies & prayer, 6 home groups, 7 upcoming meetings. Fixed slides are kept as they are; songs are
+// cloned from the prototype (Arial 26 title, David 54 lyrics); groups and meetings are refilled from the site.
+const TPL = { welcome: 0, blank: 1, song: 2, communion: 3, blessing: 4, testimonies: 5, groups: 6, meetings: 7 };
+const xmlEsc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// replace all paragraphs of a text body with new ones, styled like given sample paragraphs
+function setParagraphs(spXml, lines, pickSample) {
+  const body = spXml.match(/<p:txBody>[\s\S]*?<\/p:txBody>/)[0];
+  const paras = body.match(/<a:p>[\s\S]*?<\/a:p>/g) || [];
+  const head = body.slice(0, body.indexOf("<a:p>"));
+  const build = (text, sample) => {
+    const pPr = (sample.match(/<a:pPr[\s\S]*?<\/a:pPr>|<a:pPr[^>]*\/>/) || [""])[0];
+    const rPr = (sample.match(/<a:rPr[\s\S]*?<\/a:rPr>|<a:rPr[^>]*\/>/) || ['<a:rPr lang="he-IL"/>'])[0];
+    return text ? `<a:p>${pPr}<a:r>${rPr}<a:t>${xmlEsc(text)}</a:t></a:r></a:p>` : `<a:p>${pPr}<a:endParaRPr lang="he-IL"/></a:p>`;
+  };
+  const newBody = head + lines.map((t, n) => build(t, pickSample(paras, t, n))).join("") + "</p:txBody>";
+  return spXml.replace(body, newBody);
+}
+const shapes = (xml) => xml.match(/<p:sp>[\s\S]*?<\/p:sp>/g) || [];
+const firstText = (sp) => (sp.match(/<a:t>([^<]*)<\/a:t>/) || [, ""])[1];
+
+// home groups straight from the community site's front page
+async function homeGroupLines() {
+  const html = await fetch("../index.html", { cache: "no-cache" }).then((r) => r.text());
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const out = [];
+  doc.querySelectorAll(".groups .group").forEach((g, n) => {
+    const city = g.querySelector("strong")?.textContent.trim() || "";
+    const small = g.querySelector("small")?.textContent.replace(/^[\s·]+/, "").trim() || "";
+    let when = g.textContent.replace(city, "").replace(g.querySelector("small")?.textContent || "", "").replace(/[·]/g, " ").replace(/\s+/g, " ").trim();
+    when = when.replace(/(\d{1,2}:\d{2})/, "ב $1");
+    if (n) out.push("");
+    out.push(city, `${when}${small ? `. ${small}` : ""}`);
+  });
+  return out;
+}
+
+// next meetings after this session: this month and the next, like the template
+function meetingLines(iso) {
+  const after = state.meetings.filter((m) => m.iso > iso);
+  if (!after.length) return [];
+  const first = after[0].date, months = new Set([first.getMonth(), (first.getMonth() + 1) % 12]);
+  const list = after.filter((m) => months.has(m.date.getMonth()) && (m.date - first) < 70 * 864e5);
+  const out = [];
+  let month = null;
+  for (const m of list) {
+    const name = m.date.toLocaleDateString("he-IL", { month: "long" });
+    if (name !== month) { if (month) out.push(""); out.push(`${name}:`); month = name; }
+    const extra = meetingKind(m.day) === "קבלת שבת" ? "קבלת שבת" : /בפטיסט/.test(m.place) ? "צ'אפל" : (m.notes || "");
+    out.push(`\t${m.dateText.slice(0, 5)} ${m.place}${extra ? ` | ${extra}` : ""}`);
+  }
+  return out;
+}
+
 async function buildPptx(iso) {
-  if (!window.PptxGenJS) { toast("ספריית המצגות לא נטענה, נסו לרענן"); return; }
+  if (!window.JSZip) { toast("ספריית המצגות לא נטענה, נסו לרענן"); return; }
   const items = itemsFor(iso).filter((i) => i.songs);
-  const [bg, menorah, qr] = await Promise.all([
-    imageData("../img/background.jpg", 1920), imageData("img/welcome_menorah.png", 1100), imageData("img/youtube_qr.png", 187),
-  ]);
-  const GOLD = "D8BE83", WHITE = "F5F7FA";
-  const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_WIDE"; // 13.333 x 7.5 in (960 x 540 pt), like the template
-  pptx.rtlMode = true;
-  pptx.defineSlideMaster({ title: "BG", background: { data: bg.replace(/^data:/, "") } });
-  const T = { rtlMode: true, lang: "he-IL", margin: 0 };
+  const zip = await JSZip.loadAsync(await fetch("template.pptx", { cache: "no-cache" }).then((r) => r.arrayBuffer()));
+  const read = (p) => zip.file(p).async("string");
+  const presXml = await read("ppt/presentation.xml");
+  const presRels = await read("ppt/_rels/presentation.xml.rels");
+  const target = (rid) => (presRels.match(new RegExp(`Id="${rid}"[^>]*?Target="([^"]+)"`)) || presRels.match(new RegExp(`Target="([^"]+)"[^>]*?Id="${rid}"`)))[1];
+  const tplSlides = [...presXml.matchAll(/<p:sldId [^>]*?r:id="(rId\d+)"\s*\/>/g)].map((m) => "ppt/" + target(m[1]));
+  const relsPath = (p) => p.replace("slides/", "slides/_rels/") + ".rels";
+  let next = 100;
+  const newParts = [];
 
-  // 1. welcome slide
-  const w = pptx.addSlide({ masterName: "BG" });
-  w.addText("ברוכים הבאים לקהילת אור השרון", { ...T, x: 0.38, y: 0.47, w: 12.57, h: 1.33, fontFace: "Guttman-Aram", fontSize: 54, color: GOLD, align: "center", valign: "middle" });
-  w.addImage({ data: menorah, x: 6.87, y: 1.81, w: 6.22, h: 5.46, sizing: { type: "cover", w: 6.22, h: 5.46 } });
-  w.addText("ל YouTube הקהילתי נא סרקו:", { ...T, x: 0.67, y: 2.25, w: 5.31, h: 0.75, fontFace: "David", fontSize: 40, italic: true, color: GOLD, align: "right", valign: "top" });
-  w.addImage({ data: qr, x: 0.96, y: 2.99, w: 3.02, h: 2.85 });
-  w.addText("אנא השקיטו את הטלפונים הניידים", { ...T, x: 0.4, y: 6.26, w: 7.2, h: 0.82, fontFace: "Guttman-Aram", fontSize: 28, color: WHITE, align: "center", valign: "middle" });
-  pptx.addSlide({ masterName: "BG" }); // blank, like the template
-
-  // 2. songs: small gold title top-right, white David lyrics centered, max 4 lines; a blank slide after each song
-  for (const it of items) {
+  // a copy of a template slide (no speaker notes), optionally with its XML changed
+  async function clone(idx, edit) {
+    const src = tplSlides[idx];
+    let xml = await read(src);
+    if (edit) xml = edit(xml);
+    const rels = (await read(relsPath(src))).replace(/<Relationship [^>]*?notesSlide[^>]*?\/>/g, "");
+    const name = `ppt/slides/slide${next++}.xml`;
+    zip.file(name, xml); zip.file(relsPath(name), rels);
+    newParts.push(name);
+    return name;
+  }
+  const songSlides = async (it) => {
+    const out = [];
     for (const st of lyricStanzas(it.songs.content)) {
-      for (const part of chunks(st.lines)) {
-        const sl = pptx.addSlide({ masterName: "BG" });
-        sl.addText(it.songs.title, { ...T, x: 4.17, y: 0.21, w: 8.61, h: 0.56, fontFace: "Arial", fontSize: 26, bold: true, color: GOLD, align: "right", valign: "middle" });
-        const long = part.some((l) => l.length > 34);
-        sl.addText(part.join("\n"), { ...T, x: 0.61, y: 1.51, w: 12.17, h: 4.94, fontFace: "David", fontSize: long ? 44 : 54, color: WHITE, align: "center", valign: "middle" });
-        const meta = songMeta(it.songs.content);
-        const notes = [it.notes, meta.capo ? `קאפו ${meta.capo}` : "", it.songs.song_key ? `סולם ${it.songs.song_key}` : "", st.label].filter(Boolean).join(" · ");
-        if (notes) sl.addNotes(notes);
+      const long = st.lines.some((l) => l.length > 34);
+      for (const part of chunks(st.lines, long ? 3 : 4)) {
+        out.push(await clone(TPL.song, (xml) => {
+          const [titleSp, lyricSp] = shapes(xml).filter((sp) => /<a:t>/.test(sp));
+          let x = xml.replace(titleSp, setParagraphs(titleSp, [it.songs.title], (ps) => ps[0]));
+          return x.replace(lyricSp, setParagraphs(lyricSp, part, (ps) => ps[0]));
+        }));
       }
     }
-    pptx.addSlide({ masterName: "BG" });
+    return out;
+  };
+
+  // slide order: welcome, blank, all songs but the last (each followed by a blank), communion, last song, then the fixed tail
+  const before = items.slice(0, Math.max(0, items.length - 1)), last = items.slice(-1);
+  const order = [tplSlides[TPL.welcome], tplSlides[TPL.blank]];
+  for (const it of before) { order.push(...(await songSlides(it))); order.push(await clone(TPL.blank)); }
+  order.push(tplSlides[TPL.communion]);
+  for (const it of last) order.push(...(await songSlides(it)));
+  order.push(tplSlides[TPL.blessing], tplSlides[TPL.testimonies]);
+
+  // home groups + meetings: same slide, fresh text
+  const groups = await homeGroupLines().catch(() => null);
+  const gx = await read(tplSlides[TPL.groups]);
+  if (groups?.length) {
+    const sp = shapes(gx).filter((s) => /<a:t>/.test(s))[1];
+    zip.file(tplSlides[TPL.groups], gx.replace(sp, setParagraphs(sp, groups, (ps, t) => ps.find((p) => /<a:t>/.test(p) && (t && !/[:.]/.test(t) ? !/ימי/.test(firstText(p)) : /ימי/.test(firstText(p)))) || ps[0])));
   }
+  const meetings = meetingLines(iso);
+  const mx = await read(tplSlides[TPL.meetings]);
+  if (meetings.length) {
+    const sp = shapes(mx).filter((s) => /<a:t>/.test(s))[1];
+    zip.file(tplSlides[TPL.meetings], mx.replace(sp, setParagraphs(sp, meetings, (ps, t) => ps.find((p) => /<a:t>/.test(p) && (t.startsWith("\t") ? firstText(p).startsWith("\t") : /:$/.test(firstText(p)))) || ps[0])));
+  }
+  order.push(tplSlides[TPL.groups], tplSlides[TPL.meetings]);
+
+  // the song prototype itself is not used: remove it (and its notes)
+  const proto = tplSlides[TPL.song];
+  const protoRels = await read(relsPath(proto));
+  const protoNotes = (protoRels.match(/Target="\.\.\/notesSlides\/([^"]+)"/) || [])[1];
+  zip.remove(proto); zip.remove(relsPath(proto));
+  if (protoNotes) { zip.remove(`ppt/notesSlides/${protoNotes}`); zip.remove(`ppt/notesSlides/_rels/${protoNotes}.rels`); }
+
+  // rewrite the slide list
+  let rels = presRels.replace(/<Relationship [^>]*?Target="slides\/[^"]+"[^>]*?\/>/g, "");
+  const ids = order.map((p, n) => {
+    const rid = `rIdS${n + 1}`;
+    rels = rels.replace("</Relationships>", `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="${p.replace("ppt/", "")}"/></Relationships>`);
+    return `<p:sldId id="${300 + n}" r:id="${rid}"/>`;
+  }).join("");
+  zip.file("ppt/presentation.xml", presXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, `<p:sldIdLst>${ids}</p:sldIdLst>`));
+  zip.file("ppt/_rels/presentation.xml.rels", rels);
+  let ct = await read("[Content_Types].xml");
+  ct = ct.replace(new RegExp(`<Override PartName="/${proto}"[^>]*/>`), "");
+  if (protoNotes) ct = ct.replace(new RegExp(`<Override PartName="/ppt/notesSlides/${protoNotes}"[^>]*/>`), "");
+  ct = ct.replace("</Types>", newParts.map((p) => `<Override PartName="/${p}" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join("") + "</Types>");
+  zip.file("[Content_Types].xml", ct);
 
   const name = `סשן הלל ${iso.split("-").reverse().join("-")}.pptx`;
-  const blob = await pptx.write({ outputType: "blob" });
+  const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", compression: "DEFLATE" });
   const url = URL.createObjectURL(blob);
   const a = document.getElementById("sl-download");
   if (a) { a.href = url; a.download = name; a.textContent = `⬇️ ${name}`; a.hidden = false; }
