@@ -160,7 +160,7 @@ async function pdfToSongs(file) {
         if (line) line.items.push(it); else lines.push({ y: it.y, items: [it] });
       }
       lines.sort((a, b) => b.y - a.y);
-      for (const l of lines) all.push({ ...toLine(l), page: p });
+      for (const l of lines) all.push({ ...toLine(l), page: p, y: l.y });
     }
   }
   if (!totalText) return null; // scanned images, no text layer
@@ -376,10 +376,23 @@ function toLine(l) {
 const songIsRtl = (lines) => lines.some((l) => !l.chords && l.rtl);
 
 // chord line + following lyric line -> "[Am]lyr[G]ics"
+// a gap clearly bigger than the song's usual line spacing = a new verse/chorus (the PDF has no empty lines, only space)
+function markStanzaBreaks(lines) {
+  const gaps = [];
+  for (let i = 1; i < lines.length; i++) if (lines[i].page === lines[i - 1].page) gaps.push(lines[i - 1].y - lines[i].y);
+  const usual = median(gaps.filter((g) => g > 0));
+  for (let i = 1; i < lines.length; i++) {
+    const g = lines[i].page === lines[i - 1].page ? lines[i - 1].y - lines[i].y : 0;
+    lines[i].breakBefore = usual > 0 && g > usual * 1.55;
+  }
+}
+
 function mergeChordLines(lines) {
+  markStanzaBreaks(lines);
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i];
+    if (ln.breakBefore && out.length && out[out.length - 1] !== "") out.push("");
     if (!ln.chords) { out.push(ln.text.trimEnd()); continue; }
     const next = lines[i + 1];
     if (!next || next.chords) {
