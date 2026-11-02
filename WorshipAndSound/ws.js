@@ -20,7 +20,15 @@ const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PA
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const byId = (id) => state.members.find((m) => m.id === id);
-const INSTRUMENTS = ["פסנתר", "שירה", "גיטרה", "תוף", "בס", "חליל", "כינור"];
+const BASE_INSTRUMENTS = ["פסנתר", "שירה", "גיטרה", "קחון", "בס", "חליל", "כינור"];
+// table columns: the base list + any instrument someone in the team plays + columns added in this visit
+const extraInstruments = [];
+const allInstruments = () => {
+  const seen = new Set(BASE_INSTRUMENTS);
+  for (const m of state.members) for (const x of instrumentsOf(m)) seen.add(x);
+  for (const x of extraInstruments) seen.add(x);
+  return [...seen];
+};
 const FREQS = ["פעם בשבוע", "פעם בשבועיים", "פעם ב-3 שבועות", "פעם בחודש", "פעם ברבעון"];
 const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", "🪈"]];
 const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
@@ -36,6 +44,16 @@ function toast(text) {
 }
 
 // ---------- data ----------
+function renameInstrument(from, to) {
+  for (const m of state.members) {
+    const list = instrumentsOf(m);
+    if (!list.includes(from)) continue;
+    m.instruments = [...new Set(list.map((x) => (x === from ? to : x)))].join(", ");
+    sb.from("members").update({ instruments: m.instruments }).eq("id", m.id).then(() => {});
+  }
+  sb.from("signups").update({ instrument: to }).eq("instrument", from).then(() => {});
+}
+
 async function loadAll() {
   const since = new Date(); since.setDate(since.getDate() - 100); // enough history for "led this quarter"
   const [members, signups, meetings] = await Promise.all([
@@ -46,6 +64,7 @@ async function loadAll() {
   if (members.error) throw members.error;
   if (signups.error) throw signups.error;
   state.members = members.data;
+  renameInstrument("תוף", "קחון");
   state.signups = signups.data;
   state.invitesReady = !!members.data.length && "email" in members.data[0];
   state.meetings = meetings;
@@ -156,24 +175,25 @@ function freqSelect(m, field) {
 const box = (m, flag, on, off = false) => `<td class="cb"><input type="checkbox" data-id="${m.id}" data-flag="${esc(flag)}"${on ? " checked" : ""}${off ? " disabled" : ""}></td>`;
 
 function renderTeam() {
+  const INSTRUMENTS = allInstruments();
   const has = (m, inst) => instrumentsOf(m).includes(inst);
   // can_lead / participation_frequency arrive with team_matrix.sql; until then those columns can't be saved
   const ready = !state.members.length || "can_lead" in state.members[0];
   $("team").innerHTML = `<div class="team-section">
     ${ready ? "" : `<p class="db-warning">עמודות "הנחייה" ו"תכיפות השתתפות" עדיין לא פעילות: צריך להריץ ב-Supabase את הסקריפט team_matrix.sql. אחרי זה רעננו את הדף.</p>`}
     <div class="matrix-wrap"><table class="matrix">
-      <thead><tr><th class="name">שם</th>${state.invitesReady ? "<th>מייל</th>" : ""}<th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}
+      <thead><tr><th class="name">שם</th>${state.invitesReady ? "<th>מייל</th>" : ""}<th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}<th><button class="link-btn add-inst" data-add-instrument title="הוספת כלי">+ כלי</button></th>
         <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
       <tbody>${state.members.map((m) => `<tr>
         <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
         ${state.invitesReady ? `<td><input class="mail" type="email" dir="ltr" data-mail="${m.id}" value="${esc(m.email || "")}" placeholder="name@gmail.com"></td>` : ""}
         ${box(m, "lead", m.can_lead ?? !!m.lead_frequency, !ready)}
-        ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}
+        ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}<td></td>
         <td>${freqSelect(m, "lead_frequency")}</td><td>${ready ? freqSelect(m, "participation_frequency") : "—"}</td>
         ${box(m, "sound", m.sound).replace('class="cb"', 'class="cb sep"')}${box(m, "setup", m.setup)}
         <td><button class="link-btn del" data-deactivate="${m.id}" title="הסרה מהצוות" aria-label="הסרה">✕</button></td>
       </tr>`).join("")}
-      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 6 + (state.invitesReady ? 1 : 0)}"><button class="btn" data-add-member>הוספה</button></td></tr>
+      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 7 + (state.invitesReady ? 1 : 0)}"><button class="btn" data-add-member>הוספה</button></td></tr>
       </tbody></table></div>
     <p class="hint">כל שינוי נשמר מיד. לחיצה על שם מאפשרת לשנות אותו.</p></div>`;
 }
@@ -197,7 +217,8 @@ document.addEventListener("change", (e) => {
       const inst = flag.slice(5);
       const set = new Set(instrumentsOf(m));
       t.checked ? set.add(inst) : set.delete(inst);
-      const ordered = [...INSTRUMENTS.filter((x) => set.has(x)), ...[...set].filter((x) => !INSTRUMENTS.includes(x))];
+      const cols = allInstruments();
+      const ordered = [...cols.filter((x) => set.has(x)), ...[...set].filter((x) => !cols.includes(x))];
       updateMember(m.id, { instruments: ordered.join(", ") || null });
     }
   } else if (t.matches(".matrix .mail")) {
@@ -215,6 +236,13 @@ document.addEventListener("click", async (e) => {
     const m = byId(Number(rn.dataset.rename));
     const name = prompt("שם חדש:", m.name);
     if (name && name.trim() && name.trim() !== m.name && await updateMember(m.id, { name: name.trim() })) render();
+    return;
+  }
+  if (e.target.closest("[data-add-instrument]")) {
+    const name = (prompt("שם הכלי החדש:") || "").trim();
+    if (!name) return;
+    if (allInstruments().includes(name)) { toast("הכלי כבר בטבלה"); return; }
+    extraInstruments.push(name); render(); toast(`נוסף "${name}". מסמנים מי מנגן בו והוא נשמר`);
     return;
   }
   if (e.target.closest("[data-add-member]")) {

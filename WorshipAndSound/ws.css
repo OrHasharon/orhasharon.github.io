@@ -324,3 +324,5 @@
 .live-body { overflow: hidden; }
 .live-body .song-body { height: 100%; column-count: 2; column-fill: auto; column-gap: 6vw; column-rule: 1px solid var(--line); }
 .live-body .cp-line, .live-body .cp-section { break-inside: avoid; }
+
+.matrix .add-inst { font-size: .85rem; white-space: nowrap; }
