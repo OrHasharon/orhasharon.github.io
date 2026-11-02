@@ -316,5 +316,8 @@ body::before {
 
 [data-theme="light"] .card, [data-theme="light"] .schedule, [data-theme="light"] .groups { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 
-.guide { grid-column: 1 / -1; margin: 0; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; overflow-x: auto; }
+.guide { margin: 10px 0 0; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; overflow-x: auto; }
 .guide img { display: block; width: 100%; min-width: 720px; height: auto; }
+
+.sched-links { margin-inline-start: auto; display: inline-flex; gap: 16px; }
+.sched-links .link-btn { margin: 0; }

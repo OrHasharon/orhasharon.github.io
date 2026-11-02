@@ -79,17 +79,6 @@ function render() {
   const grid = $("grid");
   $("status").textContent = "";
 
-  // duty team guidelines: just the community's instruction sheet
-  const guide = state.tab === "guide";
-  document.querySelector(".toolbar").hidden = guide;
-  if (guide) {
-    $("count").textContent = "";
-    $("chips").hidden = true;
-    grid.innerHTML = `<figure class="guide"><img src="img/duty-guidelines.png?v=1" alt="הנחיות לצוות תורנות: הכנת אולם המפגש, בסיום האסיפה, בסיום זמן ההתחברות"></figure>`;
-    $("more").hidden = true;
-    return;
-  }
-
   if (state.tab === "series") {
     const list = data.playlists.filter((p) => !state.query || p.title.includes(state.query));
     $("count").textContent = `${list.length} סדרות`;
@@ -208,9 +197,10 @@ function renderSchedule(meetings) {
     ${hasDuty ? `<div class="sched-row sched-duty">
       <span class="sched-label">תורנות</span>
       <span>${next.duty ? esc(next.duty) : "טרם שובץ"}</span>
-      ${toggle("duty", "שיבוץ מלא", openPanel === "duty")}
+      <span class="sched-links">${toggle("guide", "הנחיות לתורנים", openPanel === "guide")}${toggle("duty", "שיבוץ מלא", openPanel === "duty")}</span>
     </div>
-    ${dutyPanel}` : ""}`;
+    ${dutyPanel}
+    ${openPanel === "guide" ? `<figure class="guide"><img src="img/duty-guidelines.png?v=1" alt="הנחיות לצוות תורנות: הכנת אולם המפגש, בסיום האסיפה, בסיום זמן ההתחברות"></figure>` : ""}` : ""}`;
   el.querySelectorAll("[data-panel]").forEach((b) => b.addEventListener("click", () => {
     openPanel = openPanel === b.dataset.panel ? null : b.dataset.panel;
     renderSchedule(meetings);
