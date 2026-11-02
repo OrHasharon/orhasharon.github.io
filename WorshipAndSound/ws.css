@@ -240,3 +240,14 @@
 
 .cp-bare-chords { white-space: pre; color: #ff8f7a; font-weight: 700; font-size: .7em; margin-bottom: 0 !important; min-height: 0; }
 .draft .preview { max-height: none; }
+
+/* song index */
+.song-index { columns: 3 260px; column-gap: 28px; }
+.idx-group { break-inside: avoid; margin-bottom: 14px; }
+.idx-group h3 { margin: 0 0 4px; font-family: "Frank Ruhl Libre", serif; font-size: 1.3rem; color: var(--accent-ink); border-bottom: 1px solid var(--line); }
+.idx-song { display: block; width: 100%; text-align: start; background: none; border: 0; color: var(--ink); font: inherit; padding: 3px 2px; cursor: pointer; }
+.idx-song:hover { color: var(--accent-ink); }
+.idx-song small { color: var(--muted); font-size: .78em; }
+.uploads { margin-top: 18px; color: var(--muted); }
+.uploads summary { cursor: pointer; }
+.uploads .duty-table { margin-top: 8px; }

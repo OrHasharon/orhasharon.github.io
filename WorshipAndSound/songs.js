@@ -109,6 +109,17 @@ async function pdfToSongs(file) {
   }
   if (!totalText) return null; // scanned images, no text layer
 
+  // table of contents pages ("283 אגילה בן" lines, no chords) are skipped: the site builds its own index
+  const TOC_LINE = /^\s*\d{1,4}\s+[^\d\s.)]|[^\d\s.(]\s+\d{1,4}\s*$/;
+  const tocPages = new Set();
+  for (const pg of new Set(all.map((l) => l.page))) {
+    const lyric = all.filter((l) => l.page === pg && !l.chords && l.text.trim());
+    const toc = lyric.filter((l) => TOC_LINE.test(l.text) && !/^\s*\d{1,4}\s*[.)]/.test(l.text));
+    if (toc.length >= 5 && toc.length >= lyric.length * 0.6) tocPages.add(pg);
+  }
+  const TOC_HEADER = /^\s*(תוכן\s+(ה)?עניינים|אינדקס|index|contents)\s*$/i;
+  all.splice(0, all.length, ...all.filter((l) => !tocPages.has(l.page) && !TOC_HEADER.test(l.text)));
+
   // Songbook style: "76. שם השיר" starts a song, everything under it (also on later pages) is the song.
   // Otherwise fall back to big text (compared with the lyrics, not the smaller chord lines).
   const NUMBERED = /^\s*\d{1,4}\s*[.)]\s*\S|\S\s*[.(]\s*\d{1,4}\s*$/;
@@ -193,7 +204,8 @@ function toLine(l) {
     const edgeStart = rtl ? it.x + it.w : it.x;
     if (prevEdge !== null) {
       const gap = rtl ? prevEdge - edgeStart : edgeStart - prevEdge;
-      const spaces = Math.max(gap > cw * 0.3 ? 1 : 0, Math.round(gap / cw));
+      // a final letter (ך ם ן ף ץ) always ends a word, so never put a space before it
+      const spaces = /^[ךםןףץ]/.test(it.str) ? 0 : Math.max(gap > cw * 0.3 ? 1 : 0, Math.round(gap / cw));
       for (let s = 0; s < spaces; s++) { text += " "; pos.push(rtl ? prevEdge - (s + 0.5) * cw : prevEdge + (s + 0.5) * cw); }
     }
     const icw = it.w / Math.max(1, it.letters ?? it.str.length);
@@ -218,6 +230,20 @@ function toLine(l) {
     while (at < text.length && IS_MARK.test(text[at])) at++;
     text = text.slice(0, at) + m.ch + text.slice(at);
     pos.splice(at, 0, pos[best]);
+  }
+  // a final letter (with its niqqud) that ended up before other letters of its word goes back to the word's end
+  if (/[ךםןףץ]/.test(text)) {
+    const cs = [...text].map((ch, i) => ({ ch, x: pos[i] }));
+    for (let i = 0; i < cs.length; i++) {
+      if (!/[ךםןףץ]/.test(cs[i].ch)) continue;
+      let end = i + 1;
+      while (end < cs.length && IS_MARK.test(cs[end].ch)) end++;
+      let stop = end;
+      while (stop < cs.length && /[א-ת֑-ׇ]/.test(cs[stop].ch)) stop++;
+      if (stop > end) { const grp = cs.splice(i, end - i); cs.splice(stop - grp.length, 0, ...grp); i = stop - 1; }
+    }
+    text = cs.map((c) => c.ch).join("");
+    pos.splice(0, pos.length, ...cs.map((c) => c.x));
   }
   const h = Math.max(...l.items.map((i) => i.h));
   if (!HEB.test(text)) {
@@ -268,7 +294,7 @@ function mergeChordLines(lines) {
       while (at < t.length && /[֑-ׇ ]/.test(t[at])) at++; // stick to the next letter, never split it from its niqqud
       t = t.slice(0, at) + `[${ins.name}]` + t.slice(at);
     }
-    out.push(t.trimEnd());
+    out.push(t.replace(/ {2,}/g, " ").trimEnd());
     i++;
   }
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -287,6 +313,26 @@ async function loadSongs() {
   songsState.loaded = true;
 }
 
+async function saveImported(drafts, fileName) {
+  const byTitle = new Map(songsState.list.map((s) => [s.title.trim(), s]));
+  const fresh = [], updates = [];
+  for (const d of drafts) {
+    const row = { title: d.title.trim(), content: d.content, song_key: firstChord(d.content), source: fileName, updated_at: new Date().toISOString() };
+    if (!row.title || !row.content.trim()) continue;
+    const old = byTitle.get(row.title);
+    if (old) updates.push(sb.from("songs").update(row).eq("id", old.id)); else fresh.push(row);
+  }
+  const results = await Promise.all([fresh.length ? sb.from("songs").insert(fresh) : { error: null }, ...updates]);
+  const failed = results.filter((r) => r.error).length;
+  await loadSongs();
+  songsState.view = "list";
+  renderSongs();
+  toast(failed ? `חלק מהשירים לא נשמרו (${failed})` : `נשמרו ${fresh.length} שירים חדשים${updates.length ? `, עודכנו ${updates.length}` : ""}`);
+}
+
+const myEmail = () => (typeof user !== "undefined" && user?.email ? user.email.toLowerCase() : null);
+const isMine = (row) => !!myEmail() && (row.added_by || "").toLowerCase() === myEmail();
+
 // ---------- views ----------
 function renderSongs() {
   const el = $("songs");
@@ -304,10 +350,41 @@ function renderSongs() {
       <label class="btn ghost file-btn">ייבוא מ-PDF<input type="file" accept="application/pdf" id="pdf-file" hidden></label>
     </div>
     ${songsState.importing ? `<p class="status">קורא את הקובץ…</p>` : ""}
-    <div class="song-list">${list.map((s) => `<button class="song-row" data-song="${s.id}"><span>${esc(s.title)}</span>${s.song_key ? `<small dir="ltr">${esc(s.song_key)}</small>` : ""}</button>`).join("") ||
-      `<p class="status">${songsState.list.length ? "לא נמצאו שירים" : "עדיין אין שירים. אפשר להוסיף שיר או לייבא מ-PDF."}</p>`}</div>`;
+    ${list.length ? songIndex(list) : `<p class="status">${songsState.list.length ? "לא נמצאו שירים" : "עדיין אין שירים. אפשר להוסיף שיר או לייבא מ-PDF."}</p>`}
+    ${uploadsHtml()}`;
   const search = $("song-search");
   search.addEventListener("input", () => { songsState.query = search.value; renderSongs(); $("song-search").focus(); });
+}
+
+// alphabetical index grouped by first letter, titles only
+function songIndex(list) {
+  const sorted = [...list].sort((a, b) => a.title.localeCompare(b.title, "he"));
+  const groups = new Map();
+  for (const s of sorted) {
+    const letter = (s.title.trim()[0] || "#").replace(/[ךםןףץ]/, (c) => ({ ך: "כ", ם: "מ", ן: "נ", ף: "פ", ץ: "צ" }[c]));
+    if (!groups.has(letter)) groups.set(letter, []);
+    groups.get(letter).push(s);
+  }
+  return `<div class="song-index">${[...groups].map(([letter, songs]) => `<section class="idx-group"><h3>${esc(letter)}</h3>
+    ${songs.map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(s.song_key)}</small>` : ""}</button>`).join("")}</section>`).join("")}</div>`;
+}
+
+// files that were imported: who, when, how many songs; only the uploader can delete
+function uploadsHtml() {
+  const files = new Map();
+  for (const s of songsState.list) {
+    if (!s.source) continue;
+    const key = s.source + "|" + (s.added_by || "");
+    const f = files.get(key) || { name: s.source, by: s.added_by, count: 0, at: s.created_at };
+    f.count++; if (s.created_at < f.at) f.at = s.created_at;
+    files.set(key, f);
+  }
+  if (!files.size) return "";
+  return `<details class="uploads"><summary>קבצים שהועלו (${files.size})</summary>
+    <div class="duty-table"><table><thead><tr><th>קובץ</th><th>הועלה ע״י</th><th>תאריך</th><th>שירים</th><th></th></tr></thead><tbody>
+    ${[...files.values()].map((f) => `<tr><td dir="auto">${esc(f.name)}</td><td dir="ltr">${esc(f.by || "")}</td><td>${f.at ? new Date(f.at).toLocaleDateString("he-IL") : ""}</td><td>${f.count}</td>
+      <td>${myEmail() && (f.by || "").toLowerCase() === myEmail() ? `<button class="link-btn" data-del-file="${esc(f.name)}">מחיקת הקובץ ושיריו</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div></details>`;
 }
 
 function renderSongView(el) {
@@ -327,7 +404,7 @@ function renderSongView(el) {
       <div class="tool-group" title="גודל טקסט"><button class="tool" data-scale="1">א+</button><button class="tool" data-scale="-1">א−</button></div>
       <div class="tool-group" title="סולם">${key ? `<span class="tool-label">סולם <b dir="ltr">${esc(key)}</b></span>` : `<span class="tool-label">סולם</span>`}
         <button class="tool" data-shift="-1" title="חצי טון למטה">−½</button><button class="tool" data-shift="1" title="חצי טון למעלה">+½</button>
-        ${songsState.shift ? `<button class="tool link" data-shift="0">מקורי</button>` : ""}</div>
+        ${songsState.shift ? `<button class="tool link" data-shift="0">מקורי</button><button class="tool" data-save-key>שמירת הסולם</button>` : ""}</div>
       ${capo ? `<div class="tool-group"><span class="tool-label">קאפו ${capo}</span>
         <button class="tool${songsState.noCapo ? " on" : ""}" data-nocapo>${songsState.noCapo ? "חזרה לאקורדי קאפו" : "בלי קאפו"}</button></div>` : ""}
       <div class="tool-group">
@@ -352,7 +429,7 @@ function renderSongEdit(el) {
     <p class="hint">תצוגה מקדימה:</p>
     <div class="chordpro preview song-body">${renderChordPro(s.content)}</div>
     <div class="form-actions"><button class="btn" type="submit">שמירה</button>
-      ${s.id ? `<button class="btn ghost" type="button" data-song-delete="${s.id}">מחיקת השיר</button>` : ""}</div>
+      ${s.id && (isMine(s) || !s.added_by) ? `<button class="btn ghost" type="button" data-song-delete="${s.id}">מחיקת השיר</button>` : ""}</div>
   </form></div>`;
   const ta = el.querySelector("textarea");
   ta.addEventListener("input", () => { el.querySelector(".preview").innerHTML = renderChordPro(ta.value); });
@@ -399,6 +476,22 @@ document.addEventListener("click", async (e) => {
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     renderSongs(); return;
   }
+  if (t.closest("[data-save-key]")) {
+    const cur = songsState.current, n = songsState.shift;
+    const content = cur.content.replace(/\[([^\]]+)\]/g, (_, c) => `[${transposeChord(c, n)}]`);
+    const row = { content, song_key: cur.song_key ? transposeChord(cur.song_key, n) : firstChord(content), updated_at: new Date().toISOString() };
+    const { error } = await sb.from("songs").update(row).eq("id", cur.id);
+    if (error) { toast("השמירה נכשלה"); return; }
+    Object.assign(cur, row); songsState.shift = 0; toast("השיר נשמר בסולם החדש"); renderSongs(); return;
+  }
+  if (t.closest("[data-del-file]")) {
+    const name = t.closest("[data-del-file]").dataset.delFile;
+    const mine = songsState.list.filter((s) => s.source === name && isMine(s));
+    if (!confirm(`למחוק את הקובץ "${name}" ואת ${mine.length} השירים שלו?`)) return;
+    const { error } = await sb.from("songs").delete().in("id", mine.map((s) => s.id));
+    if (error) { toast("המחיקה נכשלה"); return; }
+    toast("הקובץ נמחק"); await loadSongs(); renderSongs(); return;
+  }
   if (t.closest("[data-song-delete]")) {
     if (!confirm(`למחוק את "${songsState.current.title}"?`)) return;
     const { error } = await sb.from("songs").delete().eq("id", songsState.current.id);
@@ -432,7 +525,7 @@ document.addEventListener("change", async (e) => {
       songsState.importing = false;
       if (drafts === null) { toast("ה-PDF הזה סרוק כתמונה ואין בו טקסט, אי אפשר לקרוא ממנו אקורדים"); renderSongs(); return; }
       if (!drafts.length) { toast("לא נמצאו שירים בקובץ"); renderSongs(); return; }
-      songsState.drafts = drafts; songsState.importFile = file.name; songsState.view = "import"; renderSongs();
+      await saveImported(drafts, file.name);
     } catch (err) {
       console.error(err); songsState.importing = false; toast("קריאת הקובץ נכשלה"); renderSongs();
     }
