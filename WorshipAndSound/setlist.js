@@ -1,4 +1,4 @@
-// Worship sessions: ordered songs + notes per meeting, opened from the signup tab, exported to PowerPoint.
+﻿// Worship sessions: ordered songs + notes per meeting, opened from the signup tab, exported to PowerPoint.
 // Uses sb / esc / toast / state / render from ws.js and songsState / renderSongs / songMeta from songs.js.
 const setlist = { items: [], ready: false, missing: false, openDate: null };
 
@@ -73,58 +73,78 @@ function addToSetlistDialog(song) {
 }
 
 // ---------- PowerPoint ----------
+// stanzas of clean lyric lines, each tagged with its section label ({פזמון}) if any
 function lyricStanzas(content) {
-  const stanzas = [[]];
+  const stanzas = [{ label: "", lines: [] }];
   for (const raw of content.split("\n")) {
     const t = raw.trim();
-    if (/^\{.*\}$/.test(t)) continue;                              // directives and section labels
-    const line = raw.replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
-    if (!line) { if (stanzas[stanzas.length - 1].length) stanzas.push([]); continue; }
-    if (!/[֐-׿a-zA-Z]{2}/.test(line)) continue;           // chord-only rows
-    stanzas[stanzas.length - 1].push(line);
+    if (/^\{\s*(capo|artist|key)\s*:/i.test(t)) continue;
+    const label = t.match(/^\{(.+)\}$/);
+    if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
+    const line = fixNiqqud(raw.replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim());
+    if (!line) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); continue; }
+    if (!/[\u05D0-\u05EAa-zA-Z]{2}/.test(line)) continue; // chord-only rows
+    stanzas[stanzas.length - 1].lines.push(line);
   }
-  return stanzas.filter((s) => s.length);
+  return stanzas.filter((s) => s.lines.length);
 }
 
-// PptxGenJS stores slide backgrounds as .png, so hand it a real PNG
-async function imageData(url) {
+// split a stanza into slides of at most 4 lines, as evenly as possible (5 -> 3+2, not 4+1)
+function chunks(lines, max = 4) {
+  const n = Math.ceil(lines.length / max), size = Math.ceil(lines.length / n), out = [];
+  for (let i = 0; i < lines.length; i += size) out.push(lines.slice(i, i + size));
+  return out;
+}
+
+async function imageData(url, width) {
   const img = new Image();
   img.src = url;
   await img.decode();
   const c = document.createElement("canvas");
-  c.width = 1600; c.height = Math.round(1600 * img.naturalHeight / img.naturalWidth);
+  c.width = width; c.height = Math.round(width * img.naturalHeight / img.naturalWidth);
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-  return c.toDataURL("image/png");
+  return c.toDataURL("image/png"); // PptxGenJS stores images as .png
 }
 
+// Layout copied from the community's own deck (מצגות הלל ואסיפה - ארכיון/2026-10-17.pptx), 16:9, positions in inches
 async function buildPptx(iso) {
   if (!window.PptxGenJS) { toast("ספריית המצגות לא נטענה, נסו לרענן"); return; }
   const items = itemsFor(iso).filter((i) => i.songs);
-  const mt = state.meetings.find((m) => m.iso === iso);
-  const bg = (await imageData("../img/background.jpg")).replace(/^data:/, "");
+  const [bg, menorah, qr] = await Promise.all([
+    imageData("../img/background.jpg", 1920), imageData("img/welcome_menorah.png", 1100), imageData("img/youtube_qr.png", 187),
+  ]);
+  const GOLD = "D8BE83", WHITE = "F5F7FA";
   const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
+  pptx.layout = "LAYOUT_WIDE"; // 13.333 x 7.5 in (960 x 540 pt), like the template
   pptx.rtlMode = true;
-  pptx.defineSlideMaster({ title: "BG", background: { data: bg } });
-  const txt = { fontFace: "Arial", color: "FFFFFF", align: "center", valign: "middle", rtlMode: true, lang: "he-IL" };
+  pptx.defineSlideMaster({ title: "BG", background: { data: bg.replace(/^data:/, "") } });
+  const T = { rtlMode: true, lang: "he-IL", margin: 0 };
 
-  const cover = pptx.addSlide({ masterName: "BG" });
-  cover.addText("קהילת אור השרון", { ...txt, x: 0.5, y: 2.2, w: 12.3, h: 1.2, fontSize: 48, bold: true, color: "E8C070" });
-  cover.addText(mt ? `${meetingKind(mt.day)} · ${mt.dateText}` : iso.split("-").reverse().join("/"), { ...txt, x: 0.5, y: 3.5, w: 12.3, h: 0.8, fontSize: 28 });
+  // 1. welcome slide
+  const w = pptx.addSlide({ masterName: "BG" });
+  w.addText("ברוכים הבאים לקהילת אור השרון", { ...T, x: 0.38, y: 0.47, w: 12.57, h: 1.33, fontFace: "Guttman-Aram", fontSize: 54, color: GOLD, align: "center", valign: "middle" });
+  w.addImage({ data: menorah, x: 6.87, y: 1.81, w: 6.22, h: 5.46, sizing: { type: "cover", w: 6.22, h: 5.46 } });
+  w.addText("ל YouTube הקהילתי נא סרקו:", { ...T, x: 0.67, y: 2.25, w: 5.31, h: 0.75, fontFace: "David", fontSize: 40, italic: true, color: GOLD, align: "right", valign: "top" });
+  w.addImage({ data: qr, x: 0.96, y: 2.99, w: 3.02, h: 2.85 });
+  w.addText("אנא השקיטו את הטלפונים הניידים", { ...T, x: 0.4, y: 6.26, w: 7.2, h: 0.82, fontFace: "Guttman-Aram", fontSize: 28, color: WHITE, align: "center", valign: "middle" });
+  pptx.addSlide({ masterName: "BG" }); // blank, like the template
 
+  // 2. songs: small gold title top-right, white David lyrics centered, max 4 lines; a blank slide after each song
   for (const it of items) {
-    const title = pptx.addSlide({ masterName: "BG" });
-    title.addText(it.songs.title, { ...txt, x: 0.5, y: 2.6, w: 12.3, h: 1.6, fontSize: 54, bold: true, color: "E8C070" });
-    const meta = songMeta(it.songs.content);
-    if (meta.artist) title.addText(meta.artist, { ...txt, x: 0.5, y: 4.2, w: 12.3, h: 0.7, fontSize: 24 });
-    for (const stanza of lyricStanzas(it.songs.content)) {
-      for (let k = 0; k < stanza.length; k += 6) {
-        const s = pptx.addSlide({ masterName: "BG" });
-        s.addText(it.songs.title, { ...txt, x: 0.5, y: 0.25, w: 12.3, h: 0.5, fontSize: 16, color: "E8C070" });
-        s.addText(stanza.slice(k, k + 6).join("\n"), { ...txt, x: 0.6, y: 0.9, w: 12.1, h: 6.2, fontSize: 40, bold: true, lineSpacingMultiple: 1.15 });
+    for (const st of lyricStanzas(it.songs.content)) {
+      for (const part of chunks(st.lines)) {
+        const sl = pptx.addSlide({ masterName: "BG" });
+        sl.addText(it.songs.title, { ...T, x: 4.17, y: 0.21, w: 8.61, h: 0.56, fontFace: "Arial", fontSize: 26, bold: true, color: GOLD, align: "right", valign: "middle" });
+        const long = part.some((l) => l.length > 34);
+        sl.addText(part.join("\n"), { ...T, x: 0.61, y: 1.51, w: 12.17, h: 4.94, fontFace: "David", fontSize: long ? 44 : 54, color: WHITE, align: "center", valign: "middle" });
+        const meta = songMeta(it.songs.content);
+        const notes = [it.notes, meta.capo ? `קאפו ${meta.capo}` : "", it.songs.song_key ? `סולם ${it.songs.song_key}` : "", st.label].filter(Boolean).join(" · ");
+        if (notes) sl.addNotes(notes);
       }
     }
+    pptx.addSlide({ masterName: "BG" });
   }
+
   const name = `סשן הלל ${iso.split("-").reverse().join("-")}.pptx`;
   const blob = await pptx.write({ outputType: "blob" });
   const url = URL.createObjectURL(blob);

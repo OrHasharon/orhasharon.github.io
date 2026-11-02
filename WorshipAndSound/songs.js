@@ -31,6 +31,42 @@ const firstChord = (content) => (content.match(/\[([^\]]+)\]/) || [])[1] || null
 
 const HEB = /[֐-׿]/;
 
+// Clean niqqud that the PDF put on the wrong letter (shows as ◌): marks with no letter, duplicate marks,
+// and the shin/sin dot on a letter that isn't ש (moved to a nearby ש that lacks one, otherwise dropped).
+function fixNiqqud(text) {
+  const MARK = /[\u0591-\u05C7]/, LETTER = /[\u05D0-\u05EA]/;
+  const out = []; // clusters: { base, marks: [] }
+  for (const ch of text) {
+    if (MARK.test(ch)) {
+      const last = out[out.length - 1];
+      if (last && LETTER.test(last.base) && !last.marks.includes(ch)) last.marks.push(ch);
+      continue; // orphan or duplicate
+    }
+    out.push({ base: ch, marks: [] });
+  }
+  const DOTS = ["\u05C1", "\u05C2"];
+  out.forEach((c, i) => {
+    const dot = c.marks.find((m) => DOTS.includes(m));
+    if (!dot || c.base === "ש") return;
+    c.marks = c.marks.filter((m) => !DOTS.includes(m));
+    for (const j of [i + 1, i - 1, i + 2, i - 2]) {
+      const n = out[j];
+      if (n && n.base === "ש" && !n.marks.some((m) => DOTS.includes(m))) { n.marks.push(dot); break; }
+    }
+  });
+  // the PDF tends to hang a ו's mark on the letter before it: "תֹו" -> "תוֹ" (holam male), "שּו" -> "שׁוּ" (shuruk)
+  out.forEach((c, i) => {
+    const prev = out[i - 1];
+    if (c.base !== "ו" || c.marks.length || !prev || !LETTER.test(prev.base)) return;
+    const VOWELS = /[ְ-ׇֻ]/;
+    if (prev.marks.includes("ֹ")) { prev.marks = prev.marks.filter((m) => m !== "ֹ"); c.marks.push("ֹ"); return; }
+    if (prev.marks.includes("ּ") && !prev.marks.some((m) => VOWELS.test(m))) {
+      prev.marks = prev.marks.filter((m) => m !== "ּ"); c.marks.push("ּ");
+    }
+  });
+  return out.map((c) => c.base + c.marks.join("")).join("").normalize("NFC");
+}
+
 // ---------- render ChordPro ----------
 // directives: {capo: 2} {artist: ...}; a line that is only {…} is a section label, e.g. {פזמון}
 const META_RE = /^\{\s*(capo|artist|key)\s*:\s*(.*?)\s*\}$/i;
@@ -56,13 +92,13 @@ function renderChordPro(content, shift = 0, { chords = true } = {}) {
       const row = cleanStr(line).replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift) : tok));
       return `<div class="cp-line cp-bare-chords" dir="${songDir}">${esc(row)}</div>`;
     }
-    if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(line)}</div>`;
-    if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(lyricsOnly)}</div>` : "";
+    if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(line))}</div>`;
+    if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(lyricsOnly))}</div>` : "";
     const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
-    let html = parts[0] ? `<span class="seg"><span class="ch"></span><span class="ly">${esc(parts[0])}</span></span>` : "";
+    let html = parts[0] ? `<span class="seg"><span class="ch"></span><span class="ly">${esc(fixNiqqud(parts[0]))}</span></span>` : "";
     for (let k = 1; k < parts.length; k += 2) {
       const lyr = parts[k + 1] || "";
-      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[k], shift))}</span><span class="ly">${lyr ? esc(lyr) : "&nbsp;"}</span></span>`;
+      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[k], shift))}</span><span class="ly">${lyr ? esc(fixNiqqud(lyr)) : "&nbsp;"}</span></span>`;
     }
     return `<div class="cp-line${lyricsOnly.trim() ? "" : " cp-chords-only"}" dir="${dir}">${html}</div>`;
   }).join("");
@@ -137,7 +173,7 @@ async function pdfToSongs(file) {
   return songs.map((s) => {
     const { title, capo } = cleanTitle(s.title);
     const body = mergeChordLines(s.lines);
-    return { title, content: (capo ? `{capo: ${capo}}\n` : "") + body, include: true };
+    return { title, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqud).join("\n"), include: true };
   }).filter((s) => s.content.trim());
 }
 
