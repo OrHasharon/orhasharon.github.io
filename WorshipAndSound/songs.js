@@ -41,6 +41,7 @@ function songMeta(content) {
 }
 
 function renderChordPro(content, shift = 0, { chords = true } = {}) {
+  const songDir = HEB.test(content) ? "rtl" : "ltr";
   return content.split("\n").map((line) => {
     const t = line.trim();
     if (!t) return `<div class="cp-line cp-empty"></div>`;
@@ -50,6 +51,11 @@ function renderChordPro(content, shift = 0, { chords = true } = {}) {
     // direction comes from the lyrics, not the (Latin) chords
     const lyricsOnly = line.replace(/\[[^\]]*\]/g, "");
     const dir = HEB.test(lyricsOnly) ? "rtl" : "ltr";
+    if (!line.includes("[") && isChordLine(cleanStr(line))) {
+      if (!chords) return "";
+      const row = cleanStr(line).replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift) : tok));
+      return `<div class="cp-line cp-bare-chords" dir="${songDir}">${esc(row)}</div>`;
+    }
     if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(line)}</div>`;
     if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(lyricsOnly)}</div>` : "";
     const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
@@ -72,6 +78,7 @@ function cleanTitle(raw) {
 }
 
 // ---------- PDF -> songs ----------
+const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/[\u00A0\u2000-\u200A\u202F]/g, " ");
 const median = (arr) => { const a = [...arr].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
 
 async function pdfToSongs(file) {
@@ -82,7 +89,7 @@ async function pdfToSongs(file) {
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
-    const items = tc.items.filter((it) => it.str && it.str.trim()).map((it) => ({
+    const items = tc.items.map((it) => ({ ...it, str: cleanStr(it.str) })).filter((it) => it.str && it.str.trim()).map((it) => ({
       str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height,
     }));
     totalText += items.length;
@@ -342,7 +349,8 @@ function renderSongEdit(el) {
     <label class="field">סולם<input name="song_key" value="${esc(s.song_key || "")}" dir="ltr" placeholder="Am"></label>
     <label class="field">מילים ואקורדים: אקורד בסוגריים מרובעים לפני ההברה, [Am]שלום [G]עולם · כותרת חלק: {פזמון} · קאפו: {capo: 2} · כותב: {artist: שם}
       <textarea name="content" rows="16" dir="${HEB.test(s.content) ? "rtl" : "ltr"}">${esc(s.content)}</textarea></label>
-    <div class="chordpro preview">${renderChordPro(s.content)}</div>
+    <p class="hint">תצוגה מקדימה:</p>
+    <div class="chordpro preview song-body">${renderChordPro(s.content)}</div>
     <div class="form-actions"><button class="btn" type="submit">שמירה</button>
       ${s.id ? `<button class="btn ghost" type="button" data-song-delete="${s.id}">מחיקת השיר</button>` : ""}</div>
   </form></div>`;
@@ -358,8 +366,9 @@ function renderImport(el) {
     ${d.map((s, i) => `<details class="draft"${i < 3 ? " open" : ""}>
       <summary><label><input type="checkbox" data-draft-inc="${i}"${s.include ? " checked" : ""}> <b>${esc(s.title)}</b></label></summary>
       <label class="field">שם השיר<input data-draft-title="${i}" value="${esc(s.title)}"></label>
-      <label class="field">מילים ואקורדים<textarea data-draft-content="${i}" rows="10" dir="${HEB.test(s.content) ? "rtl" : "ltr"}">${esc(s.content)}</textarea></label>
-      <div class="chordpro preview" data-draft-preview="${i}">${renderChordPro(s.content)}</div>
+      <div class="chordpro preview song-body" data-draft-preview="${i}">${renderChordPro(s.content)}</div>
+      <button class="link-btn" type="button" data-draft-edit="${i}">עריכת טקסט</button>
+      <textarea data-draft-content="${i}" rows="10" dir="${HEB.test(s.content) ? "rtl" : "ltr"}" hidden>${esc(s.content)}</textarea>
     </details>`).join("")}
     <div class="form-actions"><button class="btn" data-import-save>שמירת ${d.filter((s) => s.include).length} שירים</button></div>
   </div>`;
@@ -395,6 +404,12 @@ document.addEventListener("click", async (e) => {
     const { error } = await sb.from("songs").delete().eq("id", songsState.current.id);
     if (error) { toast("המחיקה נכשלה"); return; }
     toast("השיר נמחק"); songsState.current = null; songsState.view = "list"; await loadSongs(); renderSongs(); return;
+  }
+  if (t.closest("[data-draft-edit]")) {
+    const i = t.closest("[data-draft-edit]").dataset.draftEdit;
+    const ta = document.querySelector(`[data-draft-content="${i}"]`);
+    ta.hidden = !ta.hidden; t.closest("[data-draft-edit]").textContent = ta.hidden ? "עריכת טקסט" : "סגירת עריכה";
+    return;
   }
   if (t.closest("[data-import-save]")) {
     const rows = songsState.drafts.filter((s) => s.include && s.title.trim() && s.content.trim())

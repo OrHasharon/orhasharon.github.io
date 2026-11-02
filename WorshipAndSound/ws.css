@@ -237,3 +237,6 @@
 .btn.google-main { font-size: 1.05rem; padding: 11px 26px; }
 
 .song-form textarea, .draft textarea { unicode-bidi: normal; }
+
+.cp-bare-chords { white-space: pre; color: #ff8f7a; font-weight: 700; font-size: .7em; margin-bottom: 0 !important; min-height: 0; }
+.draft .preview { max-height: none; }
