@@ -283,3 +283,21 @@
 .sl-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
 .sl-box .field select, .sl-box .field input { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
 .sl-box .field { margin-bottom: 10px; }
+
+/* ---- light mode (sub-site) ---- */
+[data-theme="light"] body::before {
+  background: linear-gradient(rgba(244, 241, 234, .90), rgba(244, 241, 234, .94)), url("../img/background.jpg") center bottom / cover no-repeat;
+}
+[data-theme="light"] #who { color: var(--ink); }
+[data-theme="light"] .assign option, [data-theme="light"] .field select option, [data-theme="light"] .matrix .freq option { background: #fff; color: var(--ink); }
+[data-theme="light"] .matrix .name { background: #fbfaf6; }
+[data-theme="light"] .matrix tbody tr:hover td.name { background: #f1ede3; }
+[data-theme="light"] .sl-box, [data-theme="light"] .toast { background: #fff; color: var(--ink); }
+[data-theme="light"] .person, [data-theme="light"] .tool, [data-theme="light"] .assign,
+[data-theme="light"] .field input, [data-theme="light"] .field select, [data-theme="light"] .matrix .freq,
+[data-theme="light"] .sl-note, [data-theme="light"] .song-form textarea { background: rgba(0,0,0,.03); }
+[data-theme="light"] .song-body .seg .ch, [data-theme="light"] .cp-bare-chords { color: #b3261e; }
+[data-theme="light"] .song-view.present { background: #fbfaf6; }
+
+.person.pending { border-style: dashed; opacity: .8; }
+.matrix .mail { font: inherit; font-size: .82rem; color: var(--ink); background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; width: 170px; }

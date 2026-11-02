@@ -13,6 +13,8 @@ const SLOTS = [
   { role: "setup", label: "הקמת סאונד", max: 2, eligible: (m) => m.setup, why: "לא מסומן/ת כמקים/ה" },
 ];
 const PAGE = 6;
+// Google Apps Script web app that emails invitations (see email/Code.gs). Empty = invitations off.
+const INVITE_HOOK = "";
 
 const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PAGE, editing: null, picking: null }; // picking = {date, member} while choosing an instrument
 const $ = (id) => document.getElementById(id);
@@ -45,6 +47,7 @@ async function loadAll() {
   if (signups.error) throw signups.error;
   state.members = members.data;
   state.signups = signups.data;
+  state.invitesReady = !!members.data.length && "email" in members.data[0];
   state.meetings = meetings;
 }
 
@@ -56,16 +59,22 @@ async function refreshSignups() {
 
 // ---------- sign-up ----------
 const takenIn = (date, role) => state.signups.filter((s) => s.meeting_date === date && s.role === role);
+// instruments this person isn't already playing at that meeting
+const freeInstruments = (m, date) => instrumentsOf(m).filter((x) => !takenIn(date, "musician").some((s) => s.member_id === m.id && s.instrument === x));
+
 // people + picker for one role at one meeting; shared by the table (desktop) and the cards (phone)
 function slotCell(mt, slot) {
   const taken = takenIn(mt.iso, slot.role);
-  const people = taken.map((s) => `<span class="person">${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`).join("");
+  const people = taken.map((s) => {
+    const pending = s.status === "pending";
+    return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
+  }).join("");
   let action = "";
   const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
   if (picking) {
-    action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${instrumentsOf(picking).map((o) => `<option value="${esc(o)}">${icon(o)} ${esc(o)}</option>`).join("")}</select>`;
+    action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${freeInstruments(picking, mt.iso).map((o) => `<option value="${esc(o)}">${icon(o)} ${esc(o)}</option>`).join("")}</select>`;
   } else if (taken.length < slot.max) {
-    const free = state.members.filter((m) => slot.eligible(m) && !taken.some((s) => s.member_id === m.id));
+    const free = state.members.filter((m) => slot.eligible(m) && (slot.role === "musician" ? freeInstruments(m, mt.iso).length : !taken.some((s) => s.member_id === m.id)));
     if (free.length) action = `<select class="assign" data-role="${slot.role}" data-date="${mt.iso}"><option value="">+ שיבוץ</option>${free.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>`;
   }
   const missing = !taken.length && slot.role !== "musician";
@@ -106,16 +115,30 @@ function meetingCard(mt, isNext) {
 async function assign(role, date, memberId, instrument = null) {
   const m = byId(memberId);
   if (role === "musician" && !instrument) {
-    const opts = instrumentsOf(m);
+    const opts = freeInstruments(m, date);
     if (opts.length > 1) { state.picking = { date, member: memberId }; render(); return; }
     instrument = opts[0];
   }
-  const { error } = await sb.from("signups").insert({ meeting_date: date, role, member_id: memberId, instrument });
+  // signing up someone else (who has an email) sends them an invitation to confirm
+  const me = (typeof user !== "undefined" && user?.email || "").toLowerCase();
+  const invite = INVITE_HOOK && state.invitesReady && m.email && m.email.toLowerCase() !== me;
+  const row = { meeting_date: date, role, member_id: memberId, instrument };
+  if (invite) Object.assign(row, { status: "pending", invite_token: crypto.randomUUID(), invited_by: me || null });
+  const { error } = await sb.from("signups").insert(row);
   state.picking = null;
   const slot = SLOTS.find((s) => s.role === role);
+  const when = date.split("-").reverse().slice(0, 2).join("/");
   if (error) toast(error.code === "23505" ? `${m.name} כבר משובץ/ת בתפקיד הזה` : "השיבוץ נכשל, נסו שוב");
-  else toast(`${m.name} שובץ/ה: ${slot.label} · ${date.split("-").reverse().slice(0, 2).join("/")}`);
+  else if (invite) {
+    fetch(INVITE_HOOK, { method: "POST", mode: "no-cors", body: JSON.stringify({ type: "invite", token: row.invite_token, from: myName() }) }).catch(() => {});
+    toast(`נשלחה הזמנה במייל ל${m.name} (${slot.label} · ${when})`);
+  } else toast(`${m.name} שובץ/ה: ${slot.label} · ${when}${INVITE_HOOK && state.invitesReady && !m.email && m.email !== me ? " (אין מייל, לכן בלי הזמנה)" : ""}`);
   await refreshSignups(); render();
+}
+
+function myName() {
+  const me = (typeof user !== "undefined" && user?.email || "").toLowerCase();
+  return state.members.find((x) => (x.email || "").toLowerCase() === me)?.name || (typeof user !== "undefined" && user?.user_metadata?.full_name) || me;
 }
 
 async function removeSignup(id) {
@@ -139,17 +162,18 @@ function renderTeam() {
   $("team").innerHTML = `<div class="team-section">
     ${ready ? "" : `<p class="db-warning">עמודות "הנחייה" ו"תכיפות השתתפות" עדיין לא פעילות: צריך להריץ ב-Supabase את הסקריפט team_matrix.sql. אחרי זה רעננו את הדף.</p>`}
     <div class="matrix-wrap"><table class="matrix">
-      <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}
+      <thead><tr><th class="name">שם</th>${state.invitesReady ? "<th>מייל</th>" : ""}<th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}
         <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
       <tbody>${state.members.map((m) => `<tr>
         <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
+        ${state.invitesReady ? `<td><input class="mail" type="email" dir="ltr" data-mail="${m.id}" value="${esc(m.email || "")}" placeholder="name@gmail.com"></td>` : ""}
         ${box(m, "lead", m.can_lead ?? !!m.lead_frequency, !ready)}
         ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}
         <td>${freqSelect(m, "lead_frequency")}</td><td>${ready ? freqSelect(m, "participation_frequency") : "—"}</td>
         ${box(m, "sound", m.sound).replace('class="cb"', 'class="cb sep"')}${box(m, "setup", m.setup)}
         <td><button class="link-btn del" data-deactivate="${m.id}" title="הסרה מהצוות" aria-label="הסרה">✕</button></td>
       </tr>`).join("")}
-      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 6}"><button class="btn" data-add-member>הוספה</button></td></tr>
+      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 6 + (state.invitesReady ? 1 : 0)}"><button class="btn" data-add-member>הוספה</button></td></tr>
       </tbody></table></div>
     <p class="hint">כל שינוי נשמר מיד. לחיצה על שם מאפשרת לשנות אותו.</p></div>`;
 }
@@ -176,6 +200,10 @@ document.addEventListener("change", (e) => {
       const ordered = [...INSTRUMENTS.filter((x) => set.has(x)), ...[...set].filter((x) => !INSTRUMENTS.includes(x))];
       updateMember(m.id, { instruments: ordered.join(", ") || null });
     }
+  } else if (t.matches(".matrix .mail")) {
+    const v = t.value.trim().toLowerCase();
+    if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast("כתובת מייל לא תקינה"); return; }
+    updateMember(Number(t.dataset.mail), { email: v || null });
   } else if (t.matches(".matrix .freq")) {
     updateMember(Number(t.dataset.id), { [t.dataset.field]: t.value || null });
   }
