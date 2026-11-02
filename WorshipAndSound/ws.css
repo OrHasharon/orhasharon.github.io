@@ -235,3 +235,5 @@
 .email-login { margin-top: 10px; }
 
 .btn.google-main { font-size: 1.05rem; padding: 11px 26px; }
+
+.song-form textarea, .draft textarea { unicode-bidi: normal; }

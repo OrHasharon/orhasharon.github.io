@@ -156,10 +156,29 @@ function splitGlued(tok) {
 }
 
 // one PDF line -> {text, rtl, chords?: [{name, xL, xR}], chars: position map}
+const IS_MARK = /[֑-ׇ]/;
 function toLine(l) {
   const rtl = l.items.some((i) => HEB.test(i.str));
-  const items = [...l.items].sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
-  const cw = median(items.map((i) => i.w / Math.max(1, i.str.length))) || 4;
+  // pull out niqqud: whole mark-only items, and marks with no letter right before them inside an item
+  const floating = [];
+  const base = [];
+  for (const it of l.items) {
+    const chars = [...it.str];
+    const letters = chars.filter((ch) => !IS_MARK.test(ch));
+    if (!letters.join("").trim()) { chars.forEach((ch) => IS_MARK.test(ch) && floating.push({ ch, x: it.x + it.w / 2 })); continue; }
+    const lw = it.w / Math.max(1, letters.length);
+    let kept = "", seen = 0;
+    chars.forEach((ch) => {
+      if (IS_MARK.test(ch)) {
+        const prev = kept[kept.length - 1];
+        if (prev && !IS_MARK.test(prev) && prev !== " ") kept += ch; // a proper mark after its letter
+        else floating.push({ ch, x: rtl ? it.x + it.w - (seen + 0.5) * lw : it.x + (seen + 0.5) * lw });
+      } else { kept += ch; seen++; }
+    });
+    base.push({ ...it, str: kept, w: it.w, letters: seen });
+  }
+  const items = base.sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
+  const cw = median(items.map((i) => i.w / Math.max(1, i.letters ?? i.str.length))) || 4;
   let text = "";
   const pos = []; // for each char of text: its x center
   let prevEdge = null;
@@ -170,9 +189,28 @@ function toLine(l) {
       const spaces = Math.max(gap > cw * 0.3 ? 1 : 0, Math.round(gap / cw));
       for (let s = 0; s < spaces; s++) { text += " "; pos.push(rtl ? prevEdge - (s + 0.5) * cw : prevEdge + (s + 0.5) * cw); }
     }
-    const icw = it.w / Math.max(1, it.str.length);
-    [...it.str].forEach((ch, k) => { text += ch; pos.push(rtl ? it.x + it.w - (k + 0.5) * icw : it.x + (k + 0.5) * icw); });
+    const icw = it.w / Math.max(1, it.letters ?? it.str.length);
+    let k = 0;
+    for (const ch of it.str) {
+      text += ch;
+      if (IS_MARK.test(ch)) { pos.push(pos[pos.length - 1] ?? it.x); continue; }
+      pos.push(rtl ? it.x + it.w - (k + 0.5) * icw : it.x + (k + 0.5) * icw); k++;
+    }
     prevEdge = rtl ? it.x : it.x + it.w;
+  }
+  // hang the floating marks on the nearest letter (after any marks it already has)
+  for (const m of floating.sort((a, b) => b.x - a.x)) {
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < text.length; i++) {
+      if (IS_MARK.test(text[i]) || text[i] === " ") continue;
+      const d = Math.abs(pos[i] - m.x);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) continue;
+    let at = best + 1;
+    while (at < text.length && IS_MARK.test(text[at])) at++;
+    text = text.slice(0, at) + m.ch + text.slice(at);
+    pos.splice(at, 0, pos[best]);
   }
   const h = Math.max(...l.items.map((i) => i.h));
   if (!HEB.test(text)) {
@@ -220,7 +258,7 @@ function mergeChordLines(lines) {
     let t = next.text;
     for (const ins of inserts) {
       let at = ins.at;
-      while (at < t.length && /[֑-ׇ]/.test(t[at])) at++; // never split a letter from its niqqud
+      while (at < t.length && /[֑-ׇ ]/.test(t[at])) at++; // stick to the next letter, never split it from its niqqud
       t = t.slice(0, at) + `[${ins.name}]` + t.slice(at);
     }
     out.push(t.trimEnd());
@@ -303,7 +341,7 @@ function renderSongEdit(el) {
     <label class="field">שם השיר<input name="title" required value="${esc(s.title)}"></label>
     <label class="field">סולם<input name="song_key" value="${esc(s.song_key || "")}" dir="ltr" placeholder="Am"></label>
     <label class="field">מילים ואקורדים: אקורד בסוגריים מרובעים לפני ההברה, [Am]שלום [G]עולם · כותרת חלק: {פזמון} · קאפו: {capo: 2} · כותב: {artist: שם}
-      <textarea name="content" rows="16" dir="auto">${esc(s.content)}</textarea></label>
+      <textarea name="content" rows="16" dir="${HEB.test(s.content) ? "rtl" : "ltr"}">${esc(s.content)}</textarea></label>
     <div class="chordpro preview">${renderChordPro(s.content)}</div>
     <div class="form-actions"><button class="btn" type="submit">שמירה</button>
       ${s.id ? `<button class="btn ghost" type="button" data-song-delete="${s.id}">מחיקת השיר</button>` : ""}</div>
@@ -320,7 +358,7 @@ function renderImport(el) {
     ${d.map((s, i) => `<details class="draft"${i < 3 ? " open" : ""}>
       <summary><label><input type="checkbox" data-draft-inc="${i}"${s.include ? " checked" : ""}> <b>${esc(s.title)}</b></label></summary>
       <label class="field">שם השיר<input data-draft-title="${i}" value="${esc(s.title)}"></label>
-      <label class="field">מילים ואקורדים<textarea data-draft-content="${i}" rows="10" dir="auto">${esc(s.content)}</textarea></label>
+      <label class="field">מילים ואקורדים<textarea data-draft-content="${i}" rows="10" dir="${HEB.test(s.content) ? "rtl" : "ltr"}">${esc(s.content)}</textarea></label>
       <div class="chordpro preview" data-draft-preview="${i}">${renderChordPro(s.content)}</div>
     </details>`).join("")}
     <div class="form-actions"><button class="btn" data-import-save>שמירת ${d.filter((s) => s.include).length} שירים</button></div>
