@@ -87,15 +87,18 @@ async function pdfToSongs(file) {
     }));
     totalText += items.length;
     if (!items.length) continue;
-    // group into lines by baseline
-    items.sort((a, b) => b.y - a.y || a.x - b.x);
-    const lines = [];
-    for (const it of items) {
-      const line = lines.find((l) => Math.abs(l.y - it.y) < Math.max(2, it.h * 0.45));
-      if (line) line.items.push(it); else lines.push({ y: it.y, items: [it] });
+    const width = page.getViewport({ scale: 1 }).width;
+    for (const col of splitColumns(items, width)) {
+      // group into lines by baseline
+      col.sort((a, b) => b.y - a.y || a.x - b.x);
+      const lines = [];
+      for (const it of col) {
+        const line = lines.find((l) => Math.abs(l.y - it.y) < Math.max(2, it.h * 0.45));
+        if (line) line.items.push(it); else lines.push({ y: it.y, items: [it] });
+      }
+      lines.sort((a, b) => b.y - a.y);
+      for (const l of lines) all.push({ ...toLine(l), page: p });
     }
-    lines.sort((a, b) => b.y - a.y);
-    for (const l of lines) all.push({ ...toLine(l), page: p });
   }
   if (!totalText) return null; // scanned images, no text layer
 
@@ -120,6 +123,38 @@ async function pdfToSongs(file) {
   }).filter((s) => s.content.trim());
 }
 
+// two (or more) side-by-side columns: find empty vertical strips that no item crosses
+function splitColumns(items, width) {
+  const ranges = items.map((i) => [i.x, i.x + i.w]).sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r[0] <= last[1] + 1) last[1] = Math.max(last[1], r[1]); else merged.push([...r]);
+  }
+  const cuts = [];
+  for (let k = 1; k < merged.length; k++) {
+    const gap = merged[k][0] - merged[k - 1][1];
+    const mid = (merged[k][0] + merged[k - 1][1]) / 2;
+    if (gap > width * 0.035 && mid > width * 0.2 && mid < width * 0.8) cuts.push(mid);
+  }
+  if (!cuts.length) return [items];
+  const edges = [-Infinity, ...cuts, Infinity];
+  const cols = edges.slice(1).map((hi, k) => items.filter((i) => i.x + i.w / 2 > edges[k] && i.x + i.w / 2 <= hi));
+  const big = cols.filter((c) => c.length >= 3);
+  if (big.length < 2) return [items];
+  const hebrew = items.filter((i) => HEB.test(i.str)).length > items.length / 4;
+  return hebrew ? big.reverse() : big; // Hebrew books read the right column first
+}
+
+// "Am7D" / "EmAm" -> ["Am7", "D"] / ["Em", "Am"] when the whole token is made of chords
+const CHORD_PIECE = /[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-G][#b]?)?/g;
+function splitGlued(tok) {
+  if (CHORD_RE.test(tok)) return [{ name: tok, at: 0 }];
+  const parts = [...tok.matchAll(CHORD_PIECE)];
+  if (!parts.length || parts.map((m) => m[0]).join("") !== tok) return null;
+  return parts.map((m) => ({ name: m[0], at: m.index }));
+}
+
 // one PDF line -> {text, rtl, chords?: [{name, xL, xR}], chars: position map}
 function toLine(l) {
   const rtl = l.items.some((i) => HEB.test(i.str));
@@ -140,17 +175,29 @@ function toLine(l) {
     prevEdge = rtl ? it.x : it.x + it.w;
   }
   const h = Math.max(...l.items.map((i) => i.h));
-  if (isChordLine(text)) {
+  if (!HEB.test(text)) {
     const chords = [];
-    for (const m of text.matchAll(/\S+/g)) {
-      if (!CHORD_RE.test(m[0])) continue;
-      const xs = pos.slice(m.index, m.index + m[0].length);
-      chords.push({ name: m[0], xL: Math.min(...xs), xR: Math.max(...xs) });
+    let ok = true, any = false;
+    for (const it of [...l.items].sort((a, b) => a.x - b.x)) {
+      const icw = it.w / Math.max(1, it.str.length);
+      for (const m of it.str.matchAll(/\S+/g)) {
+        if (FILLER_RE.test(m[0])) continue;
+        const pieces = splitGlued(m[0]);
+        if (!pieces) { ok = false; break; }
+        for (const pc of pieces) {
+          const x0 = it.x + (m.index + pc.at) * icw;
+          chords.push({ name: pc.name, xL: x0, xR: x0 + pc.name.length * icw });
+          any = true;
+        }
+      }
+      if (!ok) break;
     }
-    return { text: text.trim(), rtl, chords, h };
+    if (ok && any) return { text: chords.map((c) => c.name).join(" "), rtl, chords, h };
   }
   return { text, rtl, pos, h };
 }
+
+const songIsRtl = (lines) => lines.some((l) => !l.chords && l.rtl);
 
 // chord line + following lyric line -> "[Am]lyr[G]ics"
 function mergeChordLines(lines) {
@@ -159,7 +206,10 @@ function mergeChordLines(lines) {
     const ln = lines[i];
     if (!ln.chords) { out.push(ln.text.trimEnd()); continue; }
     const next = lines[i + 1];
-    if (!next || next.chords) { out.push(ln.chords.map((c) => `[${c.name}]`).join(" ")); continue; }
+    if (!next || next.chords) {
+      const order = songIsRtl(lines) ? [...ln.chords].sort((a, b) => b.xR - a.xR) : ln.chords;
+      out.push(order.map((c) => `[${c.name}]`).join(" ")); continue;
+    }
     // insert each chord before the lyric char nearest to where the chord starts
     const inserts = ln.chords.map((c) => {
       const anchor = next.rtl ? c.xR : c.xL;
@@ -168,7 +218,11 @@ function mergeChordLines(lines) {
       return { at: best, name: c.name };
     }).sort((a, b) => b.at - a.at);
     let t = next.text;
-    for (const ins of inserts) t = t.slice(0, ins.at) + `[${ins.name}]` + t.slice(ins.at);
+    for (const ins of inserts) {
+      let at = ins.at;
+      while (at < t.length && /[֑-ׇ]/.test(t[at])) at++; // never split a letter from its niqqud
+      t = t.slice(0, at) + `[${ins.name}]` + t.slice(at);
+    }
     out.push(t.trimEnd());
     i++;
   }
