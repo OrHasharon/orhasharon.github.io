@@ -81,9 +81,9 @@ function lyricStanzas(content) {
     if (/^\{\s*(capo|artist|key)\s*:/i.test(t)) continue;
     const label = t.match(/^\{(.+)\}$/);
     if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
-    const line = fixNiqqud(raw.replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim());
+    const line = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
     if (!line) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); continue; }
-    if (!/[\u05D0-\u05EAa-zA-Z]{2}/.test(line)) continue; // chord-only rows
+    if (!/[\u05D0-\u05EAa-zA-Z]{2}/.test(line.replace(/[\u0591-\u05C7]/g, ""))) continue; // chord-only rows (niqqud ignored)
     stanzas[stanzas.length - 1].lines.push(line);
   }
   return stanzas.filter((s) => s.lines.length);

@@ -33,6 +33,25 @@ const HEB = /[֐-׿]/;
 
 // Clean niqqud that the PDF put on the wrong letter (shows as ◌): marks with no letter, duplicate marks,
 // and the shin/sin dot on a letter that isn't ש (moved to a nearby ש that lacks one, otherwise dropped).
+// same, for a line with [chord] markers: fix the lyrics as one piece, then put each chord back before the same letter
+function fixNiqqudLine(line) {
+  if (!line.includes("[")) return fixNiqqud(line);
+  const MARK = /[֑-ׇ]/;
+  const chords = []; let plain = "", bases = 0;
+  for (const part of line.split(/(\[[^\]]*\])/)) {
+    if (/^\[[^\]]*\]$/.test(part)) { chords.push({ at: bases, c: part }); continue; }
+    plain += part; bases += [...part].filter((ch) => !MARK.test(ch)).length;
+  }
+  const fixed = fixNiqqud(plain);
+  let out = "", n = 0, k = 0;
+  for (const ch of fixed) {
+    if (!MARK.test(ch)) { while (k < chords.length && chords[k].at === n) out += chords[k++].c; n++; }
+    out += ch;
+  }
+  while (k < chords.length) out += chords[k++].c;
+  return out;
+}
+
 function fixNiqqud(text) {
   const MARK = /[\u0591-\u05C7]/, LETTER = /[\u05D0-\u05EA]/;
   const out = []; // clusters: { base, marks: [] }
@@ -78,7 +97,8 @@ function songMeta(content) {
 
 function renderChordPro(content, shift = 0, { chords = true } = {}) {
   const songDir = HEB.test(content) ? "rtl" : "ltr";
-  return content.split("\n").map((line) => {
+  return content.split("\n").map((raw) => {
+    const line = /^\s*\{.*\}\s*$/.test(raw) ? raw : fixNiqqudLine(raw);
     const t = line.trim();
     if (!t) return `<div class="cp-line cp-empty"></div>`;
     if (META_RE.test(t)) return "";
@@ -95,10 +115,10 @@ function renderChordPro(content, shift = 0, { chords = true } = {}) {
     if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(line))}</div>`;
     if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(lyricsOnly))}</div>` : "";
     const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
-    let html = parts[0] ? `<span class="seg"><span class="ch"></span><span class="ly">${esc(fixNiqqud(parts[0]))}</span></span>` : "";
+    let html = parts[0] ? `<span class="seg"><span class="ch"></span><span class="ly">${esc(parts[0])}</span></span>` : "";
     for (let k = 1; k < parts.length; k += 2) {
       const lyr = parts[k + 1] || "";
-      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[k], shift))}</span><span class="ly">${lyr ? esc(fixNiqqud(lyr)) : "&nbsp;"}</span></span>`;
+      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[k], shift))}</span><span class="ly">${lyr ? esc(lyr) : "&nbsp;"}</span></span>`;
     }
     return `<div class="cp-line${lyricsOnly.trim() ? "" : " cp-chords-only"}" dir="${dir}">${html}</div>`;
   }).join("");
@@ -173,7 +193,7 @@ async function pdfToSongs(file) {
   return songs.map((s) => {
     const { title, capo } = cleanTitle(s.title);
     const body = mergeChordLines(s.lines);
-    return { title, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqud).join("\n"), include: true };
+    return { title, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqudLine).join("\n"), include: true };
   }).filter((s) => s.content.trim());
 }
 
@@ -216,9 +236,12 @@ function toLine(l) {
   // pull out niqqud: whole mark-only items, and marks with no letter right before them inside an item
   const floating = [];
   const base = [];
+  // zero-width pieces with a letter (e.g. "ְָך") are the wrapped end of the line's last word: they go at the end
+  const tails = [];
   for (const it of l.items) {
     const chars = [...it.str];
     const letters = chars.filter((ch) => !IS_MARK.test(ch));
+    if (it.w < 0.5 && letters.join("").trim()) { tails.push(it); continue; }
     if (!letters.join("").trim()) { chars.forEach((ch) => IS_MARK.test(ch) && floating.push({ ch, x: it.x + it.w / 2 })); continue; }
     const lw = it.w / Math.max(1, letters.length);
     let kept = "", seen = 0;
@@ -252,6 +275,26 @@ function toLine(l) {
       pos.push(rtl ? it.x + it.w - (k + 0.5) * icw : it.x + (k + 0.5) * icw); k++;
     }
     prevEdge = rtl ? it.x : it.x + it.w;
+  }
+  // a tail "ְָך" holds the last mark(s) of the previous letter first, then the letter and its own mark: "ל" + "ְָך" -> "לְךָ"
+  // each tail belongs to the word that ends where the tail sits (a word can wrap mid-line too)
+  for (const tl of tails.sort((a, b) => (rtl ? a.x - b.x : b.x - a.x))) {
+    const cs = [...tl.str], marks = cs.filter((ch) => IS_MARK.test(ch)), lets = cs.filter((ch) => !IS_MARK.test(ch) && ch.trim());
+    const own = marks.length ? marks.pop() : null;
+    // candidate word ends: a non-final Hebrew letter (plus its marks) followed by a space, punctuation or the line end
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < text.length; i++) {
+      if (!/[א-ת]/.test(text[i]) || /[ךםןףץ]/.test(text[i])) continue;
+      let j = i + 1;
+      while (j < text.length && IS_MARK.test(text[j])) j++;
+      if (j < text.length && /[א-ת]/.test(text[j])) continue;
+      const d = Math.abs(pos[i] - tl.x);
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    if (best < 0) best = text.length;
+    const ins = [...marks, ...lets, ...(own ? [own] : [])];
+    text = text.slice(0, best) + ins.join("") + text.slice(best);
+    pos.splice(best, 0, ...ins.map(() => pos[Math.max(0, best - 1)] ?? tl.x));
   }
   // hang the floating marks on the nearest letter (after any marks it already has)
   for (const m of floating.sort((a, b) => b.x - a.x)) {
