@@ -254,3 +254,7 @@
 
 .search-results { display: grid; gap: 2px; max-width: 640px; }
 .search-results .idx-song { padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 1.05rem; }
+
+/* next meeting: only the date is gold, names stay white */
+.summary tr.next td { color: var(--ink); font-weight: 400; }
+.summary tr.next td.when strong { color: var(--accent-ink); font-weight: 700; }
