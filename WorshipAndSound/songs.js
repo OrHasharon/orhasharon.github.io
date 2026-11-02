@@ -378,20 +378,26 @@ function renderSongs() {
   if (v === "song") return renderSongView(el);
   if (v === "edit") return renderSongEdit(el);
   if (v === "import") return renderImport(el);
-  const q = songsState.query.trim();
-  const list = songsState.list.filter((s) => !q || s.title.includes(q) || s.content.includes(q));
   el.innerHTML = `<div class="songs-bar">
       <input id="song-search" type="search" autofocus placeholder="חפשו שיר לפי שם או מילים…" value="${esc(songsState.query)}">
       <button class="btn" data-song-new>+ שיר חדש</button>
       <label class="btn ghost file-btn">ייבוא מ-PDF<input type="file" accept="application/pdf" id="pdf-file" hidden></label>
     </div>
     ${songsState.importing ? `<p class="status">קורא את הקובץ…</p>` : ""}
-    ${!q ? (songsState.list.length ? "" : `<p class="status">עדיין אין שירים. אפשר להוסיף שיר או לייבא מ-PDF.</p>`)
-      : list.length ? `<div class="search-results">${[...list].sort((a, b) => (b.title.includes(q) - a.title.includes(q)) || a.title.localeCompare(b.title, "he")).slice(0, 50).map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}</button>`).join("")}</div>`
-      : `<p class="status">לא נמצאו שירים</p>`}
+    <div id="song-results">${searchResultsHtml()}</div>
     ${uploadsHtml()}`;
+  // only the results are redrawn while typing, so the cursor never jumps
   const search = $("song-search");
-  search.addEventListener("input", () => { songsState.query = search.value; renderSongs(); $("song-search").focus(); });
+  search.addEventListener("input", () => { songsState.query = search.value; $("song-results").innerHTML = searchResultsHtml(); });
+}
+
+function searchResultsHtml() {
+  const q = songsState.query.trim();
+  if (!q) return songsState.list.length ? "" : `<p class="status">עדיין אין שירים. אפשר להוסיף שיר או לייבא מ-PDF.</p>`;
+  const list = songsState.list.filter((s) => s.title.includes(q) || s.content.includes(q));
+  if (!list.length) return `<p class="status">לא נמצאו שירים</p>`;
+  return `<div class="search-results">${list.sort((a, b) => (b.title.includes(q) - a.title.includes(q)) || a.title.localeCompare(b.title, "he"))
+    .slice(0, 50).map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}</button>`).join("")}</div>`;
 }
 
 // alphabetical index grouped by first letter, titles only
