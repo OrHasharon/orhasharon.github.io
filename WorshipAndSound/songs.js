@@ -1,4 +1,4 @@
-// Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js.
+﻿// Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js.
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 const songsState = { loaded: false, list: [], query: "", view: "list", current: null, shift: 0, noCapo: false, present: false, presentChords: false, drafts: [], importing: false };
@@ -366,7 +366,7 @@ function songIndex(list) {
     groups.get(letter).push(s);
   }
   return `<div class="song-index">${[...groups].map(([letter, songs]) => `<section class="idx-group"><h3>${esc(letter)}</h3>
-    ${songs.map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(s.song_key)}</small>` : ""}</button>`).join("")}</section>`).join("")}</div>`;
+    ${songs.map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}</button>`).join("")}</section>`).join("")}</div>`;
 }
 
 // files that were imported: who, when, how many songs; only the uploader can delete
