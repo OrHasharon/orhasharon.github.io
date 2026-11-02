@@ -290,7 +290,33 @@ function showLogin() {
 
 const redirectTo = location.origin + location.pathname;
 
-// email magic link: works without any Google Cloud setup
+// email + password: no emails involved (needs "Confirm email" off in Supabase)
+let pwMode = "in";
+document.addEventListener("click", (e) => { const b = e.target.closest("#pw-login [data-mode]"); if (b) pwMode = b.dataset.mode; });
+$("pw-login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const email = f.get("email").trim().toLowerCase();
+  const password = f.get("password");
+  e.target.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  const res = pwMode === "up"
+    ? await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } })
+    : await sb.auth.signInWithPassword({ email, password });
+  e.target.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  const err = res.error?.message || "";
+  if (res.data?.session) { location.reload(); return; }
+  let msg;
+  if (/invalid login credentials/i.test(err)) msg = "מייל או סיסמה שגויים. אם זו הפעם הראשונה שלכם כאן, לחצו \"כניסה ראשונה: יצירת סיסמה\".";
+  else if (/already registered|already exists/i.test(err)) msg = "למייל הזה כבר יש סיסמה. לחצו \"כניסה\". אם שכחתם אותה, השתמשו בקישור למייל למטה.";
+  else if (/email not confirmed/i.test(err) || (pwMode === "up" && !err)) msg = "החשבון נוצר אבל Supabase עדיין דורש אישור במייל. צריך לכבות את Confirm email בהגדרות (ראו הוראות).";
+  else if (/password/i.test(err)) msg = "הסיסמה צריכה להיות לפחות 6 תווים.";
+  else msg = `הכניסה נכשלה: ${err}`;
+  $("sent").hidden = false;
+  $("sent").innerHTML = `<span class="login-error">${esc(msg)}</span>`;
+});
+$("magic-toggle").addEventListener("click", () => { $("email-login").hidden = !$("email-login").hidden; });
+
+// email magic link (fallback, e.g. forgotten password)
 $("email-login").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = new FormData(e.target).get("email").trim().toLowerCase();
@@ -298,7 +324,8 @@ $("email-login").addEventListener("submit", async (e) => {
   const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
   btn.disabled = false;
   if (error) {
-    toast(/rate|limit|seconds/i.test(error.message) ? "נשלחו יותר מדי מיילים לאחרונה, נסו שוב בעוד כמה דקות" : "השליחה נכשלה, בדקו את הכתובת ונסו שוב");
+    const wait = error.message.match(/after (\d+) seconds/);
+    toast(wait ? `אפשר לשלוח שוב בעוד ${wait[1]} שניות` : /rate|limit/i.test(error.message) ? "נשלחו יותר מדי מיילים בשעה האחרונה. עדיף להיכנס עם סיסמה" : "השליחה נכשלה, בדקו את הכתובת ונסו שוב");
     return;
   }
   $("sent").hidden = false;
@@ -367,14 +394,14 @@ async function start() {
   const { data: me, error: meErr } = await sb.from("allowed_users").select("email,is_admin").ilike("email", user.email).maybeSingle();
   if (meErr?.code === "PGRST205" || meErr?.code === "42P01") {
     showLogin();
-    $("email-login").hidden = true; $("google").hidden = true;
+    $("email-login").hidden = true; $("google").hidden = true; $("pw-login").hidden = true; $("magic-toggle").hidden = true;
     $("noaccess").hidden = false;
     $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b> ✓<br>אבל המערכת עדיין לא הוגדרה עד הסוף: צריך להריץ את סקריפט ההגדרה (auth_migration.sql) ב-Supabase. אחרי שהוא רץ, רעננו את הדף.<br><button class="link-btn" id="logout">התנתקות</button>`;
     return;
   }
   if (meErr || !me) {
     showLogin();
-    $("email-login").hidden = true;
+    $("email-login").hidden = true; $("pw-login").hidden = true; $("magic-toggle").hidden = true;
     $("google").hidden = true;
     $("noaccess").hidden = false;
     $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b>, אבל הכתובת עדיין לא ברשימת המורשים. בקשו מאוריה להוסיף אותה.<br><button class="link-btn" id="logout">התחברות עם חשבון אחר</button>`;

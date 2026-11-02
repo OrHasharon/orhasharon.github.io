@@ -227,3 +227,9 @@
 .sent { margin-top: 14px; color: var(--ink); }
 .btn.google { margin-top: 14px; }
 .login-error { color: #ffb4a8; }
+
+.pw-login { display: grid; gap: 8px; }
+.pw-login input { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; }
+.pw-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
+.magic-toggle { margin-top: 14px; font-size: .85rem; color: var(--muted); }
+.email-login { margin-top: 10px; }

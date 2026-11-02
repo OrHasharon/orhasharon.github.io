@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="stylesheet" href="../style.css?v=35">
-  <link rel="stylesheet" href="ws.css?v=30">
+  <link rel="stylesheet" href="ws.css?v=31">
 </head>
 <body>
   <header class="site-header">
@@ -31,8 +31,17 @@
   <main class="wrap">
     <section id="login" class="login" hidden>
       <h2>כניסה לצוותי הלל וסאונד</h2>
-      <p>כדי לראות ולערוך את השיבוצים צריך להתחבר. הקלידו את כתובת המייל ותקבלו קישור כניסה.</p>
-      <form id="email-login" class="email-login">
+      <p>כדי לראות ולערוך את השיבוצים צריך להתחבר עם המייל והסיסמה שלכם.</p>
+      <form id="pw-login" class="pw-login">
+        <input type="email" name="email" required placeholder="name@gmail.com" dir="ltr" autocomplete="email">
+        <input type="password" name="password" required minlength="6" placeholder="סיסמה (לפחות 6 תווים)" autocomplete="current-password">
+        <div class="pw-actions">
+          <button class="btn" type="submit" data-mode="in">כניסה</button>
+          <button class="btn ghost" type="submit" data-mode="up">כניסה ראשונה: יצירת סיסמה</button>
+        </div>
+      </form>
+      <button class="link-btn magic-toggle" id="magic-toggle" type="button">שכחתי סיסמה / כניסה עם קישור למייל</button>
+      <form id="email-login" class="email-login" hidden>
         <input type="email" name="email" required placeholder="name@gmail.com" dir="ltr" autocomplete="email">
         <button class="btn" type="submit">שליחת קישור כניסה</button>
       </form>
@@ -62,7 +71,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../schedule.js?v=35"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="ws.js?v=30"></script>
+  <script src="ws.js?v=31"></script>
   <script src="songs.js?v=5"></script>
 </body>
 </html>
