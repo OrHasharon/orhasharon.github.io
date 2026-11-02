@@ -233,3 +233,5 @@
 .pw-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
 .magic-toggle { margin-top: 14px; font-size: .85rem; color: var(--muted); }
 .email-login { margin-top: 10px; }
+
+.btn.google-main { font-size: 1.05rem; padding: 11px 26px; }

@@ -332,9 +332,7 @@ $("email-login").addEventListener("submit", async (e) => {
   $("sent").innerHTML = `נשלח מייל ל-<b dir="ltr">${esc(email)}</b>. פתחו אותו ולחצו על הקישור כדי להיכנס (אם לא הגיע, בדקו בתיקיית הספאם).`;
 });
 
-// Google button shows up only once Google sign-in is enabled in Supabase
-fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } }).then((r) => r.json())
-  .then((s) => { if (s.external?.google && !user) $("google").hidden = false; }).catch(() => {});
+// Google is the sign-in; password / email-link forms stay hidden as a fallback
 $("google").addEventListener("click", () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo } }));
 document.addEventListener("click", (e) => {
   if (e.target.closest("#logout")) sb.auth.signOut().then(() => location.reload());
