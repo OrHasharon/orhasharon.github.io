@@ -79,6 +79,17 @@ function render() {
   const grid = $("grid");
   $("status").textContent = "";
 
+  // duty team guidelines: just the community's instruction sheet
+  const guide = state.tab === "guide";
+  document.querySelector(".toolbar").hidden = guide;
+  if (guide) {
+    $("count").textContent = "";
+    $("chips").hidden = true;
+    grid.innerHTML = `<figure class="guide"><img src="img/duty-guidelines.png?v=1" alt="הנחיות לצוות תורנות: הכנת אולם המפגש, בסיום האסיפה, בסיום זמן ההתחברות"></figure>`;
+    $("more").hidden = true;
+    return;
+  }
+
   if (state.tab === "series") {
     const list = data.playlists.filter((p) => !state.query || p.title.includes(state.query));
     $("count").textContent = `${list.length} סדרות`;

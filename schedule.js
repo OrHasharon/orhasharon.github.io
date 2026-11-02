@@ -49,15 +49,15 @@ function parseSheet(text) {
 
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-// the sheet wins; duty.json fills in a missing duty and dates past the sheet's end
+// duty.json (the latest table Uriya sent) wins over the sheet for place, duty and notes, and adds later dates
 function mergeMeetings(sheet, roster) {
   const byDate = new Map(sheet.map((m) => [isoDate(m.date), m]));
   for (const r of roster) {
     const [y, mo, d] = r.date.split("-").map(Number);
     const date = new Date(y, mo - 1, d);
     const m = byDate.get(isoDate(date));
-    if (m) { if (!m.duty) m.duty = r.duty; if (!m.place) m.place = r.place; }
-    else byDate.set(isoDate(date), { duty: r.duty, notes: "", place: r.place, day: r.day, date });
+    if (m) { if (r.duty) m.duty = r.duty; if (r.place) m.place = r.place; if (r.notes) m.notes = r.notes; }
+    else byDate.set(isoDate(date), { duty: r.duty, notes: r.notes || "", place: r.place, day: r.day, date });
   }
   return [...byDate.values()].sort((a, b) => a.date - b.date).map((m) => ({
     ...m,

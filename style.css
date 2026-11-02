@@ -315,3 +315,6 @@ body::before {
 [data-theme="light"] .card { border-color: var(--line); }
 
 [data-theme="light"] .card, [data-theme="light"] .schedule, [data-theme="light"] .groups { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+
+.guide { grid-column: 1 / -1; margin: 0; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; overflow-x: auto; }
+.guide img { display: block; width: 100%; min-width: 720px; height: auto; }
