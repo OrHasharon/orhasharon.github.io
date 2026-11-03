@@ -66,7 +66,9 @@ async function loadAll() {
   state.members = members.data;
   renameInstrument("תוף", "קחון");
   state.signups = signups.data;
-  state.invitesReady = !!members.data.length && "email" in members.data[0];
+  const probe = await sb.from("signups").select("status").limit(1);
+  state.invitesReady = !probe.error;
+  if (state.invitesReady) await loadUsers();
   state.meetings = meetings;
 }
 
@@ -138,9 +140,10 @@ async function assign(role, date, memberId, instrument = null) {
     if (opts.length > 1) { state.picking = { date, member: memberId }; render(); return; }
     instrument = opts[0];
   }
-  // signing up someone else (who has an email) sends them an invitation to confirm
+  // signing up someone else (who has a phone or email in the users tab) = an invitation they confirm
   const me = (typeof user !== "undefined" && user?.email || "").toLowerCase();
-  const invite = INVITE_HOOK && state.invitesReady && m.email && m.email.toLowerCase() !== me;
+  const contact = state.invitesReady ? contactOf(memberId) : null;
+  const invite = !!contact && contact.email.toLowerCase() !== me && (contact.phone || contact.email);
   const row = { meeting_date: date, role, member_id: memberId, instrument };
   if (invite) Object.assign(row, { status: "pending", invite_token: crypto.randomUUID(), invited_by: me || null });
   const { error } = await sb.from("signups").insert(row);
@@ -149,16 +152,55 @@ async function assign(role, date, memberId, instrument = null) {
   const when = date.split("-").reverse().slice(0, 2).join("/");
   if (error) toast(error.code === "23505" ? `${m.name} כבר משובץ/ת בתפקיד הזה` : "השיבוץ נכשל, נסו שוב");
   else if (invite) {
-    fetch(INVITE_HOOK, { method: "POST", mode: "no-cors", body: JSON.stringify({ type: "invite", token: row.invite_token, from: myName() }) }).catch(() => {});
-    toast(`נשלחה הזמנה במייל ל${m.name} (${slot.label} · ${when})`);
-  } else toast(`${m.name} שובץ/ה: ${slot.label} · ${when}${INVITE_HOOK && state.invitesReady && !m.email && m.email !== me ? " (אין מייל, לכן בלי הזמנה)" : ""}`);
+    if (INVITE_HOOK) fetch(INVITE_HOOK, { method: "POST", mode: "no-cors", body: JSON.stringify({ type: "invite", token: row.invite_token, from: myName() }) }).catch(() => {});
+    showInviteDialog(m, contact, { role, instrument, date, token: row.invite_token });
+  } else toast(`${m.name} שובץ/ה: ${slot.label} · ${when}`);
   await refreshSignups(); render();
+}
+
+// a team member's contact details, from the users tab (phone + linked member)
+const contactOf = (memberId) => allowed.find((u) => u.member_id === memberId) || null;
+function waNumber(phone) {
+  const d = String(phone || "").replace(/\D/g, "");
+  if (!d) return "";
+  return d.startsWith("0") ? "972" + d.slice(1) : d;
 }
 
 function myName() {
   const me = (typeof user !== "undefined" && user?.email || "").toLowerCase();
-  return state.members.find((x) => (x.email || "").toLowerCase() === me)?.name || (typeof user !== "undefined" && user?.user_metadata?.full_name) || me;
+  const mine = allowed.find((u) => u.email.toLowerCase() === me);
+  return (mine && byId(mine.member_id)?.name) || (typeof user !== "undefined" && user?.user_metadata?.full_name) || me;
 }
+
+// the invitation goes out by the sender's own WhatsApp / email: one click each, nothing to set up
+function inviteText(m, { role, instrument, date, token }) {
+  const slot = SLOTS.find((s) => s.role === role);
+  const mt = state.meetings.find((x) => x.iso === date);
+  const base = location.origin + location.pathname.replace(/[^/]*$/, "") + "respond.html?t=" + token;
+  const what = slot.label.replace("נגנים ושירה", "נגינה / שירה") + (instrument ? ` (${instrument})` : "");
+  const when = `${mt ? meetingKind(mt.day) + " " : ""}${date.split("-").reverse().join("/")}`;
+  return `שלום ${m.name}, ${myName()} מזמין/ה אותך ל${what} ב${when}.\nלאישור: ${base}&a=yes\nלא אוכל: ${base}&a=no`;
+}
+
+function showInviteDialog(m, contact, inv) {
+  const text = inviteText(m, inv);
+  const wa = contact.phone ? `https://wa.me/${waNumber(contact.phone)}?text=${encodeURIComponent(text)}` : "";
+  const mail = contact.email ? `mailto:${contact.email}?subject=${encodeURIComponent("הזמנה לשיבוץ · אור השרון")}&body=${encodeURIComponent(text)}` : "";
+  let d = document.getElementById("invite-dialog");
+  if (!d) { d = document.createElement("dialog"); d.id = "invite-dialog"; d.className = "setlist-dialog"; document.body.append(d); }
+  d.innerHTML = `<div class="sl-box">
+    <button class="sl-close" data-close-invite aria-label="סגירה">✕</button>
+    <h2>${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳</h2>
+    <p class="hint">שלחו לו/ה את ההזמנה. היא/הוא יאשר/תאשר או יבטל/תבטל מהקישור, והשיבוץ יתעדכן באתר.</p>
+    <div class="sl-actions">
+      ${wa ? `<a class="btn wa" href="${wa}" target="_blank" rel="noopener">💬 שליחה בוואטסאפ</a>` : ""}
+      ${mail ? `<a class="btn ghost" href="${mail}">✉️ שליחה במייל</a>` : ""}
+    </div></div>`;
+  if (!d.open) d.showModal();
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-close-invite]") || e.target.id === "invite-dialog") document.getElementById("invite-dialog")?.close();
+});
 
 async function removeSignup(id) {
   const { error } = await sb.from("signups").delete().eq("id", id);
@@ -182,18 +224,17 @@ function renderTeam() {
   $("team").innerHTML = `<div class="team-section">
     ${ready ? "" : `<p class="db-warning">עמודות "הנחייה" ו"תכיפות השתתפות" עדיין לא פעילות: צריך להריץ ב-Supabase את הסקריפט team_matrix.sql. אחרי זה רעננו את הדף.</p>`}
     <div class="matrix-wrap"><table class="matrix">
-      <thead><tr><th class="name">שם</th>${state.invitesReady ? "<th>מייל</th>" : ""}<th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}<th><button class="link-btn add-inst" data-add-instrument title="הוספת כלי">+ כלי</button></th>
+      <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}<th><button class="link-btn add-inst" data-add-instrument title="הוספת כלי">+ כלי</button></th>
         <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
       <tbody>${state.members.map((m) => `<tr>
         <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
-        ${state.invitesReady ? `<td><input class="mail" type="email" dir="ltr" data-mail="${m.id}" value="${esc(m.email || "")}" placeholder="name@gmail.com"></td>` : ""}
         ${box(m, "lead", m.can_lead ?? !!m.lead_frequency, !ready)}
         ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}<td></td>
         <td>${freqSelect(m, "lead_frequency")}</td><td>${ready ? freqSelect(m, "participation_frequency") : "—"}</td>
         ${box(m, "sound", m.sound).replace('class="cb"', 'class="cb sep"')}${box(m, "setup", m.setup)}
         <td><button class="link-btn del" data-deactivate="${m.id}" title="הסרה מהצוות" aria-label="הסרה">✕</button></td>
       </tr>`).join("")}
-      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 7 + (state.invitesReady ? 1 : 0)}"><button class="btn" data-add-member>הוספה</button></td></tr>
+      <tr class="add-row"><td class="name"><input id="new-member" placeholder="שם חדש…"></td><td colspan="${INSTRUMENTS.length + 7}"><button class="btn" data-add-member>הוספה</button></td></tr>
       </tbody></table></div>
     <p class="hint">כל שינוי נשמר מיד. לחיצה על שם מאפשרת לשנות אותו.</p></div>`;
 }
@@ -276,8 +317,11 @@ function renderUsers() {
   const self = (u) => u.email.toLowerCase() === user.email.toLowerCase();
   $("users").innerHTML = `<div class="team-section"><h2>משתמשים מורשים</h2>
     <p class="hint">רק כתובות שברשימה יכולות להיכנס לאתר.</p>
-    <div class="duty-table users-table"><table><thead><tr><th>מייל</th><th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
-    ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td><td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
+    <div class="duty-table users-table"><table><thead><tr><th>מייל</th>${state.invitesReady ? "<th>טלפון</th><th>איש/אשת צוות</th>" : ""}<th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
+    ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td>
+      ${state.invitesReady ? `<td><input class="u-phone" type="tel" dir="ltr" data-u-phone="${esc(u.email)}" value="${esc(u.phone || "")}" placeholder="050-0000000"></td>
+      <td><select class="u-member" data-u-member="${esc(u.email)}"><option value="">—</option>${[...state.members].sort((a, b) => a.name.localeCompare(b.name, "he")).map((m) => `<option value="${m.id}"${m.id === u.member_id ? " selected" : ""}>${esc(m.name)}</option>`).join("")}</select></td>` : ""}
+      <td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
       <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
     </tbody></table></div>
     <form class="add-user"><input name="email" type="email" required placeholder="name@gmail.com" dir="ltr">
@@ -305,6 +349,17 @@ document.addEventListener("click", async (e) => {
     const { error } = await sb.from("allowed_users").update({ is_admin: !u.is_admin }).eq("email", u.email);
     toast(error ? "העדכון נכשל" : "עודכן"); await loadUsers(); render();
   }
+});
+
+document.addEventListener("change", async (e) => {
+  const ph = e.target.closest("[data-u-phone]"), mm = e.target.closest("[data-u-member]");
+  if (!ph && !mm) return;
+  const email = (ph || mm).dataset[ph ? "uPhone" : "uMember"];
+  const patch = ph ? { phone: ph.value.trim() || null } : { member_id: mm.value ? Number(mm.value) : null };
+  if (ph && patch.phone && waNumber(patch.phone).length < 11) { toast("מספר טלפון לא תקין"); return; }
+  const { error } = await sb.from("allowed_users").update(patch).eq("email", email);
+  toast(error ? "השמירה נכשלה" : "נשמר");
+  await loadUsers();
 });
 
 // ---------- shell ----------

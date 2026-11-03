@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="stylesheet" href="../style.css?v=43">
-  <link rel="stylesheet" href="ws.css?v=45">
+  <link rel="stylesheet" href="ws.css?v=48">
   <style>
     .respond { margin: 40px auto; max-width: 520px; text-align: center; background: var(--surface); border: 1px solid var(--line);
       border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 22px; }
@@ -19,6 +19,7 @@
     .respond .what { font-size: 1.15rem; margin: 8px 0 18px; }
     .respond .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
     .btn.no { background: #b3261e; color: #fff; }
+    .btn.wa { background: #25d366; color: #fff; text-decoration: none; display: inline-block; }
     .respond textarea { width: 100%; font: inherit; color: var(--ink); background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 10px 0; }
   </style>
 </head>
@@ -41,12 +42,14 @@
     const ROLES = { leader: "הובלת הלל", musician: "נגינה / שירה", sound: "סאונד", setup: "הקמת סאונד" };
     const q = new URLSearchParams(location.search), t = q.get("t"), a = q.get("a");
     const box = document.getElementById("box");
+    let inv = null;
+    const waNumber = (p) => { const d = String(p || "").replace(/\D/g, ""); return d.startsWith("0") ? "972" + d.slice(1) : d; };
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const notify = () => { if (INVITE_HOOK) fetch(INVITE_HOOK, { method: "POST", mode: "no-cors", body: JSON.stringify({ type: "answer", token: t }) }).catch(() => {}); };
 
     async function load() {
       const { data, error } = await sb.rpc("invite_details", { t });
-      const inv = data && data[0];
+      inv = data && data[0];
       if (error || !inv) { box.innerHTML = `<h2>ההזמנה לא נמצאה</h2><p>ייתכן שהשיבוץ בוטל באתר.</p>`; return; }
       const when = inv.meeting_date.split("-").reverse().join("/");
       const what = ROLES[inv.role] + (inv.instrument ? ` (${esc(inv.instrument)})` : "");
@@ -56,7 +59,7 @@
         return;
       }
       box.innerHTML = `<h2>שלום ${esc(inv.member_name)}</h2>
-        <p>${esc(inv.invited_by || "מוביל/ת ההלל")} מזמין/ה אותך:</p>
+        <p>${esc(inv.inviter_name || inv.invited_by || "מוביל/ת ההלל")} מזמין/ה אותך:</p>
         <p class="what"><b>${when}</b> · <b>${what}</b></p>
         <div class="row"><button class="btn" id="yes">✔ מאשר/ת</button><button class="btn no" id="no">✖ לא אוכל</button></div>
         <div id="why" hidden><textarea id="reason" rows="3" placeholder="סיבה (תישלח למזמין/ה)"></textarea><button class="btn no" id="send-no">שליחת ביטול</button></div>`;
@@ -72,9 +75,13 @@
       const { data, error } = await sb.rpc("respond_invite", { t, accept, why });
       if (error) { box.insertAdjacentHTML("beforeend", `<p class="status">משהו השתבש, נסו שוב</p>`); box.querySelectorAll("button").forEach((b) => (b.disabled = false)); return; }
       notify();
+      // let the inviter know, from the answering person's own WhatsApp (one click)
+      const when = inv.meeting_date.split("-").reverse().join("/");
+      const msg = data === "accepted" ? `היי, אישרתי את השיבוץ ב-${when} ✔` : `היי, לא אוכל להגיע לשיבוץ ב-${when}.${why ? " הסיבה: " + why : ""}`;
+      const tell = inv.inviter_phone ? `<p><a class="btn wa" href="https://wa.me/${waNumber(inv.inviter_phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 לעדכן את ${esc(inv.inviter_name || "המזמין/ה")} בוואטסאפ</a></p>` : "";
       box.innerHTML = data === "accepted"
-        ? `<h2>תודה! השיבוץ אושר ✔</h2><p>הוא מופיע באתר השיבוצים.</p><p><a href="./">לאתר השיבוצים</a></p>`
-        : data === "declined" ? `<h2>השיבוץ בוטל</h2><p>הודענו למזמין/ה${why ? " עם הסיבה שכתבת" : ""}.</p>`
+        ? `<h2>תודה! השיבוץ אושר ✔</h2><p>הוא מופיע באתר השיבוצים.</p>${tell}<p><a href="./">לאתר השיבוצים</a></p>`
+        : data === "declined" ? `<h2>השיבוץ בוטל</h2><p>הוא הוסר מאתר השיבוצים.</p>${tell}`
         : `<h2>ההזמנה כבר לא פעילה</h2>`;
     }
     if (t) load(); else box.innerHTML = `<h2>קישור לא תקין</h2>`;

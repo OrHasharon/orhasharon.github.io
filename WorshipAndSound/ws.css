@@ -326,3 +326,10 @@
 .live-body .cp-line, .live-body .cp-section { break-inside: avoid; }
 
 .matrix .add-inst { font-size: .85rem; white-space: nowrap; }
+
+.users-table .u-phone, .users-table .u-member { font: inherit; font-size: .88rem; color: var(--ink); background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.users-table .u-phone { width: 130px; }
+.users-table .u-member option { background: #111827; }
+[data-theme="light"] .users-table .u-member option { background: #fff; }
+.btn.wa { background: #25d366; color: #fff; text-decoration: none; }
+.sl-actions a.btn { text-decoration: none; display: inline-flex; align-items: center; }
