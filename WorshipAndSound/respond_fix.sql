@@ -1,4 +1,4 @@
--- WorshipAndSound: the confirm / decline links work for any sign-up that hasn't been answered yet
+﻿-- WorshipAndSound: the confirm / decline links work for any sign-up that hasn't been answered yet
 -- (also your own, which starts out confirmed). Run once: SQL Editor -> New query -> paste -> Run. Safe to re-run.
 
 drop function if exists or_hasharon_worship.invite_details(uuid);
@@ -56,3 +56,7 @@ revoke all on function or_hasharon_worship.invite_details(uuid) from public;
 revoke all on function or_hasharon_worship.respond_invite(uuid, boolean, text) from public;
 grant execute on function or_hasharon_worship.invite_details(uuid) to anon, authenticated;
 grant execute on function or_hasharon_worship.respond_invite(uuid, boolean, text) to anon, authenticated;
+
+-- version marker, so the site (and Claude) can tell this script has run
+create or replace function or_hasharon_worship.invites_version() returns int language sql immutable as 'select 2';
+grant execute on function or_hasharon_worship.invites_version() to anon, authenticated;

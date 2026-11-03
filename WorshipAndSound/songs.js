@@ -164,6 +164,7 @@ async function pdfToSongs(file) {
     }));
     totalText += items.length;
     if (!items.length) continue;
+    mergeDigits(items);
     const width = page.getViewport({ scale: 1 }).width;
     for (const col of splitColumns(items, width)) {
       // group into lines by baseline
@@ -187,6 +188,14 @@ async function pdfToSongs(file) {
     const toc = lyric.filter((l) => TOC_LINE.test(l.text) && !/^\s*\d{1,4}\s*[.)]/.test(l.text));
     if (toc.length >= 5 && toc.length >= lyric.length * 0.6) tocPages.add(pg);
   }
+  // the table of contents names each number: that name wins over the page heading (e.g. 316 "ישוע חי")
+  const tocNames = {};
+  for (const l of all.filter((x) => tocPages.has(x.page) && !x.chords)) {
+    const m = l.text.match(/^\s*(\d{1,4})\s+(.*\S)\s*$/) || l.text.match(/^\s*(.*\S)\s+(\d{1,4})\s*$/);
+    if (!m) continue;
+    const [num, name] = /^\d+$/.test(m[1]) ? [m[1], m[2]] : [m[2], m[1]];
+    if (!tocNames[num] && /[א-תa-zA-Z]/.test(name)) tocNames[num] = name.replace(/[.\s]+$/, "");
+  }
   const TOC_HEADER = /^\s*(תוכן\s+(ה)?עניינים|אינדקס|index|contents)\s*$/i;
   all.splice(0, all.length, ...all.filter((l) => !tocPages.has(l.page) && !TOC_HEADER.test(l.text)));
 
@@ -204,10 +213,26 @@ async function pdfToSongs(file) {
     if (!current) { current = { title: `עמוד ${ln.page}`, lines: [] }; songs.push(current); }
     current.lines.push(ln);
   }
+  // the TOC name wins only when it is really another name (not a spelling of the same one) and the number is unique in the book
+  const numCount = {};
+  songs.forEach((s) => { const n = cleanTitle(s.title).num; if (n) numCount[n] = (numCount[n] || 0) + 1; });
+  const words = (t) => t.replace(/ה'/g, "אדני").replace(/[^א-תa-zA-Z\s]/g, " ").split(/\s+/).filter(Boolean).map((w) => w.replace(/[וי]/g, ""));
+  const near = (a, b) => { // at most 2 letters apart ("המושיע"/"מושיע", "יברכך"/"יברך")
+    let row = [...Array(b.length + 1).keys()];
+    for (let i = 1; i <= a.length; i++) {
+      const nxt = [i];
+      for (let j = 1; j <= b.length; j++) nxt[j] = Math.min(row[j] + 1, nxt[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      row = nxt;
+    }
+    return Math.min(a.length, b.length) >= 5 && row[b.length] <= 2;
+  };
+  const sameName = (a, b) => { const A = words(a), B = words(b); return A.every((w) => B.includes(w)) || B.every((w) => A.includes(w)) || near(A.join(""), B.join("")); };
   return songs.map((s) => {
-    const { title, capo, num } = cleanTitle(s.title);
+    const { title: pageTitle, capo, num } = cleanTitle(s.title);
+    const toc = num && numCount[num] === 1 && tocNames[num] && cleanTitle(tocNames[num]).title;
+    const title = toc && !sameName(toc, pageTitle) ? toc : pageTitle;
     const body = mergeChordLines(s.lines);
-    return { title, num, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqudLine).join("\n"), include: true };
+    return { title, pageTitle, num, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqudLine).join("\n"), include: true };
   }).filter((s) => s.content.trim()).map(stripCapoLines).map((s, _, all) => {
     // songs with the same name: add a line of the song in brackets, e.g. "אבינו מלכנו (שמענו קולנו)".
     // Use the first line that isn't just the name again and that differs between the twins.
@@ -223,6 +248,23 @@ async function pdfToSongs(file) {
     }
     return { ...s, baseTitle: s.title, title: `${s.title} (${twins.indexOf(s) + 1})` };
   });
+}
+
+// a number can come split into touching pieces ("4","7" or "47","3"): join them, left to right, into one item
+function mergeDigits(items) {
+  const digits = items.filter((i) => /^\d+$/.test(i.str.trim())).sort((a, b) => a.x - b.x);
+  for (const it of digits) {
+    if (it.gone) continue;
+    for (;;) {
+      const nb = digits.find((o) => !o.gone && o !== it && Math.abs(o.y - it.y) < 1 && o.x >= it.x &&
+        o.x - (it.x + it.w) < Math.max(1.5, it.h * 0.25) && o.x - (it.x + it.w) > -it.h * 0.3);
+      if (!nb) break;
+      it.str = it.str.trim() + nb.str.trim();
+      it.w = Math.max(it.x + it.w, nb.x + nb.w) - it.x;
+      nb.gone = true;
+    }
+  }
+  for (let k = items.length - 1; k >= 0; k--) if (items[k].gone) items.splice(k, 1);
 }
 
 // two (or more) side-by-side columns: find empty vertical strips that no item crosses
@@ -460,7 +502,10 @@ async function loadSongs() {
 }
 
 async function saveImported(drafts, fileName) {
-  const key = (d) => (d.num ? `${fileName}#${d.num}` : null);
+  // a number printed twice in the book gets "#267", "#267-2"
+  const seenNum = {};
+  drafts.forEach((d) => { if (d.num) { seenNum[d.num] = (seenNum[d.num] || 0) + 1; d.numKey = seenNum[d.num] > 1 ? `${d.num}-${seenNum[d.num]}` : d.num; } });
+  const key = (d) => (d.num ? `${fileName}#${d.numKey}` : null);
   const bySource = new Map(songsState.list.filter((x) => x.source).map((x) => [x.source, x]));
   // older imports were saved as just the file name: match those by title, in order, so duplicates pair up 1:1
   const legacy = new Map();
