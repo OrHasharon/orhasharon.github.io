@@ -490,7 +490,14 @@ function mergeChordLines(lines) {
 
 // ---------- data ----------
 async function loadSongs() {
-  const { data, error } = await sb.from("songs").select("*").order("title");
+  // the server returns at most 1000 rows per request: read page by page
+  let data = [], error = null;
+  for (let from = 0; ; from += 1000) {
+    const r = await sb.from("songs").select("*").order("title").order("id").range(from, from + 999);
+    if (r.error) { error = r.error; break; }
+    data = data.concat(r.data);
+    if (r.data.length < 1000) break;
+  }
   if (error) {
     songsState.missing = error.code === "PGRST205" || error.code === "42P01";
     if (!songsState.missing) toast("טעינת השירים נכשלה");
