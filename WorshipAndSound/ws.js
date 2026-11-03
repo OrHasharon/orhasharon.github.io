@@ -1,4 +1,4 @@
-// WorshipAndSound (email sign-in + allow-list once login_migration.sql ran): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
+﻿// WorshipAndSound (email sign-in + allow-list once login_migration.sql ran): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -140,12 +140,12 @@ async function assign(role, date, memberId, instrument = null) {
     if (opts.length > 1) { state.picking = { date, member: memberId }; render(); return; }
     instrument = opts[0];
   }
-  // every sign-up can be sent on WhatsApp; someone else is pending (⏳) until they answer from the link, yourself = confirmed
+  // every sign-up (yours too) is pending ⏳ until the person confirms from the link; only then ✅
   const me = (typeof user !== "undefined" && user?.email || "").toLowerCase();
   const contact = state.invitesReady ? contactOf(memberId) : null;
   const self = isMe(memberId);
   const row = { meeting_date: date, role, member_id: memberId, instrument };
-  if (state.invitesReady) Object.assign(row, { status: self ? "confirmed" : "pending", invite_token: crypto.randomUUID(), invited_by: me || null });
+  if (state.invitesReady) Object.assign(row, { status: "pending", invite_token: crypto.randomUUID(), invited_by: me || null });
   const { error } = await sb.from("signups").insert(row);
   state.picking = null;
   if (error) toast(error.code === "23505" ? `${m.name} כבר משובץ/ת בתפקיד הזה` : "השיבוץ נכשל, נסו שוב");
@@ -192,7 +192,7 @@ function inviteText(m, { role, instrument, date, token }) {
     `_הודעה ממערכת OrHasharon/WorshipAndSound_`;
 }
 
-function showInviteDialog(m, contact, inv, text = inviteText(m, inv), title = inv.self ? `${esc(m.name)} שובץ/ה ✅` : `${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳`) {
+function showInviteDialog(m, contact, inv, text = inviteText(m, inv), title = `${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳`) {
   contact = contact || {};
   const wa = `https://wa.me/${contact.phone ? waNumber(contact.phone) : ""}?text=${encodeURIComponent(text)}`;
   const mail = contact.email ? `mailto:${contact.email}?subject=${encodeURIComponent("הזמנה לשיבוץ · אור השרון")}&body=${encodeURIComponent(text)}` : "";
