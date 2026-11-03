@@ -53,9 +53,18 @@
       if (error || !inv) { box.innerHTML = `<h2>ההזמנה לא נמצאה</h2><p>ייתכן שהשיבוץ בוטל באתר.</p>`; return; }
       const when = inv.meeting_date.split("-").reverse().join("/");
       const what = ROLES[inv.role] + (inv.instrument ? ` (${esc(inv.instrument)})` : "");
-      if (inv.response) {
-        box.innerHTML = `<h2>כבר ענית על ההזמנה</h2><p class="what">${when} · ${what}</p><p>${inv.response === "accepted" ? "אישרת את השיבוץ ✔" : "ביטלת את השיבוץ"}</p>
-          <p><a href="./">לאתר השיבוצים</a></p>`;
+      if (inv.response === "declined") {
+        box.innerHTML = `<h2>השיבוץ בוטל</h2><p class="what">${when} · ${what}</p><p>כבר ביטלת את השיבוץ הזה. כדי לחזור, צריך לשבץ מחדש באתר.</p><p><a href="./">לאתר השיבוצים</a></p>`;
+        return;
+      }
+      if (inv.response === "accepted") {
+        // already confirmed: the confirm link just says so; the decline link still lets you cancel
+        box.innerHTML = `<h2>השיבוץ מאושר ✔</h2><p class="what"><b>${when}</b> · <b>${what}</b></p>
+          ${a === "no" ? "" : `<p>התוכניות השתנו?</p><div class="row"><button class="btn no" id="no">✖ לא אוכל בכל זאת</button></div>`}
+          <div id="why"${a === "no" ? "" : " hidden"}><p>${a === "no" ? "לא תוכל/י בכל זאת?" : ""}</p><textarea id="reason" rows="3" placeholder="למה לא תוכל/י? (יוצג למי ששיבץ)"></textarea><button class="btn no" id="send-no">שליחת ביטול</button></div>`;
+        document.getElementById("no")?.addEventListener("click", () => { document.getElementById("why").hidden = false; document.getElementById("reason").focus(); });
+        document.getElementById("send-no").onclick = () => answer(false, document.getElementById("reason").value.trim());
+        if (a === "no") document.getElementById("reason").focus();
         return;
       }
       box.innerHTML = `<h2>שלום ${esc(inv.member_name)}</h2>

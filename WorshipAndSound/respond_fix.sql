@@ -26,9 +26,16 @@ $$;
 
 create or replace function or_hasharon_worship.respond_invite(t uuid, accept boolean, why text default null)
 returns text language plpgsql security definer set search_path = '' as $$
-declare s record;
+declare s record; prev text;
 begin
-  if exists (select 1 from or_hasharon_worship.invite_log where token = t) then return 'answered'; end if;
+  select response into prev from or_hasharon_worship.invite_log where token = t;
+  if prev = 'declined' then return 'answered'; end if;            -- the sign-up is gone already
+  if prev = 'accepted' then
+    if accept then return 'answered'; end if;                     -- confirmed twice: nothing to do
+    delete from or_hasharon_worship.signups where invite_token = t; -- changed their mind after confirming
+    update or_hasharon_worship.invite_log set response = 'declined', reason = why, answered_at = now() where token = t;
+    return 'declined';
+  end if;
   select si.*, m.name as mname into s
     from or_hasharon_worship.signups si join or_hasharon_worship.members m on m.id = si.member_id
    where si.invite_token = t;
