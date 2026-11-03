@@ -6,9 +6,12 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { detectSessionInUrl: false }, // handled in consumeAuthRedirect()
 });
 
+const GROUP = "קבוצה";
+const isGroup = (m) => !!m && m.notes === GROUP;
+const GROUPS = ["נוער"];
 const SLOTS = [
-  { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => m.can_lead ?? !!m.lead_frequency, why: "לא מסומן/ת להנחייה" },
-  { role: "musician", label: "נגנים ושירה", max: Infinity, eligible: (m) => !!m.instruments, why: "לא רשומים כלים" },
+  { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => isGroup(m) || (m.can_lead ?? !!m.lead_frequency), why: "לא מסומן/ת להנחייה" },
+  { role: "musician", label: "נגנים ושירה", max: Infinity, eligible: (m) => isGroup(m) || !!m.instruments, why: "לא רשומים כלים" },
   { role: "sound", label: "סאונד", max: 1, eligible: (m) => m.sound, why: "לא מסומן/ת כאיש/ת סאונד" },
   { role: "setup", label: "הקמת סאונד", max: 2, eligible: (m) => m.setup, why: "לא מסומן/ת כמקים/ה" },
 ];
@@ -65,6 +68,11 @@ async function loadAll() {
   if (signups.error) throw signups.error;
   state.members = members.data;
   renameInstrument("תוף", "קחון");
+  for (const name of GROUPS) {
+    if (state.members.some((m) => m.name === name)) continue;
+    const { data } = await sb.from("members").insert({ name, notes: GROUP, can_lead: true }).select().single();
+    if (data) state.members.push(data);
+  }
   state.signups = signups.data;
   const probe = await sb.from("signups").select("status").limit(1);
   state.invitesReady = !probe.error;
@@ -81,14 +89,14 @@ async function refreshSignups() {
 // ---------- sign-up ----------
 const takenIn = (date, role) => state.signups.filter((s) => s.meeting_date === date && s.role === role);
 // instruments this person isn't already playing at that meeting
-const freeInstruments = (m, date) => instrumentsOf(m).filter((x) => !takenIn(date, "musician").some((s) => s.member_id === m.id && s.instrument === x));
+const freeInstruments = (m, date) => isGroup(m) ? (takenIn(date, "musician").some((s) => s.member_id === m.id) ? [] : [""]) : instrumentsOf(m).filter((x) => !takenIn(date, "musician").some((s) => s.member_id === m.id && s.instrument === x));
 
 // people + picker for one role at one meeting; shared by the table (desktop) and the cards (phone)
 function slotCell(mt, slot) {
   const taken = takenIn(mt.iso, slot.role);
   const people = taken.map((s) => {
     const pending = s.status === "pending";
-    return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : s.invite_token && s.status === "confirmed" ? '<span class="ok" title="אושר">✅</span> ' : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}${state.invitesReady ? `<button data-notify="${s.id}" title="הודעה בוואטסאפ / מייל" aria-label="הודעה">💬</button>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
+    return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : s.invite_token && s.status === "confirmed" ? '<span class="ok" title="אושר">✅</span> ' : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}${state.invitesReady && !isGroup(byId(s.member_id)) ? `<button data-notify="${s.id}" title="הודעה בוואטסאפ / מייל" aria-label="הודעה">💬</button>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
   }).join("");
   let action = "";
   const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
@@ -135,6 +143,12 @@ function meetingCard(mt, isNext) {
 
 async function assign(role, date, memberId, instrument = null) {
   const m = byId(memberId);
+  if (isGroup(m)) {
+    // a group just goes on the schedule: confirmed, no message to send
+    const { error } = await sb.from("signups").insert({ meeting_date: date, role, member_id: memberId });
+    toast(error ? (error.code === "23505" ? `${m.name} כבר משובצ/ת כאן` : "השיבוץ נכשל, נסו שוב") : `${m.name} שובצו`);
+    await refreshSignups(); render(); return;
+  }
   if (role === "musician" && !instrument) {
     const opts = freeInstruments(m, date);
     if (opts.length > 1) { state.picking = { date, member: memberId }; render(); return; }
