@@ -579,9 +579,13 @@ const firstLine = (s) => (s.content.split("\n").map((l) => l.replace(/\[[^\]]*\]
 function searchResultsHtml() {
   const q = songsState.query.trim();
   if (!q) return songsState.list.length ? "" : `<p class="status">עדיין אין שירים. אפשר להוסיף שיר או לייבא מ-PDF.</p>`;
-  const list = songsState.list.filter((s) => s.title.includes(q) || s.content.includes(q));
+  // ignore niqqud, chords and punctuation, so "ישוע חי" also finds "יֵשׁוּעַ [G]חַי,"
+  const norm = (t) => t.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").replace(/[֑-ׇ]/g, "").replace(/[^א-תa-zA-Z0-9]+/g, " ").toLowerCase().trim();
+  const nq = norm(q);
+  const inTitle = (s) => norm(s.title).includes(nq);
+  const list = nq ? songsState.list.filter((s) => inTitle(s) || norm(s.content).includes(nq)) : [];
   if (!list.length) return `<p class="status">לא נמצאו שירים</p>`;
-  return `<div class="search-results">${list.sort((a, b) => (b.title.includes(q) - a.title.includes(q)) || a.title.localeCompare(b.title, "he"))
+  return `<div class="search-results">${list.sort((a, b) => (inTitle(b) - inTitle(a)) || a.title.localeCompare(b.title, "he"))
     .slice(0, 50).map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}${sameName(s) ? `<small class="first-line"> · ${esc(firstLine(s))}</small>` : ""}</button>`).join("")}</div>`;
 }
 
