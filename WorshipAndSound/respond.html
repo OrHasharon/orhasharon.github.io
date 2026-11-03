@@ -53,7 +53,7 @@
       if (error || !inv) { box.innerHTML = `<h2>ההזמנה לא נמצאה</h2><p>ייתכן שהשיבוץ בוטל באתר.</p>`; return; }
       const when = inv.meeting_date.split("-").reverse().join("/");
       const what = ROLES[inv.role] + (inv.instrument ? ` (${esc(inv.instrument)})` : "");
-      if (inv.status !== "pending") {
+      if (inv.response) {
         box.innerHTML = `<h2>כבר ענית על ההזמנה</h2><p class="what">${when} · ${what}</p><p>${inv.response === "accepted" ? "אישרת את השיבוץ ✔" : "ביטלת את השיבוץ"}</p>
           <p><a href="./">לאתר השיבוצים</a></p>`;
         return;
@@ -62,7 +62,7 @@
         <p>${esc(inv.inviter_name || inv.invited_by || "מוביל/ת ההלל")} מזמין/ה אותך:</p>
         <p class="what"><b>${when}</b> · <b>${what}</b></p>
         <div class="row"><button class="btn" id="yes">✔ מאשר/ת</button><button class="btn no" id="no">✖ לא אוכל</button></div>
-        <div id="why" hidden><textarea id="reason" rows="3" placeholder="סיבה (תישלח למזמין/ה)"></textarea><button class="btn no" id="send-no">שליחת ביטול</button></div>`;
+        <div id="why" hidden><textarea id="reason" rows="3" placeholder="למה לא תוכל/י? (יוצג למי ששיבץ)"></textarea><button class="btn no" id="send-no">שליחת ביטול</button></div>`;
       document.getElementById("yes").onclick = () => answer(true);
       document.getElementById("no").onclick = () => { document.getElementById("why").hidden = false; document.getElementById("reason").focus(); };
       document.getElementById("send-no").onclick = () => answer(false, document.getElementById("reason").value.trim());
@@ -82,7 +82,8 @@
       box.innerHTML = data === "accepted"
         ? `<h2>תודה! השיבוץ אושר ✔</h2><p>הוא מופיע באתר השיבוצים.</p>${tell}<p><a href="./">לאתר השיבוצים</a></p>`
         : data === "declined" ? `<h2>השיבוץ בוטל</h2><p>הוא הוסר מאתר השיבוצים.</p>${tell}`
-        : `<h2>ההזמנה כבר לא פעילה</h2>`;
+        : data === "answered" ? `<h2>כבר ענית על ההזמנה</h2>`
+        : `<h2>ההזמנה כבר לא פעילה</h2><p>ייתכן שהשיבוץ הוסר באתר.</p>`;
     }
     if (t) load(); else box.innerHTML = `<h2>קישור לא תקין</h2>`;
   </script>

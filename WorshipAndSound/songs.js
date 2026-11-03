@@ -115,11 +115,22 @@ function renderChordPro(content, shift = 0, { chords = true } = {}) {
     if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(line))}</div>`;
     if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(lyricsOnly))}</div>` : "";
     const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
-    let html = parts[0] ? `<span class="seg"><span class="ch"></span><span class="ly">${esc(parts[0])}</span></span>` : "";
-    for (let k = 1; k < parts.length; k += 2) {
-      const lyr = parts[k + 1] || "";
-      html += `<span class="seg"><span class="ch">${esc(transposeChord(parts[k], shift))}</span><span class="ly">${lyr ? esc(lyr) : "&nbsp;"}</span></span>`;
+    const segs = [{ ch: "", ly: parts[0] || "" }];
+    for (let k = 1; k < parts.length; k += 2) segs.push({ ch: transposeChord(parts[k], shift), ly: parts[k + 1] || "" });
+    // group the pieces into whole words, so a long line wraps between words and never inside one
+    const words = [];
+    let cur = [];
+    for (const sg of segs) {
+      if (!sg.ly && !sg.ch) continue;
+      const pieces = sg.ly ? sg.ly.split(/(?<=\s)/) : [""];
+      pieces.forEach((pc, n) => {
+        cur.push({ ch: n ? "" : sg.ch, ly: pc });
+        if (/\s$/.test(pc)) { words.push(cur); cur = []; }
+      });
     }
+    if (cur.length) words.push(cur);
+    const html = words.map((w) => `<span class="w">${w.map((sg) =>
+      `<span class="seg"><span class="ch">${esc(sg.ch)}</span><span class="ly">${sg.ly ? esc(sg.ly) : "&nbsp;"}</span></span>`).join("")}</span>`).join("");
     return `<div class="cp-line${lyricsOnly.trim() ? "" : " cp-chords-only"}" dir="${dir}">${html}</div>`;
   }).join("");
 }

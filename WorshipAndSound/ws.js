@@ -182,11 +182,14 @@ function inviteText(m, { role, instrument, date, token }) {
   const what = (role === "musician" ? "הלל" : slot.label) + (instrument ? ` (${instrument})` : "");
   const leader = state.signups.find((x) => x.meeting_date === date && x.role === "leader");
   const leaderName = leader ? byId(leader.member_id)?.name : "";
-  return `היי! זאת הודעה ממערכת OrHasharon/WorshipAndSound\n` +
-    `שובצת ע"י ${myName()} ל${what} בתאריך ${date.split("-").reverse().join("/")}${leaderName ? `, בהובלת ${leaderName}` : ""}.\n` +
-    `לאישור: ${base}&a=yes\n` +
-    `לסירוב (אפשר לכתוב סיבה): ${base}&a=no\n` +
-    `אם תסרב/י, השיבוץ יורד. אם תאשר/י, יופיע ✅ ליד שמך באתר.`;
+  const mt = state.meetings.find((x) => x.iso === date);
+  const day = mt ? `${meetingKind(mt.day)}, ` : "";
+  return `היי ${m.name.split(" ")[0]}! 👋\n` +
+    `שובצת ל*${what}* ב${day}*${date.split("-").reverse().join("/")}*${mt?.place ? ` (${mt.place})` : ""}${leaderName ? `, בהובלת ${leaderName}` : ""}.\n` +
+    `שיבץ/ה: ${myName()}\n\n` +
+    `✅ לאישור: ${base}&a=yes\n` +
+    `❌ לא אוכל (עם סיבה): ${base}&a=no\n\n` +
+    `_הודעה ממערכת OrHasharon/WorshipAndSound_`;
 }
 
 function showInviteDialog(m, contact, inv, text = inviteText(m, inv), title = inv.self ? `${esc(m.name)} שובץ/ה ✅` : `${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳`) {

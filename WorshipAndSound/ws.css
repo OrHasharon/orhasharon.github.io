@@ -322,7 +322,7 @@
 
 /* live mode: a long song continues in a second column instead of scrolling */
 .live-body { overflow: hidden; }
-.live-body .song-body { height: 100%; column-count: 2; column-fill: auto; column-gap: 6vw; column-rule: 1px solid var(--line); }
+
 .live-body .cp-line, .live-body .cp-section { break-inside: avoid; }
 
 .matrix .add-inst { font-size: .85rem; white-space: nowrap; }
@@ -335,10 +335,9 @@
 .sl-actions a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 
 /* live mode: never break a line mid-word (shrink instead); phones get one scrolling column and a compact bar */
-.live-body .cp-line { flex-wrap: nowrap; }
+
 @media (max-width: 760px) {
-  .live-body { overflow-y: auto; padding: 10px 12px; }
-  .live-body .song-body { column-count: 1; height: auto; }
+  .live-body { padding: 10px 12px; }
   .live-bar { padding: 6px 10px; gap: 4px 8px; }
   .live-title { font-size: 1.05rem; }
   .live-pos { font-size: .8rem; }
@@ -352,3 +351,12 @@
 }
 
 .person [data-notify] { background: none; border: 0; cursor: pointer; padding: 0 2px; font-size: .85rem; }
+
+/* words never split: a line wraps between words */
+.cp-line .w { display: inline-flex; align-items: flex-end; white-space: nowrap; }
+/* live mode: fixed-height columns; extra columns go to the left and scroll sideways */
+.live-body { overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.live-body .song-body { height: 100%; column-fill: auto; column-rule: 1px solid var(--line); margin-inline-start: 0; }
+.live-body .cp-line, .live-body .cp-section { break-inside: avoid; }
+
+@media (max-width: 760px) { .live-body .song-body { font-size: calc(1.3rem * var(--live-zoom)); } }

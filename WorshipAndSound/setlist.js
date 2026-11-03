@@ -368,17 +368,34 @@ function renderLive() {
   fitLive(el);
 }
 
-// one column if it fits; else it flows into the second column; if two columns aren't enough, shrink the font
+// Columns of a fixed width: one per screen on a phone, two side by side on a wide screen.
+// Whatever doesn't fit in the height continues in another column to the left (scroll / swipe sideways).
+// The font size is only ever what the zoom says: nothing is shrunk behind your back.
 function fitLive(el) {
-  const body = el.querySelector(".live-body .song-body");
+  const outer = el.querySelector(".live-body"), body = outer?.querySelector(".song-body");
   if (!body) return;
-  body.style.fontSize = "";
   const narrow = window.matchMedia("(max-width: 760px)").matches;
-  // every line on one line (no word cut in half); on wide screens also: at most two columns, no scrolling
-  const linesFit = () => [...body.querySelectorAll(".cp-line")].every((l) => l.scrollWidth <= l.clientWidth + 1);
-  const fits = () => linesFit() && (narrow || body.scrollWidth <= body.clientWidth + 2);
-  let size = parseFloat(getComputedStyle(body).fontSize);
-  for (let k = 0; k < 30 && !fits() && size > 12; k++) { size *= 0.94; body.style.fontSize = size + "px"; }
+  const gap = narrow ? 28 : Math.round(window.innerWidth * 0.05);
+  const w = Math.floor(narrow ? outer.clientWidth - 24 : (outer.clientWidth - 48 - gap) / 2);
+  body.style.columnGap = gap + "px";
+  body.style.columnWidth = w + "px";
+  body.style.width = w + "px";            // the box is one column wide; extra columns overflow to the side
+  if (!narrow) body.style.width = (w * 2 + gap) + "px";
+  outer.scrollLeft = 0;
+}
+
+// how far the columns can still move in a direction ("next" = towards the next column, i.e. left in Hebrew)
+function liveCanScroll(dir) {
+  const outer = document.querySelector("#live-view .live-body");
+  if (!outer) return false;
+  const max = outer.scrollWidth - outer.clientWidth;
+  const pos = Math.abs(outer.scrollLeft);   // RTL scrollLeft runs 0 .. -max
+  return dir === "next" ? pos < max - 4 : pos > 4;
+}
+function liveScroll(dir) {
+  const outer = document.querySelector("#live-view .live-body");
+  const step = outer.clientWidth * (window.matchMedia("(max-width: 760px)").matches ? 1 : 0.5);
+  outer.scrollBy({ left: (dir === "next" ? -1 : 1) * step, behavior: "smooth" });
 }
 
 function liveAction(a) {
@@ -410,20 +427,25 @@ document.addEventListener("click", (e) => {
 // keyboard / foot pedal: arrows or PageUp/PageDown change song, +/- zoom, Esc leaves
 document.addEventListener("keydown", (e) => {
   if (!live.on) return;
-  if (["ArrowLeft", "PageDown", " "].includes(e.key)) { e.preventDefault(); liveAction("next"); }
-  else if (["ArrowRight", "PageUp"].includes(e.key)) { e.preventDefault(); liveAction("prev"); }
+  if (["ArrowLeft", "PageDown", " "].includes(e.key)) { e.preventDefault(); liveCanScroll("next") ? liveScroll("next") : liveAction("next"); }
+  else if (["ArrowRight", "PageUp"].includes(e.key)) { e.preventDefault(); liveCanScroll("prev") ? liveScroll("prev") : liveAction("prev"); }
   else if (e.key === "+" || e.key === "=") liveAction("zoom+1");
   else if (e.key === "-") liveAction("zoom-1");
   else if (e.key === "Escape") liveAction("exit");
 });
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && live.on) { live.on = false; renderLive(); } });
 // swipe on a phone/tablet
-let touchX = null;
-document.addEventListener("touchstart", (e) => { if (live.on) touchX = e.touches[0].clientX; }, { passive: true });
+let touchX = null, touchNext = false, touchPrev = false;
+document.addEventListener("touchstart", (e) => {
+  if (!live.on) return;
+  touchX = e.touches[0].clientX; touchNext = !liveCanScroll("next"); touchPrev = !liveCanScroll("prev");
+}, { passive: true });
 document.addEventListener("touchend", (e) => {
   if (!live.on || touchX === null) return;
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
-  if (Math.abs(dx) > 70) liveAction(dx > 0 ? "next" : "prev"); // RTL: swipe right = next song
+  // finger to the right reveals the next column (Hebrew reads right to left); past the last column = next song
+  if (dx > 70 && touchNext) liveAction("next");
+  else if (dx < -70 && touchPrev) liveAction("prev");
 }, { passive: true });
 
 window.addEventListener("resize", () => { if (live.on) fitLive(liveEl()); });
