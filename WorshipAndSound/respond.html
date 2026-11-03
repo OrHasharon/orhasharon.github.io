@@ -61,13 +61,13 @@
       box.innerHTML = `<h2>שלום ${esc(inv.member_name)}</h2>
         <p>${esc(inv.inviter_name || inv.invited_by || "מוביל/ת ההלל")} מזמין/ה אותך:</p>
         <p class="what"><b>${when}</b> · <b>${what}</b></p>
-        <div class="row"><button class="btn" id="yes">✔ מאשר/ת</button><button class="btn no" id="no">✖ לא אוכל</button></div>
-        <div id="why" hidden><textarea id="reason" rows="3" placeholder="למה לא תוכל/י? (יוצג למי ששיבץ)"></textarea><button class="btn no" id="send-no">שליחת ביטול</button></div>`;
-      document.getElementById("yes").onclick = () => answer(true);
-      document.getElementById("no").onclick = () => { document.getElementById("why").hidden = false; document.getElementById("reason").focus(); };
+        ${a === "no" ? "" : `<div class="row"><button class="btn" id="yes">✔ מאשר/ת</button><button class="btn no" id="no">✖ לא אוכל</button></div>`}
+        <div id="why"${a === "no" ? "" : " hidden"}><textarea id="reason" rows="3" placeholder="למה לא תוכל/י? (יוצג למי ששיבץ)"></textarea><button class="btn no" id="send-no">שליחת סירוב</button></div>`;
+      document.getElementById("yes")?.addEventListener("click", () => answer(true));
+      document.getElementById("no")?.addEventListener("click", () => { document.getElementById("why").hidden = false; document.getElementById("reason").focus(); });
       document.getElementById("send-no").onclick = () => answer(false, document.getElementById("reason").value.trim());
-      if (a === "yes") answer(true);
-      if (a === "no") document.getElementById("no").click();
+      if (a === "yes") answer(true);           // the confirm link confirms right away
+      if (a === "no") document.getElementById("reason").focus();  // the decline link: only the reason box
     }
 
     async function answer(accept, why = null) {
