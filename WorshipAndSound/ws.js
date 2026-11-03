@@ -88,7 +88,7 @@ function slotCell(mt, slot) {
   const taken = takenIn(mt.iso, slot.role);
   const people = taken.map((s) => {
     const pending = s.status === "pending";
-    return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
+    return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}${contactOf(s.member_id)?.phone || contactOf(s.member_id)?.email ? `<button data-notify="${s.id}" title="הודעה בוואטסאפ / מייל" aria-label="הודעה">💬</button>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
   }).join("");
   let action = "";
   const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
@@ -182,23 +182,37 @@ function inviteText(m, { role, instrument, date, token }) {
   return `שלום ${m.name}, ${myName()} מזמין/ה אותך ל${what} ב${when}.\nלאישור: ${base}&a=yes\nלא אוכל: ${base}&a=no`;
 }
 
-function showInviteDialog(m, contact, inv) {
-  const text = inviteText(m, inv);
+function showInviteDialog(m, contact, inv, text = inviteText(m, inv), title = `${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳`) {
   const wa = contact.phone ? `https://wa.me/${waNumber(contact.phone)}?text=${encodeURIComponent(text)}` : "";
   const mail = contact.email ? `mailto:${contact.email}?subject=${encodeURIComponent("הזמנה לשיבוץ · אור השרון")}&body=${encodeURIComponent(text)}` : "";
   let d = document.getElementById("invite-dialog");
   if (!d) { d = document.createElement("dialog"); d.id = "invite-dialog"; d.className = "setlist-dialog"; document.body.append(d); }
   d.innerHTML = `<div class="sl-box">
     <button class="sl-close" data-close-invite aria-label="סגירה">✕</button>
-    <h2>${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳</h2>
-    <p class="hint">שלחו לו/ה את ההזמנה. היא/הוא יאשר/תאשר או יבטל/תבטל מהקישור, והשיבוץ יתעדכן באתר.</p>
+    <h2>${title}</h2>
+    <p class="hint">${inv.token ? "שלחו לו/ה את ההזמנה. היא/הוא יאשר/תאשר או יבטל/תבטל מהקישור, והשיבוץ יתעדכן באתר." : "תזכורת על השיבוץ, מוכנה לשליחה."}</p>
     <div class="sl-actions">
       ${wa ? `<a class="btn wa" href="${wa}" target="_blank" rel="noopener">💬 שליחה בוואטסאפ</a>` : ""}
       ${mail ? `<a class="btn ghost" href="${mail}">✉️ שליחה במייל</a>` : ""}
     </div></div>`;
   if (!d.open) d.showModal();
 }
+function reminderText(m, { role, instrument, date }) {
+  const slot = SLOTS.find((s) => s.role === role);
+  const mt = state.meetings.find((x) => x.iso === date);
+  const what = slot.label.replace("נגנים ושירה", "נגינה / שירה") + (instrument ? ` (${instrument})` : "");
+  return `שלום ${m.name}, תזכורת: את/ה משובץ/ת ל${what} ב${mt ? meetingKind(mt.day) + " " : ""}${date.split("-").reverse().join("/")}${mt?.place ? `, ${mt.place}` : ""}. תודה!`;
+}
 document.addEventListener("click", (e) => {
+  const n = e.target.closest("[data-notify]");
+  if (n) {
+    const sgn = state.signups.find((x) => x.id === Number(n.dataset.notify));
+    const m = byId(sgn.member_id), c = contactOf(sgn.member_id);
+    const inv = { role: sgn.role, instrument: sgn.instrument, date: sgn.meeting_date, token: sgn.status === "pending" ? sgn.invite_token : null };
+    if (inv.token) showInviteDialog(m, c, inv);
+    else showInviteDialog(m, c, inv, reminderText(m, inv), `הודעה ל${esc(m.name)}`);
+    return;
+  }
   if (e.target.closest("[data-close-invite]") || e.target.id === "invite-dialog") document.getElementById("invite-dialog")?.close();
 });
 

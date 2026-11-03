@@ -350,3 +350,5 @@
   .live-nav .tool { font-size: .9rem; padding: 6px 12px; }
   .live-next { font-size: .8rem; }
 }
+
+.person [data-notify] { background: none; border: 0; cursor: pointer; padding: 0 2px; font-size: .85rem; }
