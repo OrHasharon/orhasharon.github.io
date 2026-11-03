@@ -88,7 +88,7 @@ function slotCell(mt, slot) {
   const taken = takenIn(mt.iso, slot.role);
   const people = taken.map((s) => {
     const pending = s.status === "pending";
-    return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}${contactOf(s.member_id)?.phone || contactOf(s.member_id)?.email ? `<button data-notify="${s.id}" title="הודעה בוואטסאפ / מייל" aria-label="הודעה">💬</button>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
+    return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : s.invite_token && s.status === "confirmed" ? '<span class="ok" title="אושר">✅</span> ' : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}${state.invitesReady ? `<button data-notify="${s.id}" title="הודעה בוואטסאפ / מייל" aria-label="הודעה">💬</button>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
   }).join("");
   let action = "";
   const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
@@ -140,24 +140,27 @@ async function assign(role, date, memberId, instrument = null) {
     if (opts.length > 1) { state.picking = { date, member: memberId }; render(); return; }
     instrument = opts[0];
   }
-  // signing up someone else (who has a phone or email in the users tab) = an invitation they confirm
+  // every sign-up can be sent on WhatsApp; someone else is pending (⏳) until they answer from the link, yourself = confirmed
   const me = (typeof user !== "undefined" && user?.email || "").toLowerCase();
   const contact = state.invitesReady ? contactOf(memberId) : null;
-  const invite = !!contact && contact.email.toLowerCase() !== me && (contact.phone || contact.email);
+  const self = isMe(memberId);
   const row = { meeting_date: date, role, member_id: memberId, instrument };
-  if (invite) Object.assign(row, { status: "pending", invite_token: crypto.randomUUID(), invited_by: me || null });
+  if (state.invitesReady) Object.assign(row, { status: self ? "confirmed" : "pending", invite_token: crypto.randomUUID(), invited_by: me || null });
   const { error } = await sb.from("signups").insert(row);
   state.picking = null;
-  const slot = SLOTS.find((s) => s.role === role);
-  const when = date.split("-").reverse().slice(0, 2).join("/");
   if (error) toast(error.code === "23505" ? `${m.name} כבר משובץ/ת בתפקיד הזה` : "השיבוץ נכשל, נסו שוב");
-  else if (invite) {
-    if (INVITE_HOOK) fetch(INVITE_HOOK, { method: "POST", mode: "no-cors", body: JSON.stringify({ type: "invite", token: row.invite_token, from: myName() }) }).catch(() => {});
-    showInviteDialog(m, contact, { role, instrument, date, token: row.invite_token });
-  } else toast(`${m.name} שובץ/ה: ${slot.label} · ${when}`);
+  else if (state.invitesReady) {
+    if (INVITE_HOOK && !self) fetch(INVITE_HOOK, { method: "POST", mode: "no-cors", body: JSON.stringify({ type: "invite", token: row.invite_token, from: myName() }) }).catch(() => {});
+    showInviteDialog(m, contact, { role, instrument, date, token: row.invite_token, self });
+  } else toast(`${m.name} שובץ/ה`);
   await refreshSignups(); render();
 }
 
+// is this team member the person who is logged in?
+function isMe(memberId) {
+  const me = (typeof user !== "undefined" && user?.email || "").toLowerCase();
+  return !!me && allowed.some((u) => u.email.toLowerCase() === me && u.member_id === memberId);
+}
 // a team member's contact details, from the users tab (phone + linked member)
 const contactOf = (memberId) => allowed.find((u) => u.member_id === memberId) || null;
 function waNumber(phone) {
@@ -175,24 +178,29 @@ function myName() {
 // the invitation goes out by the sender's own WhatsApp / email: one click each, nothing to set up
 function inviteText(m, { role, instrument, date, token }) {
   const slot = SLOTS.find((s) => s.role === role);
-  const mt = state.meetings.find((x) => x.iso === date);
   const base = location.origin + location.pathname.replace(/[^/]*$/, "") + "respond.html?t=" + token;
-  const what = slot.label.replace("נגנים ושירה", "נגינה / שירה") + (instrument ? ` (${instrument})` : "");
-  const when = `${mt ? meetingKind(mt.day) + " " : ""}${date.split("-").reverse().join("/")}`;
-  return `שלום ${m.name}, ${myName()} מזמין/ה אותך ל${what} ב${when}.\nלאישור: ${base}&a=yes\nלא אוכל: ${base}&a=no`;
+  const what = (role === "musician" ? "הלל" : slot.label) + (instrument ? ` (${instrument})` : "");
+  const leader = state.signups.find((x) => x.meeting_date === date && x.role === "leader");
+  const leaderName = leader ? byId(leader.member_id)?.name : "";
+  return `היי! זאת הודעה ממערכת OrHasharon/WorshipAndSound\n` +
+    `שובצת ע"י ${myName()} ל${what} בתאריך ${date.split("-").reverse().join("/")}${leaderName ? `, בהובלת ${leaderName}` : ""}.\n` +
+    `לאישור: ${base}&a=yes\n` +
+    `לסירוב (אפשר לכתוב סיבה): ${base}&a=no\n` +
+    `אם תסרב/י, השיבוץ יורד. אם תאשר/י, יופיע ✅ ליד שמך באתר.`;
 }
 
-function showInviteDialog(m, contact, inv, text = inviteText(m, inv), title = `${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳`) {
-  const wa = contact.phone ? `https://wa.me/${waNumber(contact.phone)}?text=${encodeURIComponent(text)}` : "";
+function showInviteDialog(m, contact, inv, text = inviteText(m, inv), title = inv.self ? `${esc(m.name)} שובץ/ה ✅` : `${esc(m.name)} שובץ/ה, ממתין/ה לאישור ⏳`) {
+  contact = contact || {};
+  const wa = `https://wa.me/${contact.phone ? waNumber(contact.phone) : ""}?text=${encodeURIComponent(text)}`;
   const mail = contact.email ? `mailto:${contact.email}?subject=${encodeURIComponent("הזמנה לשיבוץ · אור השרון")}&body=${encodeURIComponent(text)}` : "";
   let d = document.getElementById("invite-dialog");
   if (!d) { d = document.createElement("dialog"); d.id = "invite-dialog"; d.className = "setlist-dialog"; document.body.append(d); }
   d.innerHTML = `<div class="sl-box">
     <button class="sl-close" data-close-invite aria-label="סגירה">✕</button>
     <h2>${title}</h2>
-    <p class="hint">${inv.token ? "שלחו לו/ה את ההזמנה. היא/הוא יאשר/תאשר או יבטל/תבטל מהקישור, והשיבוץ יתעדכן באתר." : "תזכורת על השיבוץ, מוכנה לשליחה."}</p>
+    <p class="hint">${contact.phone ? "ההודעה מוכנה לשליחה." : "אין מספר טלפון ל" + esc(m.name) + " בלשונית משתמשים: וואטסאפ ייפתח ותבחרו למי לשלוח."} ${inv.token && !inv.self ? "אישור או סירוב מהקישור מעדכנים את השיבוץ באתר." : ""}</p>
     <div class="sl-actions">
-      ${wa ? `<a class="btn wa" href="${wa}" target="_blank" rel="noopener">💬 שליחה בוואטסאפ</a>` : ""}
+      <a class="btn wa" href="${wa}" target="_blank" rel="noopener">💬 שליחה בוואטסאפ</a>
       ${mail ? `<a class="btn ghost" href="${mail}">✉️ שליחה במייל</a>` : ""}
     </div></div>`;
   if (!d.open) d.showModal();
@@ -208,8 +216,8 @@ document.addEventListener("click", (e) => {
   if (n) {
     const sgn = state.signups.find((x) => x.id === Number(n.dataset.notify));
     const m = byId(sgn.member_id), c = contactOf(sgn.member_id);
-    const inv = { role: sgn.role, instrument: sgn.instrument, date: sgn.meeting_date, token: sgn.status === "pending" ? sgn.invite_token : null };
-    if (inv.token) showInviteDialog(m, c, inv);
+    const inv = { role: sgn.role, instrument: sgn.instrument, date: sgn.meeting_date, token: sgn.invite_token, self: isMe(sgn.member_id) };
+    if (inv.token) showInviteDialog(m, c, inv, inviteText(m, inv), `הודעה ל${esc(m.name)}`);
     else showInviteDialog(m, c, inv, reminderText(m, inv), `הודעה ל${esc(m.name)}`);
     return;
   }
