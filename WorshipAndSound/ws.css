@@ -360,3 +360,5 @@
 .live-body .cp-line, .live-body .cp-section { break-inside: avoid; }
 
 @media (max-width: 760px) { .live-body .song-body { font-size: calc(1.3rem * var(--live-zoom)); } }
+
+.idx-song .first-line { color: var(--muted); font-size: .85em; }

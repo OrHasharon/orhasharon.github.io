@@ -137,11 +137,14 @@ function renderChordPro(content, shift = 0, { chords = true } = {}) {
 
 // "76. תודה לך אבי (capo 2)" -> title "תודה לך אבי" + {capo: 2}
 function cleanTitle(raw) {
+  const n = raw.match(/^\s*(\d{1,4})\s*[.)\-]/) || raw.match(/[.(]\s*(\d{1,4})\s*$/);
   let title = raw.replace(/^\s*\d+\s*[.)\-]\s*/, "").replace(/\s*[.(]\s*\d{1,4}\s*$/, "").trim();
   // RTL text extraction can mirror the brackets, so accept either side
-  const capo = title.match(/[()]?\s*(?:capo|קאפו)\s*(\d+)\s*[()]?/i);
+  // also the mirrored form the PDF gives in Hebrew lines: "(apo 3C)" = "(Capo 3)"
+  const cm = title.match(/[()]?\s*(?:(\d+)\s*c?apo|(?:c?apo|קאפו)\s*(\d+)\s*c?)\s*[()]?/i);
+  const capo = cm && [cm[0], cm[1] || cm[2]];
   if (capo) title = title.replace(capo[0], "").replace(/[()]\s*[()]/g, "").replace(/^[\s()]+|[\s()]+$/g, "").trim();
-  return { title, capo: capo ? capo[1] : null };
+  return { title, capo: capo ? capo[1] : null, num: n ? n[1] : null };
 }
 
 // ---------- PDF -> songs ----------
@@ -202,10 +205,24 @@ async function pdfToSongs(file) {
     current.lines.push(ln);
   }
   return songs.map((s) => {
-    const { title, capo } = cleanTitle(s.title);
+    const { title, capo, num } = cleanTitle(s.title);
     const body = mergeChordLines(s.lines);
-    return { title, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqudLine).join("\n"), include: true };
-  }).filter((s) => s.content.trim());
+    return { title, num, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqudLine).join("\n"), include: true };
+  }).filter((s) => s.content.trim()).map(stripCapoLines).map((s, _, all) => {
+    // songs with the same name: add a line of the song in brackets, e.g. "אבינו מלכנו (שמענו קולנו)".
+    // Use the first line that isn't just the name again and that differs between the twins.
+    const twins = all.filter((x) => x.title === s.title);
+    if (twins.length < 2) return s;
+    const bare = (t) => t.replace(/[^א-תa-zA-Z]/g, "");
+    const cands = (x) => lyricLines(x).filter((l) => bare(l) && bare(l) !== bare(x.title));
+    for (let k = 0; k < 6; k++) {
+      const picks = twins.map((x) => cands(x)[k]);
+      if (picks.every(Boolean) && new Set(picks.map(bare)).size === picks.length) {
+        return { ...s, baseTitle: s.title, title: `${s.title} (${picks[twins.indexOf(s)]})` };
+      }
+    }
+    return { ...s, baseTitle: s.title, title: `${s.title} (${twins.indexOf(s) + 1})` };
+  });
 }
 
 // two (or more) side-by-side columns: find empty vertical strips that no item crosses
@@ -443,12 +460,21 @@ async function loadSongs() {
 }
 
 async function saveImported(drafts, fileName) {
-  const byTitle = new Map(songsState.list.map((s) => [s.title.trim(), s]));
+  const key = (d) => (d.num ? `${fileName}#${d.num}` : null);
+  const bySource = new Map(songsState.list.filter((x) => x.source).map((x) => [x.source, x]));
+  // older imports were saved as just the file name: match those by title, in order, so duplicates pair up 1:1
+  const legacy = new Map();
+  for (const x of [...songsState.list].sort((a, b) => a.id - b.id)) {
+    if (x.source && x.source.includes("#")) continue;
+    const t = x.title.trim();
+    if (!legacy.has(t)) legacy.set(t, []);
+    legacy.get(t).push(x);
+  }
   const fresh = [], updates = [];
   for (const d of drafts) {
-    const row = { title: d.title.trim(), content: d.content, song_key: firstChord(d.content), source: fileName, updated_at: new Date().toISOString() };
+    const row = { title: d.title.trim(), content: d.content, song_key: firstChord(d.content), source: key(d) || fileName, updated_at: new Date().toISOString() };
     if (!row.title || !row.content.trim()) continue;
-    const old = byTitle.get(row.title);
+    const old = (key(d) && bySource.get(key(d))) || legacy.get(row.title)?.shift() || legacy.get((d.baseTitle || "").trim())?.shift();
     if (old) updates.push(sb.from("songs").update(row).eq("id", old.id)); else fresh.push(row);
   }
   const results = await Promise.all([fresh.length ? sb.from("songs").insert(fresh) : { error: null }, ...updates]);
@@ -484,13 +510,34 @@ function renderSongs() {
   search.addEventListener("input", () => { songsState.query = search.value; $("song-results").innerHTML = searchResultsHtml(); });
 }
 
+// lyric lines of a song, without chords/directives, short (up to the first comma) for use in a title
+const lyricLines = (s) => s.content.split("\n").map((l) => l.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").trim())
+  .filter((l) => /[\u05D0-\u05EAa-zA-Z]{2}/.test(l.replace(/[\u0591-\u05C7]/g, "")) && !/c?apo\s*\d/i.test(l))
+  .map((l) => l.split(/[,.;:!?]/)[0].replace(/[\u0591-\u05C7]/g, "").trim().slice(0, 40)).filter(Boolean);
+
+// a stray capo line in the lyrics ("apo 3C", "Capo 2") becomes the {capo: N} directive
+function stripCapoLines(s) {
+  let capo = null;
+  const kept = s.content.split("\n").filter((l) => {
+    const m = l.replace(/\[[^\]]*\]/g, "").trim().match(/^[()\s]*c?apo\s*(\d)\s*[a-z]*[()\s]*$|^[()\s]*(\d)\s*c?apo[()\s]*$/i);
+    if (m) { capo = capo || m[1] || m[2]; return false; }
+    return true;
+  });
+  if (!capo) return s;
+  const body = kept.join("\n").replace(/^\{capo:[^}]*\}\n?/, "");
+  return { ...s, content: `{capo: ${capo}}\n` + body };
+}
+
+const sameName = (s) => songsState.list.filter((x) => x.title.trim() === s.title.trim()).length > 1;
+const firstLine = (s) => (s.content.split("\n").map((l) => l.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").trim()).find((l) => /[\u05D0-\u05EAa-zA-Z]{2}/.test(l.replace(/[\u0591-\u05C7]/g, ""))) || "").split(/[,.;:!?]/)[0].trim().slice(0, 40);
+
 function searchResultsHtml() {
   const q = songsState.query.trim();
   if (!q) return songsState.list.length ? "" : `<p class="status">עדיין אין שירים. אפשר להוסיף שיר או לייבא מ-PDF.</p>`;
   const list = songsState.list.filter((s) => s.title.includes(q) || s.content.includes(q));
   if (!list.length) return `<p class="status">לא נמצאו שירים</p>`;
   return `<div class="search-results">${list.sort((a, b) => (b.title.includes(q) - a.title.includes(q)) || a.title.localeCompare(b.title, "he"))
-    .slice(0, 50).map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}</button>`).join("")}</div>`;
+    .slice(0, 50).map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}${sameName(s) ? `<small class="first-line"> · ${esc(firstLine(s))}</small>` : ""}</button>`).join("")}</div>`;
 }
 
 // alphabetical index grouped by first letter, titles only
@@ -511,8 +558,9 @@ function uploadsHtml() {
   const files = new Map();
   for (const s of songsState.list) {
     if (!s.source) continue;
-    const key = s.source + "|" + (s.added_by || "");
-    const f = files.get(key) || { name: s.source, by: s.added_by, count: 0, at: s.created_at };
+    const file = s.source.split("#")[0];
+    const key = file + "|" + (s.added_by || "");
+    const f = files.get(key) || { name: file, by: s.added_by, count: 0, at: s.created_at };
     f.count++; if (s.created_at < f.at) f.at = s.created_at;
     files.set(key, f);
   }
@@ -624,7 +672,7 @@ document.addEventListener("click", async (e) => {
   }
   if (t.closest("[data-del-file]")) {
     const name = t.closest("[data-del-file]").dataset.delFile;
-    const mine = songsState.list.filter((s) => s.source === name && isMine(s));
+    const mine = songsState.list.filter((s) => (s.source || "").split("#")[0] === name && isMine(s));
     if (!confirm(`למחוק את הקובץ "${name}" ואת ${mine.length} השירים שלו?`)) return;
     const { error } = await sb.from("songs").delete().in("id", mine.map((s) => s.id));
     if (error) { toast("המחיקה נכשלה"); return; }
