@@ -333,3 +333,20 @@
 [data-theme="light"] .users-table .u-member option { background: #fff; }
 .btn.wa { background: #25d366; color: #fff; text-decoration: none; }
 .sl-actions a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* live mode: never break a line mid-word (shrink instead); phones get one scrolling column and a compact bar */
+.live-body .cp-line { flex-wrap: nowrap; }
+@media (max-width: 760px) {
+  .live-body { overflow-y: auto; padding: 10px 12px; }
+  .live-body .song-body { column-count: 1; height: auto; }
+  .live-bar { padding: 6px 10px; gap: 4px 8px; }
+  .live-title { font-size: 1.05rem; }
+  .live-pos { font-size: .8rem; }
+  .live-note { font-size: .8rem; width: 100%; }
+  .live-tools { margin-inline-start: 0; width: 100%; gap: 3px; }
+  .live-tools .tool { font-size: .78rem; padding: 3px 7px; }
+  .live-tools .tool-label { font-size: .78rem; }
+  .live-nav { padding: 6px 10px; }
+  .live-nav .tool { font-size: .9rem; padding: 6px 12px; }
+  .live-next { font-size: .8rem; }
+}

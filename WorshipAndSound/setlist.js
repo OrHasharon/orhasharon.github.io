@@ -373,7 +373,10 @@ function fitLive(el) {
   const body = el.querySelector(".live-body .song-body");
   if (!body) return;
   body.style.fontSize = "";
-  const fits = () => body.scrollWidth <= body.clientWidth + 2;
+  const narrow = window.matchMedia("(max-width: 760px)").matches;
+  // every line on one line (no word cut in half); on wide screens also: at most two columns, no scrolling
+  const linesFit = () => [...body.querySelectorAll(".cp-line")].every((l) => l.scrollWidth <= l.clientWidth + 1);
+  const fits = () => linesFit() && (narrow || body.scrollWidth <= body.clientWidth + 2);
   let size = parseFloat(getComputedStyle(body).fontSize);
   for (let k = 0; k < 30 && !fits() && size > 12; k++) { size *= 0.94; body.style.fontSize = size + "px"; }
 }
