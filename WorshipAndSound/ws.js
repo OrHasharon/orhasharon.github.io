@@ -33,9 +33,9 @@ const allInstruments = () => {
   return [...seen];
 };
 const FREQS = ["פעם בשבוע", "פעם בשבועיים", "פעם ב-3 שבועות", "פעם בחודש", "פעם ברבעון"];
-const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", "🪈"]];
+const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", ""]]; // flute: no icon (the emoji looks like a firecracker)
 const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
-const instHtml = (inst) => inst ? ` <small>(${icon(inst)} ${esc(inst)})</small>` : "";
+const instHtml = (inst) => inst ? ` <small>(${[icon(inst), esc(inst)].filter(Boolean).join(" ")})</small>` : "";
 const instrumentsOf = (m) => (m.instruments || "").split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
 function toast(text) {
