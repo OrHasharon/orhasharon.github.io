@@ -1,4 +1,4 @@
-﻿// WorshipAndSound (email sign-in + allow-list once login_migration.sql ran): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
+// WorshipAndSound (email sign-in + allow-list once login_migration.sql ran): sign-up for worship/sound teams + editable team info (Supabase, schema or_hasharon_worship)
 const SUPABASE_URL = "https://pualpwrkztjzhgpaqudm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -165,7 +165,7 @@ async function assign(role, date, memberId, instrument = null) {
   if (error) toast(error.code === "23505" ? `${m.name} כבר משובץ/ת בתפקיד הזה` : "השיבוץ נכשל, נסו שוב");
   else if (state.invitesReady) {
     if (INVITE_HOOK && !self) fetch(INVITE_HOOK, { method: "POST", mode: "no-cors", body: JSON.stringify({ type: "invite", token: row.invite_token, from: myName() }) }).catch(() => {});
-    showInviteDialog(m, contact, { role, instrument, date, token: row.invite_token, self });
+    showInviteDialog(m, contact, { role, instrument, date, token: row.invite_token, self, pending: true });
   } else toast(`${m.name} שובץ/ה`);
   await refreshSignups(); render();
 }
@@ -219,6 +219,7 @@ function showInviteDialog(m, contact, inv, text = inviteText(m, inv), title = `$
     <div class="sl-actions">
       <a class="btn wa" href="${wa}" target="_blank" rel="noopener">💬 שליחה בוואטסאפ</a>
       ${mail ? `<a class="btn ghost" href="${mail}">✉️ שליחה במייל</a>` : ""}
+      ${inv.token && inv.pending ? `<button class="btn ghost" type="button" data-no-confirm="${inv.token}">✅ לא צריך אישור</button>` : ""}
     </div></div>`;
   if (!d.open) d.showModal();
 }
@@ -233,13 +234,24 @@ document.addEventListener("click", (e) => {
   if (n) {
     const sgn = state.signups.find((x) => x.id === Number(n.dataset.notify));
     const m = byId(sgn.member_id), c = contactOf(sgn.member_id);
-    const inv = { role: sgn.role, instrument: sgn.instrument, date: sgn.meeting_date, token: sgn.invite_token, self: isMe(sgn.member_id) };
+    const inv = { role: sgn.role, instrument: sgn.instrument, date: sgn.meeting_date, token: sgn.invite_token, self: isMe(sgn.member_id), pending: sgn.status === "pending" };
     if (inv.token) showInviteDialog(m, c, inv, inviteText(m, inv), `הודעה ל${esc(m.name)}`);
     else showInviteDialog(m, c, inv, reminderText(m, inv), `הודעה ל${esc(m.name)}`);
     return;
   }
   if (e.target.closest("[data-close-invite]") || e.target.id === "invite-dialog") document.getElementById("invite-dialog")?.close();
+  const nc = e.target.closest("[data-no-confirm]");
+  if (nc) markConfirmed(nc.dataset.noConfirm);
 });
+
+// "no confirmation needed": the sign-up is confirmed right away, nothing waits for an answer
+async function markConfirmed(token) {
+  const { error } = await sb.from("signups").update({ status: "confirmed" }).eq("invite_token", token);
+  if (error) { toast("העדכון נכשל, נסו שוב"); return; }
+  document.getElementById("invite-dialog")?.close();
+  toast("השיבוץ אושר ✅");
+  await refreshSignups(); render();
+}
 
 async function removeSignup(id) {
   const { error } = await sb.from("signups").delete().eq("id", id);
