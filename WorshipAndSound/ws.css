@@ -365,3 +365,7 @@
 
 /* the sign-up table needs the room: use almost the whole screen width */
 .wrap { max-width: 1600px; }
+/* history button: left end, just above the sign-up table */
+.signup-bar { display: flex; justify-content: flex-end; margin: -6px 0 8px; }
+.history-btn { background: none; border: 1px solid var(--line, rgba(255,255,255,.18)); color: var(--muted, inherit); border-radius: 999px; padding: 5px 14px; font: inherit; font-size: .88rem; cursor: pointer; }
+.history-btn:hover, .history-btn[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }

@@ -22,7 +22,7 @@ const INVITE_HOOK = "";
 const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PAGE, editing: null, picking: null }; // picking = {date, member} while choosing an instrument
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const byId = (id) => state.members.find((m) => m.id === id);
+const byId = (id) => state.members.find((m) => m.id === id) || state.former?.find((m) => m.id === id); // former = no longer active, still named in history
 const BASE_INSTRUMENTS = ["פסנתר", "שירה", "גיטרה", "קחון", "בס", "חליל", "כינור"];
 // table columns: the base list + any instrument someone in the team plays + columns added in this visit
 const extraInstruments = [];
@@ -57,13 +57,25 @@ function renameInstrument(from, to) {
   sb.from("signups").update({ instrument: to }).eq("instrument", from).then(() => {});
 }
 
+// every sign-up, past ones too (history); the server gives at most 1000 rows per request
+async function fetchSignups() {
+  let rows = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await sb.from("signups").select("*").order("id").range(from, from + 999);
+    if (r.error) return r;
+    rows = rows.concat(r.data);
+    if (r.data.length < 1000) return { data: rows, error: null };
+  }
+}
+
 async function loadAll() {
-  const since = new Date(); since.setDate(since.getDate() - 100); // enough history for "led this quarter"
-  const [members, signups, meetings] = await Promise.all([
+  const [members, signups, meetings, former] = await Promise.all([
     sb.from("members").select("*").eq("active", true).order("name"),
-    sb.from("signups").select("*").gte("meeting_date", isoDate(since)),
+    fetchSignups(),
     loadMeetings(),
+    sb.from("members").select("*").eq("active", false),
   ]);
+  state.former = former.data || [];
   if (members.error) throw members.error;
   if (signups.error) throw signups.error;
   state.members = members.data;
@@ -81,8 +93,7 @@ async function loadAll() {
 }
 
 async function refreshSignups() {
-  const since = new Date(); since.setDate(since.getDate() - 100);
-  const { data, error } = await sb.from("signups").select("*").gte("meeting_date", isoDate(since));
+  const { data, error } = await fetchSignups();
   if (!error) state.signups = data;
 }
 
@@ -94,6 +105,9 @@ const freeInstruments = (m, date) => isGroup(m) ? (takenIn(date, "musician").som
 // people + picker for one role at one meeting; shared by the table (desktop) and the cards (phone)
 function slotCell(mt, slot) {
   const taken = takenIn(mt.iso, slot.role);
+  // history: who served, read only
+  if (state.history) return { missing: false, taken, html: `<div class="slot-people">${taken.map((s) =>
+    `<span class="person">${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}</span>`).join("") || `<span class="empty">—</span>`}</div>` };
   const people = taken.map((s) => {
     const pending = s.status === "pending";
     return `<span class="person${pending ? " pending" : ""}"${pending ? ' title="נשלחה הזמנה, ממתין לאישור"' : ""}>${pending ? "⏳ " : s.invite_token && s.status === "confirmed" ? '<span class="ok" title="אושר">✅</span> ' : ""}${esc(byId(s.member_id)?.name || "?")}${instHtml(s.instrument)}${state.invitesReady && !isGroup(byId(s.member_id)) ? `<button data-notify="${s.id}" title="הודעה בוואטסאפ / מייל" aria-label="הודעה">💬</button>` : ""}<button data-remove="${s.id}" title="הסרה מהשיבוץ" aria-label="הסרה">✕</button></span>`;
@@ -113,16 +127,26 @@ function slotCell(mt, slot) {
 function summaryTable(upcoming) {
   return `<div class="summary"><div class="duty-table"><table>
     <thead><tr><th>תאריך</th>${SLOTS.map((s) => `<th>${s.label}</th>`).join("")}</tr></thead>
-    <tbody>${upcoming.map((mt, i) => `<tr${i === 0 ? ' class="next"' : ""}>
+    <tbody>${upcoming.map((mt, i) => `<tr${i === 0 && !state.history ? ' class="next"' : ""}>
       <td class="when"><strong>${mt.dateText.slice(0, 5)}</strong><small>${meetingKind(mt)}</small>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</td>
       ${SLOTS.map((s) => { const c = slotCell(mt, s); return `<td class="${c.missing ? "missing" : ""}">${c.html}</td>`; }).join("")}</tr>`).join("")}</tbody>
   </table></div></div>`;
 }
 
 function renderSignup() {
+  const bar = `<div class="signup-bar"><button class="history-btn" type="button" data-history aria-pressed="${!!state.history}">${state.history ? "← חזרה לשיבוצים" : "🕘 היסטוריה"}</button></div>`;
+  if (state.history) {
+    // past meetings that had sign-ups, newest first
+    const now = new Date();
+    const past = state.meetings.filter((m) => meetingEnd(m) <= now && state.signups.some((s) => s.meeting_date === m.iso)).reverse();
+    $("signup").innerHTML = bar + (!past.length ? `<p class="status">עדיין אין מפגשים שעברו. אחרי המפגש הראשון הוא יופיע כאן.</p>` : summaryTable(past) +
+      `<div class="cards-view"><div class="meetings-list">${past.slice(0, state.shown).map((mt) => meetingCard(mt, false)).join("")}</div></div>`);
+    $("more").hidden = past.length <= state.shown;
+    return;
+  }
   const upcoming = upcomingMeetings(state.meetings);
-  if (!upcoming.length) { $("signup").innerHTML = `<p class="status">אין מפגשים קרובים בלוח</p>`; $("more").hidden = true; return; }
-  $("signup").innerHTML = summaryTable(upcoming) +
+  if (!upcoming.length) { $("signup").innerHTML = bar + `<p class="status">אין מפגשים קרובים בלוח</p>`; $("more").hidden = true; return; }
+  $("signup").innerHTML = bar + summaryTable(upcoming) +
     `<div class="cards-view"><div class="meetings-list">${upcoming.slice(0, state.shown).map((mt, i) => meetingCard(mt, i === 0)).join("")}</div></div>`;
   $("more").hidden = upcoming.length <= state.shown;
 }
@@ -427,7 +451,8 @@ function render() {
 document.addEventListener("click", (e) => {
   const t = e.target;
   const tab = t.closest(".tabs button");
-  if (tab) { state.tab = tab.dataset.tab; state.editing = null; render(); return; }
+  if (tab) { state.tab = tab.dataset.tab; state.editing = null; state.history = false; render(); return; }
+  if (t.closest("[data-history]")) { state.history = !state.history; state.shown = PAGE; render(); return; }
   if (t.closest("[data-remove]")) { removeSignup(Number(t.closest("[data-remove]").dataset.remove)); return; }
   if (t.closest("[data-deactivate]")) { deactivate(Number(t.closest("[data-deactivate]").dataset.deactivate)); return; }
 });
