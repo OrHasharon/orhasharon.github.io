@@ -34,8 +34,11 @@ const allInstruments = () => {
 };
 const FREQS = ["פעם בשבוע", "פעם בשבועיים", "פעם ב-3 שבועות", "פעם בחודש", "פעם ברבעון"];
 const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", ""]]; // flute: no icon (the emoji looks like a firecracker)
+ICONS.unshift(["סקסופון", "🎷"]);
 const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
-const instHtml = (inst) => inst ? ` <small>(${[icon(inst), esc(inst)].filter(Boolean).join(" ")})</small>` : "";
+// guitars all show the guitar icon, so the text says which one: אקוסטית / בס / חשמלית
+const instLabel = (inst) => /חשמל/.test(inst) ? "חשמלית" : /בס/.test(inst) ? "בס" : inst.trim() === "גיטרה" || /אקוסט/.test(inst) ? "אקוסטית" : inst;
+const instHtml = (inst) => inst ? ` <small>(${[icon(inst), esc(instLabel(inst))].filter(Boolean).join(" ")})</small>` : "";
 const instrumentsOf = (m) => (m.instruments || "").split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
 function toast(text) {
@@ -115,7 +118,7 @@ function slotCell(mt, slot) {
   let action = "";
   const picking = state.picking && state.picking.date === mt.iso && slot.role === "musician" ? byId(state.picking.member) : null;
   if (picking) {
-    action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${freeInstruments(picking, mt.iso).map((o) => `<option value="${esc(o)}">${icon(o)} ${esc(o)}</option>`).join("")}</select>`;
+    action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${freeInstruments(picking, mt.iso).map((o) => `<option value="${esc(o)}">${icon(o)} ${esc(instLabel(o))}</option>`).join("")}</select>`;
   } else if (taken.length < slot.max) {
     const free = state.members.filter((m) => slot.eligible(m) && (slot.role === "musician" ? freeInstruments(m, mt.iso).length : !taken.some((s) => s.member_id === m.id)));
     if (free.length) action = `<select class="assign" data-role="${slot.role}" data-date="${mt.iso}"><option value="">+ שיבוץ</option>${free.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>`;
@@ -299,7 +302,7 @@ function renderTeam() {
   $("team").innerHTML = `<div class="team-section">
     ${ready ? "" : `<p class="db-warning">עמודות "הנחייה" ו"תכיפות השתתפות" עדיין לא פעילות: צריך להריץ ב-Supabase את הסקריפט team_matrix.sql. אחרי זה רעננו את הדף.</p>`}
     <div class="matrix-wrap"><table class="matrix">
-      <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${x}</th>`).join("")}<th><button class="link-btn add-inst" data-add-instrument title="הוספת כלי">+ כלי</button></th>
+      <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${esc(instLabel(x))}</th>`).join("")}<th><button class="link-btn add-inst" data-add-instrument title="הוספת כלי">+ כלי</button></th>
         <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
       <tbody>${state.members.map((m) => `<tr>
         <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
