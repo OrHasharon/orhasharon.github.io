@@ -114,7 +114,7 @@ function summaryTable(upcoming) {
   return `<div class="summary"><div class="duty-table"><table>
     <thead><tr><th>תאריך</th>${SLOTS.map((s) => `<th>${s.label}</th>`).join("")}</tr></thead>
     <tbody>${upcoming.map((mt, i) => `<tr${i === 0 ? ' class="next"' : ""}>
-      <td class="when"><strong>${mt.dateText.slice(0, 5)}</strong><small>${meetingKind(mt.day)}</small>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</td>
+      <td class="when"><strong>${mt.dateText.slice(0, 5)}</strong><small>${meetingKind(mt)}</small>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</td>
       ${SLOTS.map((s) => { const c = slotCell(mt, s); return `<td class="${c.missing ? "missing" : ""}">${c.html}</td>`; }).join("")}</tr>`).join("")}</tbody>
   </table></div></div>`;
 }
@@ -137,7 +137,7 @@ function meetingCard(mt, isNext) {
   const rows = `<div class="slot-groups">${group(["leader", "musician"])}${group(["sound", "setup"])}</div>`;
   return `<article class="meeting-card${isNext ? " next" : ""}">
     <div class="meeting-head">${isNext ? `<span class="tag">המפגש הבא</span>` : ""}
-      <h3>${meetingKind(mt.day)} · יום ${esc(mt.day)} ${mt.dateText.slice(0, 5)}</h3><span>${esc(mt.place)}</span>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</div>
+      <h3>${meetingKind(mt)} · יום ${esc(mt.day)} ${mt.dateText.slice(0, 5)}</h3><span>${esc(mt.place)}</span>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</div>
     ${rows}</article>`;
 }
 
@@ -197,7 +197,7 @@ function inviteText(m, { role, instrument, date, token }) {
   const leader = state.signups.find((x) => x.meeting_date === date && x.role === "leader");
   const leaderName = leader ? byId(leader.member_id)?.name : "";
   const mt = state.meetings.find((x) => x.iso === date);
-  const day = mt ? `${meetingKind(mt.day)}, ` : "";
+  const day = mt ? `${meetingKind(mt)}, ` : "";
   return `היי ${m.name.split(" ")[0]}! 👋\n` +
     `שובצת ל*${what}* ב${day}*${date.split("-").reverse().join("/")}*${mt?.place ? ` (${mt.place})` : ""}${leaderName ? `, בהובלת ${leaderName}` : ""}.\n` +
     `שיבץ/ה: ${myName()}\n\n` +
@@ -227,7 +227,7 @@ function reminderText(m, { role, instrument, date }) {
   const slot = SLOTS.find((s) => s.role === role);
   const mt = state.meetings.find((x) => x.iso === date);
   const what = slot.label.replace("נגנים ושירה", "נגינה / שירה") + (instrument ? ` (${instrument})` : "");
-  return `שלום ${m.name}, תזכורת: את/ה משובץ/ת ל${what} ב${mt ? meetingKind(mt.day) + " " : ""}${date.split("-").reverse().join("/")}${mt?.place ? `, ${mt.place}` : ""}. תודה!`;
+  return `שלום ${m.name}, תזכורת: את/ה משובץ/ת ל${what} ב${mt ? meetingKind(mt) + " " : ""}${date.split("-").reverse().join("/")}${mt?.place ? `, ${mt.place}` : ""}. תודה!`;
 }
 document.addEventListener("click", (e) => {
   const n = e.target.closest("[data-notify]");

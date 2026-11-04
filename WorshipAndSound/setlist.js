@@ -1,4 +1,4 @@
-﻿// Worship sessions: ordered songs + notes per meeting, opened from the signup tab, exported to PowerPoint.
+// Worship sessions: ordered songs + notes per meeting, opened from the signup tab, exported to PowerPoint.
 // Uses sb / esc / toast / state / render from ws.js and songsState / renderSongs / songMeta from songs.js.
 const setlist = { items: [], ready: false, missing: false, openDate: null };
 
@@ -30,7 +30,7 @@ function renderSetlistDialog() {
   const d = dialogEl();
   d.innerHTML = `<div class="sl-box">
     <button class="sl-close" data-close-setlist aria-label="סגירה">✕</button>
-    <h2>סשן הלל · ${mt ? `${meetingKind(mt.day)} ${mt.dateText.slice(0, 5)}` : iso.split("-").reverse().join("/")}</h2>
+    <h2>סשן הלל · ${mt ? `${meetingKind(mt)} ${mt.dateText.slice(0, 5)}` : iso.split("-").reverse().join("/")}</h2>
     ${items.length ? `<ol class="sl-list">${items.map((it, k) => `<li>
         <div class="sl-row">
           <span class="sl-num">${k + 1}</span>
@@ -66,7 +66,7 @@ function addToSetlistDialog(song) {
   d.innerHTML = `<div class="sl-box">
     <button class="sl-close" data-close-setlist aria-label="סגירה">✕</button>
     <h2>הוספת "${esc(song.title)}" לסשן הלל</h2>
-    <label class="field">מפגש<select id="sl-date">${upcoming.map((m) => `<option value="${m.iso}">${meetingKind(m.day)} · ${m.dateText.slice(0, 5)} · ${esc(m.place)}</option>`).join("")}</select></label>
+    <label class="field">מפגש<select id="sl-date">${upcoming.map((m) => `<option value="${m.iso}">${meetingKind(m)} · ${m.dateText.slice(0, 5)} · ${esc(m.place)}</option>`).join("")}</select></label>
     <label class="field">הערה (לא חובה)<input id="sl-new-note" placeholder="למשל: בסולם D, פזמון פעמיים"></label>
     <div class="sl-actions"><button class="btn" data-sl-add="${song.id}">הוספה</button></div>
   </div>`;
@@ -157,7 +157,8 @@ function meetingLines(iso) {
   for (const m of list) {
     const name = m.date.toLocaleDateString("he-IL", { month: "long" });
     if (name !== month) { if (month) out.push(""); out.push(`${name}:`); month = name; }
-    const extra = meetingKind(m.day) === "קבלת שבת" ? "קבלת שבת" : /בפטיסט/.test(m.place) ? "צ'אפל" : (m.notes || "");
+    const kind = meetingKind(m);
+    const extra = kind !== "אסיפה" && !kind.startsWith("יום ") ? kind : /בפטיסט/.test(m.place) ? "צ'אפל" : (m.notes || "");
     out.push(`\t${m.dateText.slice(0, 5)} ${m.place}${extra ? ` | ${extra}` : ""}`);
   }
   return out;

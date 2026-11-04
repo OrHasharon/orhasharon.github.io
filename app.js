@@ -179,18 +179,18 @@ function renderSchedule(meetings) {
 
   const schedulePanel = openPanel === "schedule" ? table(
     ["תאריך", "מפגש", "מקום", "שעות", ...(hasNotes ? ["הערות"] : [])],
-    upcoming.map((m) => `<tr${m === next ? ' class="next"' : ""}><td>יום ${esc(m.day)} ${short(m)}</td><td>${meetingKind(m.day)}</td><td>${place(m)}</td>
-      <td class="col-times">${meetingKind(m.day) === "אסיפה" ? "התאספות 10:40 · הלל 11:00" : ""}</td>${hasNotes ? `<td>${esc(m.notes)}</td>` : ""}</tr>`).join("")) : "";
+    upcoming.map((m) => `<tr${m === next ? ' class="next"' : ""}><td>יום ${esc(m.day)} ${short(m)}</td><td>${meetingKind(m)}</td><td>${place(m)}</td>
+      <td class="col-times">${meetingKind(m) === "אסיפה" ? "התאספות 10:40 · הלל 11:00" : ""}</td>${hasNotes ? `<td>${esc(m.notes)}</td>` : ""}</tr>`).join("")) : "";
   const dutyPanel = openPanel === "duty" ? table(
     ["תאריך", "מפגש", "תורנות"],
-    upcoming.map((m) => `<tr class="${m === next ? "next" : ""}${m.duty === "כולם" ? " all" : ""}"><td>${short(m)}</td><td>${meetingKind(m.day)}</td><td>${esc(m.duty || "טרם שובץ")}</td></tr>`).join("")) : "";
+    upcoming.map((m) => `<tr class="${m === next ? "next" : ""}${m.duty === "כולם" ? " all" : ""}"><td>${short(m)}</td><td>${meetingKind(m)}</td><td>${esc(m.duty || "טרם שובץ")}</td></tr>`).join("")) : "";
 
   el.hidden = false;
   el.innerHTML = `
     <div class="sched-row">
       <span class="sched-label">המפגש הבא</span>
-      <span class="sched-next"><strong>${meetingKind(next.day)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
-      ${meetingKind(next.day) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
+      <span class="sched-next"><strong>${meetingKind(next)}</strong> · ${short(next)} · ${place(next)}${next.notes ? ` · ${esc(next.notes)}` : ""}</span>
+      ${meetingKind(next) === "אסיפה" ? `<span class="sched-times">${SATURDAY_TIMES}</span>` : ""}
       ${toggle("schedule", "לוח מלא", openPanel === "schedule")}
     </div>
     ${schedulePanel}

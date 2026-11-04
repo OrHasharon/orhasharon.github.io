@@ -23,7 +23,10 @@ function parseCsv(text) {
   return rows;
 }
 
-function meetingKind(day) {
+// takes a meeting (its own "kind" from duty.json wins, e.g. "מסיבת חנוכה") or just the day name
+function meetingKind(m) {
+  if (m && m.kind) return m.kind;
+  const day = typeof m === "string" ? m : m.day;
   if (day.includes("שבת")) return "אסיפה";
   if (day.includes("שישי")) return "קבלת שבת";
   return `יום ${day}`;
@@ -32,7 +35,7 @@ function meetingKind(day) {
 // a meeting stays "next" until it's over: Saturday ends ~13:00, anything else at the end of its day
 function meetingEnd(m) {
   const end = new Date(m.date);
-  if (meetingKind(m.day) === "אסיפה") end.setHours(13, 0, 0, 0);
+  if (meetingKind(m) === "אסיפה") end.setHours(13, 0, 0, 0);
   else end.setHours(23, 59, 59, 999);
   return end;
 }
@@ -56,8 +59,8 @@ function mergeMeetings(sheet, roster) {
     const [y, mo, d] = r.date.split("-").map(Number);
     const date = new Date(y, mo - 1, d);
     const m = byDate.get(isoDate(date));
-    if (m) { if (r.duty) m.duty = r.duty; if (r.place) m.place = r.place; if (r.notes) m.notes = r.notes; }
-    else byDate.set(isoDate(date), { duty: r.duty, notes: r.notes || "", place: r.place, day: r.day, date });
+    if (m) { if (r.duty) m.duty = r.duty; if (r.place) m.place = r.place; if (r.notes !== undefined) m.notes = r.notes; if (r.kind) m.kind = r.kind; }
+    else byDate.set(isoDate(date), { duty: r.duty, notes: r.notes || "", place: r.place, day: r.day, kind: r.kind, date });
   }
   return [...byDate.values()].sort((a, b) => a.date - b.date).map((m) => ({
     ...m,
