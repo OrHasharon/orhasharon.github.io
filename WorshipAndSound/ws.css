@@ -99,8 +99,8 @@
 .summary tr.next td.when strong { color: var(--accent-ink); }
 .summary th { white-space: nowrap; }
 .cards-view { display: none; }
-@media (min-width: 901px) { #more { display: none !important; } }
-@media (max-width: 900px) {
+@media (min-width: 1001px) { #more { display: none !important; } }
+@media (max-width: 1000px) {
   .summary { display: none; }
   .cards-view { display: block; }
 }
@@ -369,3 +369,5 @@
 .signup-bar { display: flex; justify-content: flex-end; margin: -6px 0 8px; }
 .history-btn { background: none; border: 1px solid var(--line, rgba(255,255,255,.18)); color: var(--muted, inherit); border-radius: 999px; padding: 5px 14px; font: inherit; font-size: .88rem; cursor: pointer; }
 .history-btn:hover, .history-btn[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }
+/* a person's chip never breaks inside (name, instrument and buttons stay on one line) */
+.person { white-space: nowrap; }
