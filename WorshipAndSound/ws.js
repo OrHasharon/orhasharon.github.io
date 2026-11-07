@@ -23,7 +23,7 @@ const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PA
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const byId = (id) => state.members.find((m) => m.id === id) || state.former?.find((m) => m.id === id); // former = no longer active, still named in history
-const BASE_INSTRUMENTS = ["פסנתר", "שירה", "גיטרה", "קחון", "בס", "חליל", "כינור"];
+const BASE_INSTRUMENTS = ["פסנתר", "שירה", "גיטרה", "קחון", "בס", "כינור"];
 // table columns: the base list + any instrument someone in the team plays + columns added in this visit
 const extraInstruments = [];
 const allInstruments = () => {
@@ -33,7 +33,7 @@ const allInstruments = () => {
   return [...seen];
 };
 const FREQS = ["פעם בשבוע", "פעם בשבועיים", "פעם ב-3 שבועות", "פעם בחודש", "פעם ברבעון"];
-const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"], ["חליל", ""]]; // flute: no icon (the emoji looks like a firecracker)
+const ICONS = [["שירה", "🎤"], ["קלידים", "🎹"], ["פסנתר", "🎹"], ["קחון", "🪘"], ["תוף", "🥁"], ["כינור", "🎻"], ["בס", "🎸"], ["גיטרה", "🎸"]];
 ICONS.unshift(["סקסופון", "🎷"]);
 const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
 // guitars all show the guitar icon, so the text says which one: אקוסטית / בס / חשמלית
