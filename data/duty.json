@@ -1,5 +1,5 @@
 {
- "note": "Meetings + duty roster from Uriya's table (2026-11-02). Place, duty and notes here override the Google Sheet.",
+ "note": "Meetings + duty roster from Uriya's table (2026-11-11). Place, duty and notes here override the Google Sheet.",
  "meetings": [
   {
    "date": "2026-10-31",
@@ -23,13 +23,13 @@
    "date": "2026-11-21",
    "day": "שבת",
    "place": "כפר הבפטיסטים",
-   "duty": "גל וליה, חגית ואבירם"
+   "duty": "אור וטימור, חגית ואבירם"
   },
   {
    "date": "2026-11-28",
    "day": "שבת",
    "place": "כפר הבפטיסטים",
-   "duty": "אור וטימור, יואל ומוריה"
+   "duty": "גל וליה, יואל ומוריה"
   },
   {
    "date": "2026-12-04",
@@ -73,13 +73,19 @@
    "date": "2027-01-16",
    "day": "שבת",
    "place": "כפר הבפטיסטים",
-   "duty": "משפחת רוז, סשה ולילאן"
+   "duty": "משפחת רוז, סשה וליליאן"
   },
   {
    "date": "2027-01-23",
    "day": "שבת",
    "place": "כפר הבפטיסטים",
    "duty": "רוני הנדרן, אורי ושרון"
+  },
+  {
+   "date": "2027-01-30",
+   "day": "שבת",
+   "place": "כפר הבפטיסטים",
+   "duty": "אוריה ונעמי"
   }
  ]
 }
