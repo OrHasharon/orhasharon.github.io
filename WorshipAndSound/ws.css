@@ -555,17 +555,17 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .ic-mic-vocal { color: #e8618c; }      /* שירה */
 .ic-guitar    { color: #e8964a; }      /* גיטרה / בס / חשמלית */
 .ic-piano     { color: #4fa3e0; }      /* קלידים / פסנתר */
-.ic-drum      { color: #d8734f; }      /* תופים / קחון */
+.ic-drum      { color: #9b7be0; }      /* תופים / קחון */
 .ic-music-2   { color: #9b7be0; }      /* כינור / סקסופון */
 [data-theme="light"] .ic-mic-vocal { color: #c93d6c; }
 [data-theme="light"] .ic-guitar    { color: #c46a1c; }
 [data-theme="light"] .ic-piano     { color: #2378b8; }
-[data-theme="light"] .ic-drum      { color: #b44f2c; }
+[data-theme="light"] .ic-drum      { color: #7352c4; }
 [data-theme="light"] .ic-music-2   { color: #7352c4; }
 /* the instrument label next to a name — "(🎸 אקוסטית)" — brackets and all in the instrument's colour */
 .inst.inst-vocal  { color: #e8618c; } .inst.inst-guitar { color: #e8964a; } .inst.inst-keys { color: #4fa3e0; }
-.inst.inst-drum   { color: #d8734f; } .inst.inst-other  { color: #9b7be0; }
+.inst.inst-drum   { color: #9b7be0; } .inst.inst-other  { color: #9b7be0; }
 [data-theme="light"] .inst.inst-vocal  { color: #c93d6c; } [data-theme="light"] .inst.inst-guitar { color: #c46a1c; }
-[data-theme="light"] .inst.inst-keys   { color: #2378b8; } [data-theme="light"] .inst.inst-drum   { color: #b44f2c; }
+[data-theme="light"] .inst.inst-keys   { color: #2378b8; } [data-theme="light"] .inst.inst-drum   { color: #7352c4; }
 [data-theme="light"] .inst.inst-other  { color: #7352c4; }
 .person small.inst, .nc-inst.inst { font-weight: 500; }
