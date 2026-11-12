@@ -16,6 +16,18 @@ function setlistButton(iso) {
   return `<button class="setlist-btn${n ? " has" : ""}" data-open-setlist="${iso}">🎵 סשן הלל${n ? ` (${n})` : ""}</button>`;
 }
 
+// ---------- who may change a session: that meeting's worship leader, or an admin (the DB enforces the same, setlist_leader.sql) ----------
+function canEditSetlist(iso) {
+  if (typeof user === "undefined" || !user) return true; // open mode without sign-in
+  if (isAdmin) return true;
+  return myMemberId != null && state.signups.some((s) => s.meeting_date === iso && s.role === "leader" && s.member_id === myMemberId);
+}
+function leaderOnly(iso) {
+  const ld = state.signups.find((s) => s.meeting_date === iso && s.role === "leader");
+  const name = ld ? byId(ld.member_id)?.name : "";
+  toast(name ? `רק מוביל/ת ההלל של המפגש (${name}) יכול/ה לשנות את הסשן` : "רק מוביל/ת ההלל של המפגש יכול/ה לשנות את הסשן, ועדיין לא שובץ/ה מוביל/ה");
+}
+
 // ---------- dialog ----------
 function dialogEl() {
   let d = document.getElementById("setlist-dialog");
@@ -276,27 +288,32 @@ document.addEventListener("click", async (e) => {
   if (add) {
     const iso = document.getElementById("sl-date").value;
     const notes = document.getElementById("sl-new-note").value.trim() || null;
+    if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
     await loadSetlist();
     const pos = Math.max(0, ...itemsFor(iso).map((i) => i.position)) + 1;
     const { error } = await sb.from("setlist_items").insert({ meeting_date: iso, song_id: Number(add.dataset.slAdd), position: pos, notes });
-    if (error) { toast("ההוספה נכשלה"); return; }
+    if (error) { error.code === "42501" ? leaderOnly(iso) : toast("ההוספה נכשלה"); return; }
     await loadSetlist(); dialogEl().close(); toast("השיר נוסף לסשן"); return;
   }
   const mv = t.closest("[data-sl-move]");
   if (mv) {
+    if (!canEditSetlist(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
     const items = itemsFor(setlist.openDate);
     const k = items.findIndex((i) => i.id === Number(mv.dataset.slMove));
     const j = k + Number(mv.dataset.dir);
     if (j < 0 || j >= items.length) return;
     const order = items.map((i) => i.id);
     [order[k], order[j]] = [order[j], order[k]];
-    await Promise.all(order.map((id, n) => sb.from("setlist_items").update({ position: n + 1 }).eq("id", id)));
+    const res = await Promise.all(order.map((id, n) => sb.from("setlist_items").update({ position: n + 1 }).eq("id", id).select("id")));
+    if (res.some((r) => r.error || !r.data?.length)) leaderOnly(setlist.openDate);
     await loadSetlist(); renderSetlistDialog(); return;
   }
   const rm = t.closest("[data-sl-remove]");
   if (rm) {
-    const { error } = await sb.from("setlist_items").delete().eq("id", Number(rm.dataset.slRemove));
+    if (!canEditSetlist(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
+    const { data, error } = await sb.from("setlist_items").delete().eq("id", Number(rm.dataset.slRemove)).select("id");
     if (error) { toast("ההסרה נכשלה"); return; }
+    if (!data?.length) { leaderOnly(setlist.openDate); return; } // blocked by the DB (nothing deleted)
     await loadSetlist(); renderSetlistDialog(); return;
   }
   const song = t.closest("[data-open-song]");
@@ -350,9 +367,12 @@ document.addEventListener("click", (e) => { if (e.target.closest("[data-sl-pdf]"
 document.addEventListener("change", async (e) => {
   const n = e.target.closest("[data-sl-note]");
   if (!n) return;
-  const { error } = await sb.from("setlist_items").update({ notes: n.value.trim() || null }).eq("id", Number(n.dataset.slNote));
+  const it = setlist.items.find((i) => i.id === Number(n.dataset.slNote));
+  if (!canEditSetlist(setlist.openDate)) { n.value = it?.notes || ""; leaderOnly(setlist.openDate); return; }
+  const { data, error } = await sb.from("setlist_items").update({ notes: n.value.trim() || null }).eq("id", Number(n.dataset.slNote)).select("id");
+  if (!error && !data?.length) { n.value = it?.notes || ""; leaderOnly(setlist.openDate); return; }
   toast(error ? "שמירת ההערה נכשלה" : "ההערה נשמרה");
-  const it = setlist.items.find((i) => i.id === Number(n.dataset.slNote)); if (it && !error) it.notes = n.value.trim() || null;
+  if (it && !error) it.notes = n.value.trim() || null;
 });
 
 // ---------- live worship mode: the whole session full screen, for the musicians ----------

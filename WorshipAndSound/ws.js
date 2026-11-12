@@ -385,6 +385,7 @@ async function deactivate(id) {
 // ---------- users (admins only) ----------
 let allowed = [];
 let isAdmin = false;
+let myMemberId = null; // the team member linked to the signed-in user (Users tab)
 
 async function loadUsers() {
   const { data, error } = await sb.from("allowed_users").select("*").order("added_at");
@@ -580,7 +581,7 @@ async function start() {
   const { data: { session } } = await sb.auth.getSession();
   user = session?.user || null;
   if (!user) { showLogin(); loginProblem(authErr); return; }
-  const { data: me, error: meErr } = await sb.from("allowed_users").select("email,is_admin").ilike("email", user.email).maybeSingle();
+  const { data: me, error: meErr } = await sb.from("allowed_users").select("*").ilike("email", user.email).maybeSingle();
   if (meErr?.code === "PGRST205" || meErr?.code === "42P01") {
     showLogin();
     $("email-login").hidden = true; $("google").hidden = true; $("pw-login").hidden = true; $("magic-toggle").hidden = true;
@@ -596,7 +597,7 @@ async function start() {
     $("noaccess").innerHTML = `מחובר/ת בתור <b dir="ltr">${esc(user.email)}</b>, אבל הכתובת עדיין לא ברשימת המורשים. בקשו מאוריה להוסיף אותה.<br><button class="link-btn" id="logout">התחברות עם חשבון אחר</button>`;
     return;
   }
-  isAdmin = me.is_admin;
+  isAdmin = me.is_admin; myMemberId = me.member_id ?? null;
   document.querySelector('[data-tab="users"]').hidden = !isAdmin;
   if (isAdmin) await loadUsers();
   $("login").hidden = true;
