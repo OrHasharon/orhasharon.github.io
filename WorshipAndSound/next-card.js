@@ -3,6 +3,10 @@
 // renderHero() is called from render() (ws.js). Uses state/esc/byId/takenIn/icon/instLabel/meetingKind/SLOTS from ws.js,
 // setlist/itemsFor/openSetlist/buildPptx/printSongs/live/renderLive from setlist.js, syncStart/LIVE_SYNC_ON from live-sync.js.
 
+// on a phone the card shows only the top (buttons + leader / sound / set-up); "more" opens the band and the songs
+let heroOpen = false;
+try { heroOpen = localStorage.getItem("ws-hero-open") === "1"; } catch {}
+
 function renderHero() {
   const el = document.getElementById("hero");
   if (!el) return;
@@ -58,17 +62,30 @@ function nextMeetingCard(mt) {
         : has ? `<ol class="nc-songs">${songs.map((i) => `<li>${esc(i.songs.title)}${i.songs.song_key ? ` <small dir="ltr">${esc(i.songs.song_key)}</small>` : ""}</li>`).join("")}</ol>`
         : `<p class="nc-muted">עדיין לא נבחרו שירים.</p>`}
     </div>`;
-  const actions = `
+  // empty set: one clear way forward instead of three greyed-out buttons
+  const mine = typeof user !== "undefined" && user && canEditSetlist(iso);
+  const actions = songs === null ? "" : !has ? `
     <div class="nc-actions">
-      <button class="btn nc-live" data-nc="live" data-date="${iso}" ${has ? "" : "disabled"}>▶ לייב</button>
+      ${mine
+        ? `<button class="btn nc-wide" data-nc="lead" data-date="${iso}">➕ בחירת שירים לסט</button>`
+        : `<button class="btn ghost nc-wide" data-nc="session" data-date="${iso}">🎵 סשן הלל</button>`}
+      <p class="nc-muted nc-wide nc-hint">${mine ? "את/ה מוביל/ה את האסיפה הזו. " : "מוביל/ת ההלל עוד לא בחר/ה שירים. "}כשיהיו שירים יופיעו כאן לייב, מצגת ו-PDF.</p>
+    </div>` : `
+    <div class="nc-actions">
+      <button class="btn nc-live" data-nc="live" data-date="${iso}">▶ לייב</button>
       <button class="btn ghost" data-nc="session" data-date="${iso}">🎵 סשן הלל</button>
-      <button class="btn ghost" data-nc="pptx" data-date="${iso}" ${has ? "" : "disabled"}>📽️ מצגת</button>
-      <button class="btn ghost" data-nc="pdf" data-date="${iso}" ${has ? "" : "disabled"}>📄 PDF</button>
-      ${typeof LIVE_SYNC_ON !== "undefined" && LIVE_SYNC_ON && (isAdmin || canEditSetlist(iso)) && has
+      <button class="btn ghost" data-nc="pptx" data-date="${iso}">📽️ מצגת</button>
+      <button class="btn ghost" data-nc="pdf" data-date="${iso}">📄 PDF</button>
+      ${typeof LIVE_SYNC_ON !== "undefined" && LIVE_SYNC_ON && (isAdmin || mine)
         ? `<button class="btn ghost nc-wide" data-nc="team" data-date="${iso}">📣 לינק לסט החי לצוות</button>` : ""}
     </div>`;
 
-  return `<section class="next-card" aria-label="האסיפה הקרובה">
+  const nBand = band.length, nSongs = has ? songs.length : 0;
+  const more = `<button class="nc-more" data-nc="more" aria-expanded="${heroOpen}" aria-controls="nc-details">
+      <span>${heroOpen ? "הסתרת הפירוט" : `נגינה ושירה${nBand ? ` (${nBand})` : ""} · שירים${nSongs ? ` (${nSongs})` : ""}`}</span>
+      <span class="nc-chev" aria-hidden="true">▾</span></button>`;
+
+  return `<section class="next-card${heroOpen ? " open" : ""}" aria-label="האסיפה הקרובה">
     <header class="nc-head">
       <span class="tag">האסיפה הקרובה</span>
       <h2>${esc(meetingKind(mt))} · יום ${esc(mt.day || "")} ${mt.dateText.slice(0, 5)}</h2>
@@ -76,7 +93,8 @@ function nextMeetingCard(mt) {
     </header>
     <div class="nc-cols">
       <div class="nc-col nc-c1">${col1}</div>
-      <div class="nc-col nc-c2">${col2}</div>
+      <div class="nc-more-wrap">${more}</div>
+      <div class="nc-col nc-c2" id="nc-details">${col2}</div>
       <div class="nc-col nc-c3">${col3}</div>
       <div class="nc-col nc-act">${actions}</div>
     </div>
@@ -88,7 +106,13 @@ document.addEventListener("click", async (e) => {
   if (!b) return;
   const iso = b.dataset.date, act = b.dataset.nc;
   setlist.openDate = iso;
+  if (act === "more") {
+    heroOpen = !heroOpen;
+    try { localStorage.setItem("ws-hero-open", heroOpen ? "1" : "0"); } catch {}
+    renderHero(); return;
+  }
   if (act === "session") { openSetlist(iso); return; }
+  if (act === "lead") { if (typeof showLeadScreen === "function") showLeadScreen(iso); else openSetlist(iso); return; }
   if (act === "team") { showTeamLinkDialog(iso); return; }
   if (act === "pdf") { printSongs(iso); return; }
   if (act === "pptx") {

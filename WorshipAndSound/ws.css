@@ -531,3 +531,17 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .person [data-notify] { color: #25d366; font-size: 1rem; }
 .person [data-notify]:hover { color: #1ebe5a; }
 .btn.wa { display: inline-flex; align-items: center; gap: 6px; }
+.nc-hint { font-size: .88rem; line-height: 1.5; }
+/* hero on a phone: closed down to leader / sound / set-up, "▾" opens the band + songs */
+.nc-more-wrap { display: none; grid-area: more; }
+.nc-more { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px;
+  padding: 11px 14px; min-height: 46px; font: inherit; font-size: .95rem; color: var(--ink); cursor: pointer;
+  background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 12px; }
+.nc-chev { transition: transform .2s ease; color: var(--accent-ink); }
+.next-card.open .nc-chev { transform: rotate(180deg); }
+@media (max-width: 860px) {
+  .nc-cols { grid-template-areas: "act" "c1" "more" "c2" "c3"; }
+  .nc-more-wrap { display: block; }
+  .next-card:not(.open) .nc-c2, .next-card:not(.open) .nc-c3 { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .nc-chev { transition: none; } }
