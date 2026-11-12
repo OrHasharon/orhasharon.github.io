@@ -599,6 +599,7 @@ async function start() {
     return;
   }
   isAdmin = me.is_admin; myMemberId = me.member_id ?? null;
+  try { localStorage.setItem("oh-access", "1"); } catch {} // signed in here = no entry code on the community site (gate.js)
   document.querySelector('[data-tab="users"]').hidden = !isAdmin;
   if (isAdmin) await loadUsers();
   $("login").hidden = true;
