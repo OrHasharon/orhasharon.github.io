@@ -14,6 +14,15 @@ const LIVE_SYNC_ON = (() => {
   } catch { return false; }
 })();
 
+// ?lead=YYYY-MM-DD: the worship leader's own link (lead.js). Kept in sessionStorage through the Google sign-in round trip.
+const LEAD_DATE = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get("lead");
+    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) sessionStorage.setItem("ws-lead", q);
+    return sessionStorage.getItem("ws-lead") || null;
+  } catch { return null; }
+})();
+
 const sync = {
   ch: null, date: null, online: false,
   seq: 0, lastSeq: -1,          // my broadcasts / the last one I applied
@@ -224,7 +233,8 @@ async function showTeamLinkDialog(date) {
     const m = byId(s.member_id); if (!m) return "";
     const c = contactOf(s.member_id) || {};
     const role = SLOTS.find((x) => x.role === s.role)?.label || "";
-    const text = teamText(date, url, m.name.split(" ")[0]);
+    const first = m.name.split(" ")[0];
+    const text = s.role === "leader" && typeof leadText === "function" ? leadText(date, first) : teamText(date, url, first);
     const wa = `https://wa.me/${c.phone ? waNumber(c.phone) : ""}?text=${encodeURIComponent(text)}`;
     return `<li class="team-row"><span><b>${esc(m.name)}</b> <small>${esc(role)}${s.instrument ? " · " + esc(s.instrument) : ""}</small></span>
       ${isMe(s.member_id) ? `<small>(את/ה)</small>` : `<a class="btn wa" href="${wa}" target="_blank" rel="noopener" data-team-sent>💬 ${c.phone ? "שליחה" : "בחירת נמען/ת"}</a>`}</li>`;

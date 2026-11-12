@@ -6,6 +6,7 @@ async function loadSetlist() {
   const { data, error } = await sb.from("setlist_items").select("*, songs(*)").order("position");
   if (error) { setlist.missing = error.code === "PGRST205" || error.code === "42P01" || error.code === "PGRST200"; setlist.ready = true; return; }
   setlist.items = data; setlist.ready = true; setlist.missing = false;
+  if (typeof leadAfterLoad === "function") leadAfterLoad(); // the leader's own link (lead.js)
 }
 const itemsFor = (iso) => setlist.items.filter((i) => i.meeting_date === iso).sort((a, b) => a.position - b.position || a.id - b.id);
 
