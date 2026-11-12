@@ -48,7 +48,7 @@ function nextMeetingCard(mt) {
     <div class="nc-block">
       <div class="nc-label">נגינה ושירה</div>
       ${band.length ? `<ul class="nc-band">${band.map((s) => `<li>
-          <span class="nc-inst">${s.instrument ? `${icon(s.instrument)} ${esc(instLabel(s.instrument))}` : "🎵"}</span>
+          <span class="nc-inst${s.instrument ? " inst inst-" + instKind(s.instrument) : ""}">${s.instrument ? `${icon(s.instrument)} ${esc(instLabel(s.instrument))}` : "🎵"}</span>
           ${who(s)}</li>`).join("")}</ul>` : missing}
     </div>`;
 

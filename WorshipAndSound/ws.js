@@ -42,7 +42,10 @@ ICONS.unshift(["סקסופון", "🎷"]);
 const icon = (inst) => (ICONS.find(([k]) => inst.includes(k)) || [, "🎵"])[1];
 // guitars all show the guitar icon, so the text says which one: אקוסטית / בס / חשמלית
 const instLabel = (inst) => /חשמל/.test(inst) ? "חשמלית" : /בס/.test(inst) ? "בס" : inst.trim() === "גיטרה" || /אקוסט/.test(inst) ? "אקוסטית" : inst;
-const instHtml = (inst) => inst ? ` <small>(${[icon(inst), esc(instLabel(inst))].filter(Boolean).join(" ")})</small>` : "";
+// which colour family an instrument belongs to (ws.css .inst-*): the label, brackets and icon share it
+const instKind = (inst) => /שירה/.test(inst) ? "vocal" : /קליד|פסנתר/.test(inst) ? "keys"
+  : /תוף|תופ|קחון/.test(inst) ? "drum" : /גיטר|בס/.test(inst) ? "guitar" : "other";
+const instHtml = (inst) => inst ? ` <small class="inst inst-${instKind(inst)}">(${[icon(inst), esc(instLabel(inst))].filter(Boolean).join(" ")})</small>` : "";
 const instrumentsOf = (m) => (m.instruments || "").split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
 function toast(text, { error = false } = {}) {
