@@ -6,8 +6,7 @@ deck/*.jpg|webp, and the master background. Run again whenever template.pptx cha
 
     python scripts/pptx_to_deck.py
 
-Slides are mapped by position, the same map as setlist.js (TPL): welcome, blank, song, communion, blessing,
-testimonies, groups, meetings. The song slide keeps only the geometry and style of its title and lyrics boxes —
+Slides are mapped by position, the same names as setlist.js (TPL) and scripts/build_template.py (KEEP). The song slide keeps only the geometry and style of its title and lyrics boxes —
 never the sample words; songs always come from the set. Groups / meetings keep their paragraphs as style samples,
 and the screen fills them with fresh lines (deck.js), like the PowerPoint export does.
 Needs Pillow.
@@ -18,7 +17,9 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "WorshipAndSound", "template.pptx")
 OUT = os.path.join(ROOT, "WorshipAndSound", "deck")
-ORDER = ["welcome", "blank", "song", "communion", "blessing", "testimonies", "groups", "meetings"]
+# the slide names, in template.pptx order (made by scripts/build_template.py — the same list as its KEEP)
+ORDER = ["welcome", "verse", "blank", "song", "communion", "communion_verse", "blessing", "sermon_title",
+         "testimonies", "groups", "meetings", "tithes", "closing"]
 
 z = zipfile.ZipFile(SRC)
 read = lambda p: z.read(p).decode("utf-8")
@@ -170,6 +171,17 @@ if bgm:
     fr = re.search(r'<a:fillRect([^>]*)/>', re.search(r"<p:bg>.*?</p:bg>", master, re.S).group(0))
     ext = {k: int(v) / 1e5 for k, v in re.findall(r'(\w)="(-?\d+)"', fr.group(1))} if fr else {}
     bg = {"src": save_media("ppt/" + target(bgm.group(1), mrels).replace("../", "")), "fill": ext}
+
+# …or a gradient (<a:gradFill>: stops + a linear angle, 0° = left→right, clockwise)
+if not bg:
+    gb = re.search(r"<p:bg>.*?<a:gradFill.*?</a:gradFill>.*?</p:bg>", master, re.S)
+    if gb:
+        stops = []
+        for pos, body in re.findall(r'<a:gs pos="(\d+)">(.*?)</a:gs>', gb.group(0), re.S):
+            c = color(body) or {"c": "#000000", "a": 1}
+            stops.append([int(pos) / 1e5, c["c"]])
+        ang = re.search(r'<a:lin ang="(\d+)"', gb.group(0))
+        bg = {"grad": {"ang": int(ang.group(1)) / 60000 if ang else 90, "stops": sorted(stops)}}
 
 deck = {"size": [W, H], "bg": bg, "fonts": FONTS, "slides": {}}
 for key, path in zip(ORDER, slide_paths):

@@ -3,21 +3,38 @@
 // Uses meetingKind (schedule.js) and songMeta (chords.js); meetingLines takes the meetings (state.meetings on the site,
 // loadMeetings() on the screen).
 
-// the order: welcome, blank, every song with a blank after it, the communion slide, the last song, then the tail.
-// A {screen: quiet} item in the set (סעודת האדון, added from the session dialog) puts the communion slide exactly
-// there; without one, communion comes before the last song, as the template always did.
+// The service order (from the 31.10.2026 presentation): welcome, opening verse, the songs (each followed by a blank),
+// the Lord's Supper + its verse, the song(s) after it, the children's blessing, the sermon, testimonies, home groups,
+// next meetings, tithes and offerings, closing. The set decides which songs go before / after the Supper: a
+// {screen: quiet} item (סעודת האדון, added from the session dialog) marks the spot; without one, the last song comes
+// after it. {sermon: true} is where the preacher's PDF goes on the projection screen (screen.js); the PowerPoint
+// download has only the "דרשה" slide there.
 function deckPlan(items, contentOf) {
   const quiet = (it) => (songMeta(contentOf(it) || "").screen || "").toLowerCase() === "quiet";
-  const hasQuiet = items.some(quiet);
-  const plan = [{ tpl: "welcome" }, { tpl: "blank" }];
-  items.forEach((it, i) => {
-    if (quiet(it)) { plan.push({ tpl: "communion", item: it }); return; }
-    if (!hasQuiet && i === items.length - 1) plan.push({ tpl: "communion" });
-    plan.push({ song: it });
-    if (i < items.length - 1) plan.push({ tpl: "blank" });
-  });
-  plan.push({ tpl: "blessing" }, { tpl: "testimonies" }, { tpl: "groups" }, { tpl: "meetings" });
+  const q = items.findIndex(quiet);
+  const before = q >= 0 ? items.slice(0, q) : items.slice(0, Math.max(0, items.length - 1));
+  const after = q >= 0 ? items.slice(q + 1) : items.slice(-1);
+  const plan = [{ tpl: "welcome" }, { tpl: "verse" }, { tpl: "blank" }];
+  const songs = (list) => list.forEach((it) => plan.push({ song: it }, { tpl: "blank" }));
+  songs(before);
+  plan.push({ tpl: "communion", item: q >= 0 ? items[q] : undefined }, { tpl: "blank" }, { tpl: "communion_verse" }, { tpl: "blank" });
+  songs(after);
+  plan.push({ tpl: "blessing" }, { tpl: "blank" }, { tpl: "sermon_title" }, { sermon: true }, { tpl: "blank" },
+    { tpl: "testimonies" }, { tpl: "groups" }, { tpl: "meetings" }, { tpl: "tithes" }, { tpl: "closing" });
   return plan;
+}
+
+// home groups, one line each like the template: "ראש העין: ימי שני ב 20:30. לפרטים: …", a blank line between
+async function serviceGroupLines() {
+  const raw = await homeGroupLines();
+  const out = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (!raw[i]) continue;
+    if (out.length) out.push("");
+    out.push(raw[i + 1] ? `${raw[i]}: ${raw[i + 1]}` : raw[i]);
+    i++;
+  }
+  return out;
 }
 
 // home groups straight from the community site's front page
@@ -46,10 +63,12 @@ function meetingLines(iso, meetings = typeof state !== "undefined" ? state.meeti
   let month = null;
   for (const m of list) {
     const name = m.date.toLocaleDateString("he-IL", { month: "long" });
-    if (name !== month) { if (month) out.push(""); out.push(`${name}:`); month = name; }
-    const kind = meetingKind(m);
-    const extra = kind !== "אסיפה" && !kind.startsWith("יום ") ? kind : /בפטיסט/.test(m.place) ? "צ'אפל" : (m.notes || "");
-    out.push(`\t${m.dateText.slice(0, 5)} ${m.place}${extra ? ` | ${extra}` : ""}`);
+    // like the template: a month name, then "14.11 כפר הבפטיסטים, צ׳אפל" / "06.11 קבלת שבת, משמר השרון"
+    if (name !== month) { out.push(name); month = name; }
+    const kind = meetingKind(m), dm = m.dateText.slice(0, 5).replace("/", ".");
+    const regular = kind === "אסיפה" || kind.startsWith("יום ");
+    const room = /בפטיסט/.test(m.place) ? "צ׳אפל" : (m.notes || "");
+    out.push(regular ? `${dm} ${m.place}${room ? ", " + room : ""}` : `${dm} ${kind}, ${m.place}`);
   }
   return out;
 }

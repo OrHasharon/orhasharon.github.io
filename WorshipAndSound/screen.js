@@ -19,6 +19,7 @@ const S = {
   mode: "lyrics", // lyrics | blank | logo | nobg
   bg: "tpl", size: 1, wake: null, opsTimer: null, ended: false,
   deck: null, deckSlides: [], pos: 0, meetings: [], groupLines: null, meetLines: [],
+  sermon: [], // the preacher's PDF, one picture per page (kept on this computer, IndexedDB)
 };
 try { S.bg = localStorage.getItem("ws-screen-bg") || "tpl"; S.size = Number(localStorage.getItem("ws-screen-size")) || 1; } catch {}
 
@@ -60,6 +61,7 @@ function buildDeck() {
   const keep = S.deckSlides[S.pos];
   S.deckSlides = [];
   for (const e of deckPlan(S.songs, (x) => x.content)) {
+    if (e.sermon) { S.sermon.forEach((src, page) => S.deckSlides.push({ key: "pdf", src, page })); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = lyricStanzas(e.song.content || "").flatMap((st) => chunks(st.lines, 4));
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
@@ -84,9 +86,9 @@ function tplParas(el, entry) {
   if ((el.role === "groups" && S.groupLines?.length) || (el.role === "meetings" && S.meetLines.length)) {
     const lines = el.role === "groups" ? S.groupLines : S.meetLines;
     const first = (p) => (p.runs.find((r) => r.t) || {}).t || "";
-    const pick = (t) => el.paras.find((p) => first(p) && (el.role === "groups"
-      ? (t && !/[:.]/.test(t) ? !/ימי/.test(first(p)) : /ימי/.test(first(p)))
-      : (t.startsWith("\t") ? first(p).startsWith("\t") : /:$/.test(first(p))))) || el.paras[0];
+    const pick = (t) => (el.role === "groups"
+      ? (t ? el.paras.find((p) => first(p)) : el.paras.find((p) => !first(p)))
+      : el.paras.find((p) => first(p) && /^\d/.test(first(p)) === /^\d/.test(t))) || el.paras[0];
     return lines.map((t) => { const p = pick(t); return { ...p, runs: t ? [{ ...p.style, t }] : [] }; });
   }
   return el.paras;
@@ -95,9 +97,14 @@ function tplParas(el, entry) {
 function tplHtml(entry) {
   const d = S.deck, slide = d.slides[entry.key];
   const W = Math.min(innerWidth, innerHeight * 16 / 9), H = W * 9 / 16, u = H / 540; // px per pt (a slide is 540pt high)
+  if (entry.key === "pdf") return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="${entry.src}"></div>`;
+  if (!slide) return `<div class="tpl" style="width:${W}px;height:${H}px"></div>`;
   const px = (b) => `left:${b[0] * W}px;top:${b[1] * H}px;width:${b[2] * W}px;height:${b[3] * H}px`;
   let html = "";
-  if (d.bg) {
+  if (d.bg?.grad) { // DrawingML 0° = left→right; CSS 90deg = left→right
+    const g = d.bg.grad;
+    html += `<div class="tpl-bg" style="inset:0;width:100%;height:100%;background:linear-gradient(${g.ang + 90}deg,${g.stops.map(([p, c]) => `${c} ${p * 100}%`).join(",")})"></div>`;
+  } else if (d.bg) {
     const f = d.bg.fill || {}, l = f.l || 0, t = f.t || 0, r = f.r || 0, b = f.b || 0;
     html += `<img class="tpl-bg" alt="" src="${d.bg.src}" style="left:${l * W}px;top:${t * H}px;width:${(1 - l - r) * W}px;height:${(1 - t - b) * H}px">`;
   }
@@ -130,7 +137,7 @@ function tplHtml(entry) {
 // the changing text of the last two slides, like the PowerPoint export
 async function loadTail() {
   try { S.meetLines = meetingLines(S.date, S.meetings); } catch { S.meetLines = []; }
-  try { S.groupLines = await homeGroupLines(); } catch { S.groupLines = null; }
+  try { S.groupLines = await serviceGroupLines(); } catch { S.groupLines = null; }
 }
 
 // ---------- drawing ----------
@@ -238,6 +245,77 @@ document.addEventListener("keydown", (e) => {
 // no clicker: tap the left half for next, the right half for previous (Hebrew reads right to left)
 $("stage").addEventListener("click", (e) => { if (e.clientX < innerWidth / 2) next(); else prev(); });
 
+// ---------- the sermon: the preacher's PDF, shown right after the "דרשה" slide ----------
+// Saved as PDF from PowerPoint ("שמירה בשם → PDF"). Each page becomes a picture once; the file is kept in this
+// computer's IndexedDB for this meeting, so a refresh doesn't lose it. Nothing is uploaded anywhere.
+const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve();
+  return new Promise((ok, bad) => {
+    const sc = document.createElement("script"); sc.src = PDFJS + "pdf.min.js";
+    sc.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.js"; ok(); };
+    sc.onerror = bad; document.head.append(sc);
+  });
+}
+function idb() {
+  return new Promise((ok, bad) => { const r = indexedDB.open("ws-screen", 1); r.onupgradeneeded = () => r.result.createObjectStore("files"); r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error); });
+}
+async function idbDo(mode, fn) { const db = await idb(); return new Promise((ok, bad) => { const tx = db.transaction("files", mode); const req = fn(tx.objectStore("files")); tx.oncomplete = () => ok(req?.result); tx.onerror = () => bad(tx.error); }); }
+const sermonKey = () => "sermon-" + (S.date || "x");
+
+async function pdfToPages(buf) {
+  await loadPdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise, pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i), v1 = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: Math.min(3, 1920 / v1.width) });
+    const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+    await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+    pages.push(c.toDataURL("image/jpeg", 0.9));
+  }
+  return pages;
+}
+async function setSermon(file) {
+  if (!file || !/pdf$/i.test(file.type || file.name)) { flash("צריך קובץ PDF (ב-PowerPoint: שמירה בשם ← PDF)"); return; }
+  flash("טוען את הדרשה…");
+  try {
+    const buf = await file.arrayBuffer();
+    S.sermon = await pdfToPages(buf.slice(0));
+    try { await idbDo("readwrite", (st) => st.put({ name: file.name, buf }, sermonKey())); } catch {}
+    const before = S.deckSlides[S.pos];
+    buildDeck();
+    flash(`הדרשה נטענה · ${S.sermon.length} שקופיות`);
+    if (!before) S.pos = 0;
+    show();
+  } catch (err) { console.error(err); flash("לא הצלחתי לקרוא את הקובץ"); }
+}
+async function restoreSermon() {
+  try {
+    const rec = await idbDo("readonly", (st) => st.get(sermonKey()));
+    if (rec?.buf) { S.sermon = await pdfToPages(rec.buf); S.sermonName = rec.name; buildDeck(); show(); }
+  } catch {}
+}
+async function clearSermon() {
+  S.sermon = []; S.sermonName = "";
+  try { await idbDo("readwrite", (st) => st.delete(sermonKey())); } catch {}
+  buildDeck(); show();
+}
+function pickSermon() {
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,.pdf";
+  inp.onchange = () => setSermon(inp.files[0]); inp.click();
+}
+// drag a PDF onto the screen
+addEventListener("dragover", (e) => e.preventDefault());
+addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) setSermon(f); });
+
+// a short message at the top for the operator
+function flash(text) {
+  let f = document.getElementById("flash");
+  if (!f) { f = document.createElement("div"); f.id = "flash"; f.className = "flash"; document.body.append(f); }
+  f.textContent = text; f.classList.add("on");
+  clearTimeout(flash.t); flash.t = setTimeout(() => f.classList.remove("on"), 3500);
+}
+
 // ---------- operator bar (appears on mouse / touch, hides after 3 seconds) ----------
 function renderOps() {
   const ops = $("ops");
@@ -256,6 +334,9 @@ function renderOps() {
       <button data-op="nobg" class="${S.mode === "nobg" ? "on" : ""}" title="H">בלי רקע</button>
     </span>
     <span class="grp"><button data-op="smaller" title="−">א−</button><button data-op="bigger" title="+">א+</button></span>
+    <span class="sep"></span>
+    <button data-op="sermon" title="PDF">📄 ${S.sermon.length ? `דרשה (${S.sermon.length})` : "טעינת דרשה (PDF)"}</button>
+    ${S.sermon.length ? `<button data-op="nosermon" title="הסרת הדרשה">✕</button>` : ""}
     <button data-op="fs" title="F">⛶ מסך מלא</button>`;
 }
 document.getElementById("ops").addEventListener("click", (e) => {
@@ -268,6 +349,8 @@ document.getElementById("ops").addEventListener("click", (e) => {
   else if (op === "blank" || op === "logo" || op === "nobg") setMode(op);
   else if (op === "smaller") setSize(-0.08); else if (op === "bigger") setSize(0.08);
   else if (op === "fs") fullscreen();
+  else if (op === "sermon") pickSermon();
+  else if (op === "nosermon") { if (confirm("להסיר את הדרשה מהמסך?")) clearSermon(); }
 });
 document.getElementById("ops").addEventListener("change", (e) => {
   if (e.target.dataset.op !== "jump") return;
@@ -337,6 +420,6 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
 (async () => {
   try { S.deck = await fetch("deck/template.json", { cache: "no-cache" }).then((r) => r.json()); } catch { S.deck = null; }
   buildDeck(); show();
-  if (await pickMeeting()) { join(); preload(); loadTail().then(() => tplMode() && show()); }
+  if (await pickMeeting()) { join(); preload(); restoreSermon(); loadTail().then(() => tplMode() && show()); }
   wakeOn(); show(); wakeOps();
 })();

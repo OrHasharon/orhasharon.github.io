@@ -110,7 +110,9 @@ async function imageData(url, width) {
 // Its slides, in order: 0 welcome, 1 blank, 2 song (prototype), 3 "זאת עשו לזכרי", 4 children's blessing,
 // 5 testimonies & prayer, 6 home groups, 7 upcoming meetings. Fixed slides are kept as they are; songs are
 // cloned from the prototype (Arial 26 title, David 54 lyrics); groups and meetings are refilled from the site.
-const TPL = { welcome: 0, blank: 1, song: 2, communion: 3, blessing: 4, testimonies: 5, groups: 6, meetings: 7 };
+// template.pptx slides, in order (scripts/build_template.py KEEP)
+const TPL = { welcome: 0, verse: 1, blank: 2, song: 3, communion: 4, communion_verse: 5, blessing: 6, sermon_title: 7,
+  testimonies: 8, groups: 9, meetings: 10, tithes: 11, closing: 12 };
 const xmlEsc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // replace all paragraphs of a text body with new ones, styled like given sample paragraphs
@@ -175,23 +177,24 @@ async function buildPptx(iso) {
   };
 
   // home groups + meetings: same slide, fresh text
-  const groups = await homeGroupLines().catch(() => null);
+  const groups = await serviceGroupLines().catch(() => null);
   const gx = await read(tplSlides[TPL.groups]);
   if (groups?.length) {
     const sp = shapes(gx).filter((s) => /<a:t>/.test(s))[1];
-    zip.file(tplSlides[TPL.groups], gx.replace(sp, setParagraphs(sp, groups, (ps, t) => ps.find((p) => /<a:t>/.test(p) && (t && !/[:.]/.test(t) ? !/ימי/.test(firstText(p)) : /ימי/.test(firstText(p)))) || ps[0])));
+    zip.file(tplSlides[TPL.groups], gx.replace(sp, setParagraphs(sp, groups, (ps, t) => (t ? ps.find((p) => /<a:t>/.test(p)) : ps.find((p) => !/<a:t>/.test(p))) || ps[0])));
   }
   const meetings = meetingLines(iso);
   const mx = await read(tplSlides[TPL.meetings]);
   if (meetings.length) {
     const sp = shapes(mx).filter((s) => /<a:t>/.test(s))[1];
-    zip.file(tplSlides[TPL.meetings], mx.replace(sp, setParagraphs(sp, meetings, (ps, t) => ps.find((p) => /<a:t>/.test(p) && (t.startsWith("\t") ? firstText(p).startsWith("\t") : /:$/.test(firstText(p)))) || ps[0])));
+    zip.file(tplSlides[TPL.meetings], mx.replace(sp, setParagraphs(sp, meetings, (ps, t) => ps.find((p) => /<a:t>/.test(p) && /^\d/.test(firstText(p)) === /^\d/.test(t)) || ps[0])));
   }
 
   // slide order from deckPlan (deck.js): welcome, blank, songs (a blank between), communion, …, then the fixed tail
   const order = [];
   let blanks = 0;
   for (const e of deckPlan(items, (it) => it.songs.content)) {
+    if (e.sermon) continue; // the preacher's own slides are shown from the projection screen
     if (e.song) order.push(...(await songSlides(e.song)));
     else if (e.tpl === "blank") order.push(blanks++ ? await clone(TPL.blank) : tplSlides[TPL.blank]); // each slide once in a .pptx
     else order.push(tplSlides[TPL[e.tpl]]);
