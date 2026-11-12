@@ -418,3 +418,6 @@
 body { font-family: "Noto Sans Hebrew", "Heebo", system-ui, sans-serif; }
 h1, .verse { font-family: "Google Sans", "Noto Sans Hebrew", sans-serif; }
 h1 { font-weight: 500; }
+/* Google Sans headings: a little more air between the letters */
+h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-title, .login h2, .idx-group h3, .sl-box h2, .live-title,
+.guest-msg h2, .respond h2 { letter-spacing: .03em; }
