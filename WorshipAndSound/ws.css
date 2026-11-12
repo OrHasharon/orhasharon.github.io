@@ -307,6 +307,7 @@
 [data-theme="light"] .assign option, [data-theme="light"] .field select option, [data-theme="light"] .matrix .freq option { background: #fff; color: var(--ink); }
 [data-theme="light"] .matrix .name { background: #fbfaf6; }
 [data-theme="light"] .matrix tbody tr:hover td.name { background: #f1ede3; }
+.toast.toast-error, [data-theme="light"] .toast.toast-error { background: #b3261e; color: #fff; font-weight: 700; z-index: 1000; }
 [data-theme="light"] .sl-box, [data-theme="light"] .toast { background: #fff; color: var(--ink); }
 [data-theme="light"] .person, [data-theme="light"] .tool, [data-theme="light"] .assign,
 [data-theme="light"] .field input, [data-theme="light"] .field select, [data-theme="light"] .matrix .freq,

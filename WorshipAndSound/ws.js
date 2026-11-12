@@ -41,12 +41,13 @@ const instLabel = (inst) => /חשמל/.test(inst) ? "חשמלית" : /בס/.test
 const instHtml = (inst) => inst ? ` <small>(${[icon(inst), esc(instLabel(inst))].filter(Boolean).join(" ")})</small>` : "";
 const instrumentsOf = (m) => (m.instruments || "").split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
-function toast(text) {
+function toast(text, { error = false } = {}) {
   document.querySelector(".toast")?.remove();
   const t = document.createElement("div");
-  t.className = "toast"; t.textContent = text;
-  document.body.append(t);
-  setTimeout(() => t.remove(), 3500);
+  t.className = "toast" + (error ? " toast-error" : ""); t.textContent = (error ? "⛔ " : "") + text;
+  // an open modal dialog sits in the top layer above <body>, so the toast goes inside it to be seen
+  ([...document.querySelectorAll("dialog[open]")].pop() || document.body).append(t);
+  setTimeout(() => t.remove(), error ? 6000 : 3500);
 }
 
 // ---------- data ----------

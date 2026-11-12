@@ -24,7 +24,7 @@ function canEditSetlist(iso) {
 function leaderOnly(iso) {
   const ld = state.signups.find((s) => s.meeting_date === iso && s.role === "leader");
   const name = ld ? byId(ld.member_id)?.name : "";
-  toast(name ? `רק מוביל/ת ההלל של המפגש (${name}) יכול/ה לשנות את הסשן` : "רק מוביל/ת ההלל של המפגש יכול/ה לשנות את הסשן, ועדיין לא שובץ/ה מוביל/ה");
+  toast(name ? `אין הרשאה: רק מוביל/ת ההלל של המפגש (${name}) יכול/ה לשנות את הסשן` : "אין הרשאה: רק מוביל/ת ההלל של המפגש יכול/ה לשנות את הסשן, ועדיין לא שובץ/ה מוביל/ה", { error: true });
 }
 
 // ---------- dialog ----------
