@@ -406,8 +406,10 @@ function flash(text) {
 function renderOps() {
   const ops = $("ops");
   const who = S.leaderHere && S.leader ? `👑 ${esc(S.leader.name || "")} מוביל/ה` : S.songs.length ? "אין מוביל/ה מחובר/ת · הלחצן שולט" : "ממתינים למוביל/ה";
+  const src = S.leaderHere ? "" : S.setSource === "db" ? ` · ${S.songs.length} שירים מהסשן` : S.songs.length ? "" :
+    ` · <a class="ops-link" href="./" target="_blank">כדי לראות את השירים לפני הלייב — להתחבר לאתר פעם אחת במחשב הזה</a>`;
   ops.innerHTML = `
-    <span class="status"><span class="dot${S.online ? " on" : ""}"></span>${who}${S.date ? ` · ${day()}` : ""}</span>
+    <span class="status"><span class="dot${S.online ? " on" : ""}"></span>${who}${S.date ? ` · ${day()}` : ""}${src}</span>
     <span class="sep"></span>
     <span class="grp"><button data-op="prev" title="הקודם (PageUp)">→</button><button data-op="next" title="הבא (PageDown)">←</button></span>
     ${S.songs.length ? `<select data-op="jump" aria-label="קפיצה לשיר">${S.songs.map((s, i) => `<option value="${i}"${i === S.idx ? " selected" : ""}>${i + 1}. ${esc(s.title)}</option>`).join("")}</select>` : ""}
@@ -493,12 +495,36 @@ function join() {
 }
 
 // the set before anyone leads (live_set.sql; until it runs this quietly does nothing)
+// The session's songs, before anyone leads:
+// 1. a computer that once signed in to the site (WorshipAndSound) keeps that sign-in — then the set is read straight
+//    from the database, like the site does (same origin, same Supabase session);
+// 2. otherwise live_set.sql's live_set(code), once it runs;
+// 3. otherwise the songs arrive when the leader presses ▶ live.
+// Re-read every 2 minutes while nobody leads, so edits to the set show up; a leader in live mode overrides it.
 async function preload() {
+  let rows = null;
   try {
-    const { data, error } = await sb.rpc("live_set", { c: S.code });
-    if (!error && data?.length && !S.songs.length) onSongs(data.map((r) => ({ id: r.id, title: r.title, key: r.song_key || "", content: r.content || "", notes: r.notes || "" })));
+    const { data: ses } = await sb.auth.getSession();
+    S.signedIn = !!ses?.session;
+    if (S.signedIn) {
+      const { data, error } = await sb.from("setlist_items").select("*, songs(*)").eq("meeting_date", S.date).order("position").order("id");
+      if (!error && data) rows = data.filter((i) => i.songs).map((i) => ({ id: i.id, title: i.songs.title, key: i.songs.song_key || "", content: i.songs.content || "", notes: i.notes || "" }));
+    }
   } catch {}
+  if (!rows) {
+    try {
+      const { data, error } = await sb.rpc("live_set", { c: S.code });
+      if (!error && data) rows = data.map((r) => ({ id: r.id, title: r.title, key: r.song_key || "", content: r.content || "", notes: r.notes || "" }));
+    } catch {}
+  }
+  S.setSource = rows ? (S.signedIn ? "db" : "rpc") : null;
+  if (rows && !S.leaderHere) {
+    const sig = rows.map((r) => r.id + ":" + r.title).join("|");
+    if (sig !== S.setSig) { S.setSig = sig; onSongs(rows); }
+  }
+  renderOps();
 }
+setInterval(() => { if (S.code && !S.leaderHere) preload(); }, 120000);
 
 async function wakeOn() { try { if ("wakeLock" in navigator && !S.wake) { S.wake = await navigator.wakeLock.request("screen"); S.wake.addEventListener("release", () => { S.wake = null; }); } } catch {} }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { wakeOn(); hello(); } });
