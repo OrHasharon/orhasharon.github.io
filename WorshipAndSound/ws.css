@@ -557,15 +557,26 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .ic-piano     { color: #4fa3e0; }      /* קלידים / פסנתר */
 .ic-drum      { color: #9b7be0; }      /* תופים / קחון */
 .ic-music-2   { color: #e6c13d; }      /* כינור / סקסופון */
-[data-theme="light"] .ic-mic-vocal { color: #c93d6c; }
-[data-theme="light"] .ic-guitar    { color: #c46a1c; }
-[data-theme="light"] .ic-piano     { color: #2378b8; }
-[data-theme="light"] .ic-drum      { color: #7352c4; }
-[data-theme="light"] .ic-music-2   { color: #9a7600; }
+[data-theme="light"] .ic-mic-vocal { color: #a82556; }
+[data-theme="light"] .ic-guitar    { color: #934a0b; }
+[data-theme="light"] .ic-piano     { color: #1a5d93; }
+[data-theme="light"] .ic-drum      { color: #6440b8; }
+[data-theme="light"] .ic-music-2   { color: #735800; }
 /* the instrument label next to a name — "(🎸 אקוסטית)" — brackets and all in the instrument's colour */
 .inst.inst-vocal  { color: #e8618c; } .inst.inst-guitar { color: #e8964a; } .inst.inst-keys { color: #4fa3e0; }
 .inst.inst-drum   { color: #9b7be0; } .inst.inst-other  { color: #e6c13d; }
-[data-theme="light"] .inst.inst-vocal  { color: #c93d6c; } [data-theme="light"] .inst.inst-guitar { color: #c46a1c; }
-[data-theme="light"] .inst.inst-keys   { color: #2378b8; } [data-theme="light"] .inst.inst-drum   { color: #7352c4; }
-[data-theme="light"] .inst.inst-other  { color: #9a7600; }
+[data-theme="light"] .inst.inst-vocal  { color: #a82556; } [data-theme="light"] .inst.inst-guitar { color: #934a0b; }
+[data-theme="light"] .inst.inst-keys   { color: #1a5d93; } [data-theme="light"] .inst.inst-drum   { color: #6440b8; }
+[data-theme="light"] .inst.inst-other  { color: #735800; }
 .person small.inst, .nc-inst.inst { font-weight: 500; }
+
+/* ---------- contrast (WCAG AA) ---------- */
+/* WhatsApp buttons: white on #25d366 was 1.98:1 — a deeper green keeps the brand feel at 5:1 */
+.btn.wa { background: #15803d; color: #fff; }
+.btn.wa:hover { background: #116b33; }
+/* light mode */
+[data-theme="light"] .live-end { color: #b3261e; border-color: rgba(179, 38, 30, .45); }
+[data-theme="light"] .person.pending, [data-theme="light"] .nc-name.pending { opacity: 1; }
+[data-theme="light"] .person.pending { color: var(--muted); }
+/* light mode: an active toggle (עוקב/ת, אקורדים, ⚙ תצוגה) must look on — filled, not just outlined */
+[data-theme="light"] .tool.on { background: var(--accent); color: #1b1408; border-color: var(--accent); }
