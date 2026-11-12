@@ -580,3 +580,5 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 [data-theme="light"] .person.pending { color: var(--muted); }
 /* light mode: an active toggle (עוקב/ת, אקורדים, ⚙ תצוגה) must look on — filled, not just outlined */
 [data-theme="light"] .tool.on { background: var(--accent); color: #1b1408; border-color: var(--accent); }
+/* a silent item in the set (סעודת האדון, {screen: quiet}) in the musicians' view */
+.quiet-item { font-size: 1.4em; color: var(--muted); text-align: center; margin: 2em 0; }

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>מסך הקרנה · אור השרון</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <script src="../icons.js?v=2"></script>
+  <style>
+    /* The projection screen (screen.js): lyrics only, white on a dark animated background, for the HDMI computer. */
+    html, body { margin: 0; height: 100%; background: #000; color: #fff; overflow: hidden; font-family: "Noto Sans Hebrew", "Heebo", system-ui, sans-serif; }
+    body.idle, body.idle * { cursor: none !important; }
+    .stage { position: fixed; inset: 0; overflow: hidden; background: #000; }
+
+    /* ---- backgrounds: CSS only, transform / opacity animations ---- */
+    .bg, .bg i { position: absolute; inset: 0; display: block; }
+    .bg i { will-change: transform, opacity; }
+    .shade { position: absolute; inset: 0; background: rgba(0, 0, 0, .35); }
+
+    /* 1. night sky: deep blue + two layers of slowly drifting stars */
+    .bg-night .bg { background: radial-gradient(ellipse at 50% 120%, #14235a 0%, #0a1233 45%, #02040c 100%); }
+    .bg-night .bg i { inset: -50%; background-repeat: repeat; }
+    .bg-night .bg i:nth-child(1) { background-image: radial-gradient(1.6px 1.6px at 20px 30px, rgba(255,255,255,.75), transparent 60%), radial-gradient(1.2px 1.2px at 140px 90px, rgba(255,255,255,.6), transparent 60%), radial-gradient(1.4px 1.4px at 80px 160px, rgba(255,255,255,.55), transparent 60%), radial-gradient(1px 1px at 190px 200px, rgba(255,255,255,.5), transparent 60%); background-size: 220px 220px; animation: drift 140s linear infinite; }
+    .bg-night .bg i:nth-child(2) { background-image: radial-gradient(1px 1px at 50px 70px, rgba(200,215,255,.5), transparent 60%), radial-gradient(1px 1px at 260px 140px, rgba(200,215,255,.45), transparent 60%), radial-gradient(1.2px 1.2px at 170px 300px, rgba(255,255,255,.4), transparent 60%); background-size: 340px 340px; animation: drift 240s linear infinite reverse; opacity: .8; }
+    .bg-night .bg i:nth-child(3) { inset: 0; background: radial-gradient(ellipse at 30% 20%, rgba(90,120,255,.18), transparent 60%); animation: breathe 18s ease-in-out infinite; }
+    @keyframes drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-220px, -110px, 0); } }
+
+    /* 2. soft light: near-black with large blurred glows moving slowly */
+    .bg-glow .bg { background: #05060a; }
+    .bg-glow .bg i { width: 70vmax; height: 70vmax; inset: auto; border-radius: 50%; filter: blur(90px); opacity: .55; }
+    .bg-glow .bg i:nth-child(1) { background: #1f3f9c; top: -20vmax; left: -15vmax; animation: float1 60s ease-in-out infinite; }
+    .bg-glow .bg i:nth-child(2) { background: #5a2a8a; bottom: -25vmax; right: -20vmax; animation: float2 75s ease-in-out infinite; }
+    .bg-glow .bg i:nth-child(3) { background: #8a6420; width: 45vmax; height: 45vmax; top: 30vh; left: 35vw; opacity: .3; animation: float3 90s ease-in-out infinite; }
+    @keyframes float1 { 50% { transform: translate3d(25vw, 20vh, 0) scale(1.15); } }
+    @keyframes float2 { 50% { transform: translate3d(-30vw, -15vh, 0) scale(.9); } }
+    @keyframes float3 { 50% { transform: translate3d(-20vw, 10vh, 0) scale(1.2); } }
+
+    /* 3. deep blue: a slow shifting gradient (a big layer that moves) */
+    .bg-deep .bg { background: #020a1f; }
+    .bg-deep .bg i:nth-child(1) { inset: -100%; background: linear-gradient(120deg, #021235 0%, #0a2f6b 25%, #04163f 50%, #0d3a7a 75%, #021235 100%); animation: sweep 50s ease-in-out infinite alternate; }
+    .bg-deep .bg i:nth-child(2), .bg-deep .bg i:nth-child(3) { display: none; }
+    @keyframes sweep { to { transform: translate3d(40%, 25%, 0) rotate(8deg); } }
+
+    /* 4. quiet black: almost black, a vignette that breathes — also the Lord's Supper */
+    .bg-quiet .bg { background: #030303; }
+    .bg-quiet .bg i:nth-child(1) { background: radial-gradient(ellipse at 50% 45%, rgba(70,60,40,.35), transparent 65%); animation: breathe 12s ease-in-out infinite; }
+    .bg-quiet .bg i:nth-child(2), .bg-quiet .bg i:nth-child(3) { display: none; }
+    .bg-quiet .shade { background: none; }
+    @keyframes breathe { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+
+    @media (prefers-reduced-motion: reduce) { .bg i { animation: none !important; } }
+
+    /* ---- the slide ---- */
+    .slide { position: absolute; inset: 6vh 6vw; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15em;
+      text-align: center; font-weight: 600; line-height: 1.35; font-size: var(--size, 7vw); text-shadow: 0 2px 18px rgba(0,0,0,.65); transition: opacity .25s ease; }
+    .slide.out { opacity: 0; }
+    .slide > div { white-space: nowrap; }
+    .slide.title { font-family: "Google Sans", "Noto Sans Hebrew", sans-serif; font-weight: 500; letter-spacing: .03em; }
+    .slide .sub { font-size: .38em; font-weight: 400; opacity: .8; margin-top: .6em; white-space: normal; }
+    .slide .logo { width: 22vmin; height: 22vmin; border-radius: 50%; margin-bottom: .4em; box-shadow: 0 6px 40px rgba(0,0,0,.5); }
+    .corner { position: absolute; top: 3vh; inset-inline-start: 3vw; font: 500 2.2vw/1.2 "Google Sans", "Noto Sans Hebrew", sans-serif; letter-spacing: .03em; opacity: .7; transition: opacity .25s; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+
+    /* ---- quick screens ---- */
+    .stage.blank .slide, .stage.blank .corner, .stage.blank .bg, .stage.blank .shade { opacity: 0; }
+    .stage.nobg .bg, .stage.nobg .shade { display: none; }
+
+    /* ---- operator bar (only on mouse / touch, never on its own) ---- */
+    .ops { position: fixed; inset-inline: 0; bottom: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px;
+      background: rgba(18, 18, 22, .9); backdrop-filter: blur(6px); font-size: 15px; transition: opacity .2s; }
+    .ops[hidden] { display: flex !important; opacity: 0; pointer-events: none; }
+    .ops .grp { display: flex; gap: 4px; align-items: center; }
+    .ops .sep { width: 1px; height: 28px; background: rgba(255,255,255,.18); margin: 0 4px; }
+    .ops button, .ops select { font: inherit; color: #fff; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 9px; min-height: 40px; padding: 4px 12px; cursor: pointer; }
+    .ops button.on { background: #c8963a; border-color: #c8963a; color: #1b1408; }
+    .ops select { max-width: 260px; }
+    .ops select option { color: #000; }
+    .ops .status { display: inline-flex; align-items: center; gap: 6px; opacity: .9; }
+    .ops .dot { width: 9px; height: 9px; border-radius: 50%; background: #777; }
+    .ops .dot.on { background: #2e9e5b; }
+    .ops .ic { vertical-align: -.18em; }
+  </style>
+</head>
+<body>
+  <div id="stage" class="stage bg-night">
+    <div class="bg"><i></i><i></i><i></i></div>
+    <div class="shade"></div>
+    <div id="slide" class="slide"></div>
+    <div id="corner" class="corner"></div>
+  </div>
+  <div id="ops" class="ops" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SB = "https://pualpwrkztjzhgpaqudm.supabase.co", KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  </script>
+  <script src="../schedule.js?v=37"></script>
+  <script src="chords.js?v=3"></script>
+  <script src="screen.js?v=3"></script>
+</body>
+</html>

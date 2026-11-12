@@ -62,6 +62,8 @@ function renderSetlistDialog() {
       <button class="btn" data-sl-live ${items.length ? "" : "disabled"}>▶ מצב הלל (מסך מלא)</button>
       ${LIVE_SYNC_ON && (isAdmin || canEditSetlist(iso)) ? `<button class="btn ghost" data-sl-team>📣 לינק לסט החי לצוות</button>` : ""}
       <button class="btn ghost" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
+      ${canEditSetlist(iso) ? `<button class="btn ghost" data-sl-supper>🍞 + סעודת האדון</button>` : ""}
+      <button class="btn ghost" data-sl-screen ${items.length ? "" : "disabled"} title="פותחים פעם אחת במחשב ההקרנה ושומרים כסימנייה">🖥️ מסך הקרנה</button>
       <button class="btn ghost" data-sl-pdf ${items.length ? "" : "disabled"}>📄 הורדת השירים כ-PDF</button>
       <a id="sl-download" class="link-btn" hidden></a>
     </div>
@@ -90,28 +92,9 @@ function addToSetlistDialog(song) {
 }
 
 // ---------- PowerPoint ----------
-// stanzas of clean lyric lines, each tagged with its section label ({פזמון}) if any
-function lyricStanzas(content) {
-  const stanzas = [{ label: "", lines: [] }];
-  for (const raw of content.split("\n")) {
-    const t = raw.trim();
-    if (/^\{\s*(capo|artist|key)\s*:/i.test(t)) continue;
-    const label = t.match(/^\{(.+)\}$/);
-    if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
-    const line = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
-    if (!line) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); continue; }
-    if (!/[\u05D0-\u05EAa-zA-Z]{2}/.test(line.replace(/[\u0591-\u05C7]/g, ""))) continue; // chord-only rows (niqqud ignored)
-    stanzas[stanzas.length - 1].lines.push(line);
-  }
-  return stanzas.filter((s) => s.lines.length);
-}
-
-// split a stanza into slides of at most 4 lines, as evenly as possible (5 -> 3+2, not 4+1)
-function chunks(lines, max = 4) {
-  const n = Math.ceil(lines.length / max), size = Math.ceil(lines.length / n), out = [];
-  for (let i = 0; i < lines.length; i += size) out.push(lines.slice(i, i + size));
-  return out;
-}
+// lyricStanzas / chunks (lyrics → slides) live in chords.js, shared with the projection screen
+// an item that is silent on the screen ({screen: quiet}, e.g. סעודת האדון) and has no lyrics
+const quietItem = (song) => (songMeta(song.content || "").screen || "").toLowerCase() === "quiet" && !lyricStanzas(song.content || "").length;
 
 async function imageData(url, width) {
   const img = new Image();
@@ -287,6 +270,27 @@ document.addEventListener("click", async (e) => {
     if (setlist.missing) { toast("הסשנים עדיין לא פעילים: צריך להריץ את setlist.sql ב-Supabase"); return; }
     addToSetlistDialog(songsState.current); return;
   }
+  // the projection screen: one fixed link for the HDMI computer (screen.html picks the upcoming meeting by itself)
+  if (t.closest("[data-sl-screen]")) { window.open("screen.html", "_blank"); return; }
+  // "סעודת האדון": a special song ({screen: quiet} → title alone on the screen), created once, added at the end
+  if (t.closest("[data-sl-supper]")) {
+    const iso = setlist.openDate;
+    if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
+    if (!songsState.loaded) await loadSongs();
+    let s = songsState.list.find((x) => x.title.trim() === "סעודת האדון");
+    if (!s) {
+      const { data, error } = await sb.from("songs").insert({ title: "סעודת האדון", content: "{screen: quiet}", song_key: null }).select().single();
+      if (error || !data) { toast("לא הצלחתי ליצור את הפריט", { error: true }); return; }
+      s = data; songsState.list.push(data);
+    }
+    await loadSetlist();
+    const pos = Math.max(0, ...itemsFor(iso).map((i) => i.position)) + 1;
+    const { error } = await sb.from("setlist_items").insert({ meeting_date: iso, song_id: s.id, position: pos, notes: null });
+    if (error) { error.code === "42501" ? leaderOnly(iso) : toast("ההוספה נכשלה"); return; }
+    await loadSetlist(); renderSetlistDialog();
+    toast("סעודת האדון נוספה — אפשר להוסיף שיר אחריה");
+    return;
+  }
   const add = t.closest("[data-sl-add]");
   if (add) {
     const iso = document.getElementById("sl-date").value;
@@ -427,7 +431,7 @@ function renderLive() {
       </div>` : ""}
     </div>
     ${syncPeopleHtml()}${syncAwayHtml()}
-    <div class="live-body"><div class="chordpro song-body">${renderChordPro(song.content, shift, { chords: live.chords, key: base })}</div></div>
+    <div class="live-body"><div class="chordpro song-body">${quietItem(song) ? `<p class="quiet-item">🍞 ${esc(song.title)} · שקט</p>` : renderChordPro(song.content, shift, { chords: live.chords, key: base })}</div></div>
     <div class="live-nav">
       <button class="tool" data-live="prev" ${live.idx ? "" : "disabled"}>→ הקודם</button>
       <span class="live-next">${next ? `הבא: ${esc(next.songs.title)}` : "שיר אחרון"}</span>

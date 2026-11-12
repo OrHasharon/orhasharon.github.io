@@ -75,6 +75,7 @@ function nextMeetingCard(mt) {
       <button class="btn nc-live" data-nc="live" data-date="${iso}">▶ לייב</button>
       <button class="btn ghost" data-nc="session" data-date="${iso}">🎵 סשן הלל</button>
       <button class="btn ghost" data-nc="pptx" data-date="${iso}">📽️ מצגת</button>
+      <button class="btn ghost" data-nc="screen" data-date="${iso}">🖥️ מסך הקרנה</button>
       <button class="btn ghost" data-nc="pdf" data-date="${iso}">📄 PDF</button>
       ${typeof LIVE_SYNC_ON !== "undefined" && LIVE_SYNC_ON && (isAdmin || mine)
         ? `<button class="btn ghost nc-wide" data-nc="team" data-date="${iso}">📣 לינק לסט החי לצוות</button>` : ""}
@@ -115,6 +116,7 @@ document.addEventListener("click", async (e) => {
   if (act === "lead") { if (typeof showLeadScreen === "function") showLeadScreen(iso); else openSetlist(iso); return; }
   if (act === "team") { showTeamLinkDialog(iso); return; }
   if (act === "pdf") { printSongs(iso); return; }
+  if (act === "screen") { window.open("screen.html", "_blank"); return; }
   if (act === "pptx") {
     const label = b.innerHTML; b.disabled = true; b.textContent = "יוצר מצגת…";
     try { await buildPptx(iso); } catch (err) { console.error(err); toast("יצירת המצגת נכשלה"); }

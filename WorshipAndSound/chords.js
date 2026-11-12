@@ -93,7 +93,8 @@ function fixNiqqud(text) {
 
 // ---------- render ChordPro ----------
 // directives: {capo: 2} {artist: ...}; a line that is only {…} is a section label, e.g. {פזמון}
-const META_RE = /^\{\s*(capo|artist|key)\s*:\s*(.*?)\s*\}$/i;
+// {screen: quiet} — on the projection screen this item is its title alone, on a quiet dark background (סעודת האדון)
+const META_RE = /^\{\s*(capo|artist|key|screen)\s*:\s*(.*?)\s*\}$/i;
 function songMeta(content) {
   const meta = {};
   for (const line of content.split("\n")) { const m = line.trim().match(META_RE); if (m) meta[m[1].toLowerCase()] = m[2]; }
@@ -143,3 +144,27 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
 
 // strip invisible direction marks / odd spaces that PDFs leave in
 const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/[\u00A0\u2000-\u200A\u202F]/g, " ");
+
+// ---------- lyrics → slides (PowerPoint + projection screen) ----------
+// stanzas of clean lyric lines, each tagged with its section label ({פזמון}) if any
+function lyricStanzas(content) {
+  const stanzas = [{ label: "", lines: [] }];
+  for (const raw of content.split("\n")) {
+    const t = raw.trim();
+    if (/^\{\s*(capo|artist|key|screen)\s*:/i.test(t)) continue;
+    const label = t.match(/^\{(.+)\}$/);
+    if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
+    const line = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
+    if (!line) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); continue; }
+    if (!/[\u05D0-\u05EAa-zA-Z]{2}/.test(line.replace(/[\u0591-\u05C7]/g, ""))) continue; // chord-only rows (niqqud ignored)
+    stanzas[stanzas.length - 1].lines.push(line);
+  }
+  return stanzas.filter((s) => s.lines.length);
+}
+
+// split a stanza into slides of at most 4 lines, as evenly as possible (5 -> 3+2, not 4+1)
+function chunks(lines, max = 4) {
+  const n = Math.ceil(lines.length / max), size = Math.ceil(lines.length / n), out = [];
+  for (let i = 0; i < lines.length; i += size) out.push(lines.slice(i, i + size));
+  return out;
+}

@@ -191,13 +191,13 @@ async function guestServe() {
   const ch = sb.channel("ws-guest-" + code, { config: { broadcast: { self: false }, presence: { key: "leader" } } });
   const push = () => { if (!sync.iLead) return; sendGuestSongs(true); send("state", buildState(), ch); };
   ch.on("broadcast", { event: "hello" }, push)
-    .on("presence", { event: "sync" }, () => { sync.guestCount = Object.keys(ch.presenceState()).filter((k) => k !== "leader").length; renderLive(); })
+    .on("presence", { event: "sync" }, () => { const ps = ch.presenceState(); sync.screenOn = "screen" in ps; sync.guestCount = Object.keys(ps).filter((k) => k !== "leader" && k !== "screen").length; renderLive(); })
     .subscribe((status) => { if (status === "SUBSCRIBED") { ch.track({ leader: true }); push(); } });
   sync.guestCh = ch;
 }
 function guestUnserve() {
   if (sync.guestCh) sb.removeChannel(sync.guestCh);
-  Object.assign(sync, { guestCh: null, guestCode: null, guestCount: 0, guestSongsSig: "" });
+  Object.assign(sync, { guestCh: null, guestCode: null, guestCount: 0, guestSongsSig: "", screenOn: false });
 }
 
 async function guestShare() {
@@ -275,7 +275,7 @@ function syncStatusHtml() {
   const dot = `<span class="live-dot${sync.online ? " on" : ""}" title="${sync.online ? "מחובר/ת" : "מתחבר/ת…"}"></span>`;
   const who = sync.leader ? `👑 ${esc(sync.leader.name || "")}` : "אין מוביל/ה";
   const people = n === 1 ? "מחובר/ת 1" : `${n} מחוברים`;
-  return `<button class="tool link live-who" data-live="people">${dot}${who} · ${people}${sync.guestCount ? ` + ${sync.guestCount} בלינק` : ""}</button>`;
+  return `<button class="tool link live-who" data-live="people">${dot}${who} · ${people}${sync.guestCount ? ` + ${sync.guestCount} בלינק` : ""}${sync.screenOn ? " · 🖥️ מסך ✓" : ""}</button>`;
 }
 // quick actions next to it: the leader shares the link, a follower follows / not
 function syncQuickHtml() {
