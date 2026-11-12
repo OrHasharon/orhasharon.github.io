@@ -27,18 +27,8 @@ function deckPlan(items, contentOf) {
   return plan;
 }
 
-// home groups, one line each like the template: "ראש העין: ימי שני ב 20:30. לפרטים: …", a blank line between
-async function serviceGroupLines() {
-  const raw = await homeGroupLines();
-  const out = [];
-  for (let i = 0; i < raw.length; i++) {
-    if (!raw[i]) continue;
-    if (out.length) out.push("");
-    out.push(raw[i + 1] ? `${raw[i]}: ${raw[i + 1]}` : raw[i]);
-    i++;
-  }
-  return out;
-}
+// home groups as the template shows them: the city, then "ימי שני ב 20:30. לפרטים: …", a blank line between
+const serviceGroupLines = () => homeGroupLines();
 
 // home groups straight from the community site's front page
 async function homeGroupLines() {
@@ -66,12 +56,11 @@ function meetingLines(iso, meetings = typeof state !== "undefined" ? state.meeti
   let month = null;
   for (const m of list) {
     const name = m.date.toLocaleDateString("he-IL", { month: "long" });
-    // like the template: a month name, then "14.11 כפר הבפטיסטים, צ׳אפל" / "06.11 קבלת שבת, משמר השרון"
-    if (name !== month) { out.push(name); month = name; }
-    const kind = meetingKind(m), dm = m.dateText.slice(0, 5).replace("/", ".");
-    const regular = kind === "אסיפה" || kind.startsWith("יום ");
-    const room = /בפטיסט/.test(m.place) ? "צ׳אפל" : (m.notes || "");
-    out.push(regular ? `${dm} ${m.place}${room ? ", " + room : ""}` : `${dm} ${kind}, ${m.place}`);
+    // like the template (14.11.2026 look): "נובמבר:", then "	21/11 כפר הבפטיסטים | צ'אפל", a blank line between months
+    if (name !== month) { if (month) out.push(""); out.push(`${name}:`); month = name; }
+    const kind = meetingKind(m);
+    const extra = kind !== "אסיפה" && !kind.startsWith("יום ") ? kind : /בפטיסט/.test(m.place) ? "צ'אפל" : (m.notes || "");
+    out.push(`	${m.dateText.slice(0, 5)} ${m.place}${extra ? ` | ${extra}` : ""}`);
   }
   return out;
 }

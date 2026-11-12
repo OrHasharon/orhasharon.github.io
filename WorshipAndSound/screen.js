@@ -162,9 +162,9 @@ function tplParas(el, entry) {
   if ((el.role === "groups" && S.groupLines?.length) || (el.role === "meetings" && S.meetLines.length)) {
     const lines = el.role === "groups" ? S.groupLines : S.meetLines;
     const first = (p) => (p.runs.find((r) => r.t) || {}).t || "";
-    const pick = (t) => (el.role === "groups"
-      ? (t ? el.paras.find((p) => first(p)) : el.paras.find((p) => !first(p)))
-      : el.paras.find((p) => first(p) && /^\d/.test(first(p)) === /^\d/.test(t))) || el.paras[0];
+    const pick = (t) => el.paras.find((p) => first(p) && (el.role === "groups"
+      ? (t && !/[:.]/.test(t) ? !/ימי/.test(first(p)) : /ימי/.test(first(p)))
+      : (t.startsWith("	") ? first(p).startsWith("	") : /:$/.test(first(p))))) || el.paras[0];
     return lines.map((t) => { const p = pick(t); return { ...p, runs: t ? [{ ...p.style, t }] : [] }; });
   }
   return el.paras;

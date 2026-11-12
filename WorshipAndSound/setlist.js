@@ -167,7 +167,7 @@ async function buildPptx(iso) {
   const presXml = await read("ppt/presentation.xml");
   const presRels = await read("ppt/_rels/presentation.xml.rels");
   const target = (rid) => (presRels.match(new RegExp(`Id="${rid}"[^>]*?Target="([^"]+)"`)) || presRels.match(new RegExp(`Target="([^"]+)"[^>]*?Id="${rid}"`)))[1];
-  const tplSlides = [...presXml.matchAll(/<p:sldId [^>]*?r:id="(rId\d+)"\s*\/>/g)].map((m) => "ppt/" + target(m[1]));
+  const tplSlides = [...presXml.matchAll(/<p:sldId [^>]*?r:id="([^"]+)"\s*\/>/g)].map((m) => "ppt/" + target(m[1]));
   const relsPath = (p) => p.replace("slides/", "slides/_rels/") + ".rels";
   let next = 100;
   const newParts = [];
@@ -207,13 +207,13 @@ async function buildPptx(iso) {
   const gx = await read(tplSlides[TPL.groups]);
   if (groups?.length) {
     const sp = shapes(gx).filter((s) => /<a:t>/.test(s))[1];
-    zip.file(tplSlides[TPL.groups], gx.replace(sp, setParagraphs(sp, groups, (ps, t) => (t ? ps.find((p) => /<a:t>/.test(p)) : ps.find((p) => !/<a:t>/.test(p))) || ps[0])));
+    zip.file(tplSlides[TPL.groups], gx.replace(sp, setParagraphs(sp, groups, (ps, t) => ps.find((p) => /<a:t>/.test(p) && (t && !/[:.]/.test(t) ? !/ימי/.test(firstText(p)) : /ימי/.test(firstText(p)))) || ps[0])));
   }
   const meetings = meetingLines(iso);
   const mx = await read(tplSlides[TPL.meetings]);
   if (meetings.length) {
     const sp = shapes(mx).filter((s) => /<a:t>/.test(s))[1];
-    zip.file(tplSlides[TPL.meetings], mx.replace(sp, setParagraphs(sp, meetings, (ps, t) => ps.find((p) => /<a:t>/.test(p) && /^\d/.test(firstText(p)) === /^\d/.test(t)) || ps[0])));
+    zip.file(tplSlides[TPL.meetings], mx.replace(sp, setParagraphs(sp, meetings, (ps, t) => ps.find((p) => /<a:t>/.test(p) && (t.startsWith("\t") ? firstText(p).startsWith("\t") : /:$/.test(firstText(p)))) || ps[0])));
   }
 
   // slide order from deckPlan (deck.js): welcome, blank, songs (a blank between), communion, …, then the fixed tail

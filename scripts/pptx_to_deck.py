@@ -40,9 +40,9 @@ pres = read("ppt/presentation.xml")
 W, H = map(int, re.search(r'<p:sldSz cx="(\d+)" cy="(\d+)"', pres).groups())
 prels = read("ppt/_rels/presentation.xml.rels")
 def target(rid, rels):
-    m = re.search(r'<Relationship [^>]*?Id="%s"[^>]*?Target="([^"]+)"' % rid, rels) or re.search(r'<Relationship [^>]*?Target="([^"]+)"[^>]*?Id="%s"' % rid, rels)
+    m = re.search(r'<Relationship [^>]*?Id="%s"[^>]*?Target="([^"]+)"' % re.escape(rid), rels) or re.search(r'<Relationship [^>]*?Target="([^"]+)"[^>]*?Id="%s"' % re.escape(rid), rels)
     return m.group(1)
-slide_paths = ["ppt/" + target(rid, prels) for rid in re.findall(r'<p:sldId [^>]*?r:id="(rId\d+)"', pres)]
+slide_paths = ["ppt/" + target(rid, prels) for rid in re.findall(r'<p:sldId [^>]*?r:id="([^"]+)"', pres)]
 
 # theme colours (through the master's colour map) and fonts
 theme = read("ppt/theme/theme1.xml")
@@ -180,7 +180,8 @@ def slide(path, key):
         if fill and box: els.append({"t": "rect", "box": box, "fill": fill})
         if "<p:txBody>" in body and box and (has_text or key in ROLES):
             n_text = sum(1 for e in els if e["t"] == "text" and e.get("_has"))
-            role = (ROLES.get(key) or [])[n_text] if n_text < len(ROLES.get(key) or []) else None
+            # only boxes with words get a role (an empty full-slide text box isn't the title)
+            role = (ROLES.get(key) or [])[n_text] if has_text and n_text < len(ROLES.get(key) or []) else None
             filled = key in WEEKLY or role in ("prayers",)
             el = text_el(body, keep_text=not filled)
             el["box"] = box  # incl. a position inherited from the layout
