@@ -582,3 +582,10 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 [data-theme="light"] .tool.on { background: var(--accent); color: #1b1408; border-color: var(--accent); }
 /* a silent item in the set (סעודת האדון, {screen: quiet}) in the musicians' view */
 .quiet-item { font-size: 1.4em; color: var(--muted); text-align: center; margin: 2em 0; }
+/* session dialog: add a song by name */
+.sl-add-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.sl-add-box .field { display: grid; gap: 4px; }
+.sl-add-box input { font: inherit; color: var(--ink); background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; }
+.sl-hits { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.sl-hits .link-btn { text-align: start; padding: 8px 2px; min-height: 40px; }
+.sl-hits small { color: var(--muted); }

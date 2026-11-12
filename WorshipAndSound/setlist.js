@@ -57,7 +57,11 @@ function renderSetlistDialog() {
           </span>
         </div>
         <input class="sl-note" data-sl-note="${it.id}" value="${esc(it.notes || "")}" placeholder="הערה (למשל: פזמון פעמיים, מעבר ל-D)">
-      </li>`).join("")}</ol>` : `<p class="status">עדיין אין שירים בסשן. מוסיפים מלשונית "שירים" ← פתיחת שיר ← "לסשן הלל".</p>`}
+      </li>`).join("")}</ol>` : `<p class="status">עדיין אין שירים בסשן.${canEditSetlist(iso) ? " מחפשים שיר כאן למטה ומוסיפים בלחיצה." : ""}</p>`}
+    ${canEditSetlist(iso) ? `<div class="sl-add-box">
+      <label class="field">הוספת שיר לסט<input id="sl-search" type="search" placeholder="חיפוש לפי שם השיר" autocomplete="off" value="${esc(setlist.query || "")}"></label>
+      <div id="sl-hits"></div>
+    </div>` : ""}
     <div class="sl-actions">
       <button class="btn" data-sl-live ${items.length ? "" : "disabled"}>▶ מצב הלל (מסך מלא)</button>
       ${LIVE_SYNC_ON && (isAdmin || canEditSetlist(iso)) ? `<button class="btn ghost" data-sl-team>📣 לינק לסט החי לצוות</button>` : ""}
@@ -69,13 +73,35 @@ function renderSetlistDialog() {
     </div>
   </div>`;
   if (!d.open) d.showModal();
+  renderSlHits();
 }
 
 async function openSetlist(iso) {
   setlist.openDate = iso;
+  setlist.query = "";
   await loadSetlist();
   renderSetlistDialog();
 }
+
+// ---------- add a song straight from the session dialog: search by name, one tap adds it at the end ----------
+const plainTitle = (t) => (t || "").replace(/[\u0591-\u05C7]/g, "").replace(/[״"׳'`,.\-–]/g, "").replace(/\s+/g, " ").trim();
+function renderSlHits() {
+  const box = document.getElementById("sl-hits");
+  if (!box) return;
+  const q = plainTitle(setlist.query || "");
+  if (!q) { box.innerHTML = ""; return; }
+  if (!songsState.loaded) { box.innerHTML = `<p class="hint">טוען שירים…</p>`; loadSongs().then(renderSlHits); return; }
+  const inSet = new Set(itemsFor(setlist.openDate).map((i) => i.song_id));
+  const hits = songsState.list.filter((s) => !inSet.has(s.id) && plainTitle(s.title).includes(q)).slice(0, 8);
+  box.innerHTML = hits.length
+    ? `<ul class="sl-hits">${hits.map((s) => `<li><button class="link-btn" data-sl-quickadd="${s.id}">➕ ${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(s.song_key)}</small>` : ""}</button></li>`).join("")}</ul>`
+    : `<p class="hint">לא נמצא שיר בשם הזה. שיר חדש מוסיפים בלשונית "שירים" ← "+ שיר חדש".</p>`;
+}
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "sl-search") return;
+  setlist.query = e.target.value;
+  renderSlHits(); // only the results change while typing (redrawing the input breaks Hebrew typing on phones)
+});
 
 // ---------- add a song (from the song page) ----------
 function addToSetlistDialog(song) {
@@ -241,6 +267,22 @@ document.addEventListener("click", async (e) => {
   if (t.closest("[data-add-setlist]")) {
     if (setlist.missing) { toast("הסשנים עדיין לא פעילים: צריך להריץ את setlist.sql ב-Supabase"); return; }
     addToSetlistDialog(songsState.current); return;
+  }
+  const quick = t.closest("[data-sl-quickadd]");
+  if (quick) {
+    const iso = setlist.openDate;
+    if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
+    quick.disabled = true;
+    await loadSetlist();
+    const pos = Math.max(0, ...itemsFor(iso).map((i) => i.position)) + 1;
+    const { error } = await sb.from("setlist_items").insert({ meeting_date: iso, song_id: Number(quick.dataset.slQuickadd), position: pos, notes: null });
+    if (error) { error.code === "42501" ? leaderOnly(iso) : toast("ההוספה נכשלה"); quick.disabled = false; return; }
+    await loadSetlist();
+    setlist.query = "";
+    renderSetlistDialog();
+    toast("השיר נוסף לסט");
+    document.getElementById("sl-search")?.focus();
+    return;
   }
   // the projection screen: one fixed link for the HDMI computer (screen.html picks the upcoming meeting by itself)
   if (t.closest("[data-sl-screen]")) { window.open("screen.html", "_blank"); return; }
