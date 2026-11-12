@@ -387,3 +387,13 @@
 .history-btn:hover, .history-btn[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }
 /* a person's chip never breaks inside (name, instrument and buttons stay on one line) */
 .person { white-space: nowrap; }
+
+/* live set sync (live-sync.js): connection dot, who leads, people list, "leader is on song X" bar */
+.live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); opacity: .6; }
+.live-dot.on { background: #2e9e5b; opacity: 1; }
+.live-people { padding: 6px 16px; border-bottom: 1px solid var(--line); font-size: .95rem; }
+.live-people ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.live-people p { margin: 4px 0 0; color: var(--muted); }
+.live-away { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 16px; background: var(--hallel); color: #fff; font-size: .95rem; }
+.live-away .tool { background: #fff; color: var(--hallel); border-color: #fff; }
+@media (max-width: 760px) { .live-people, .live-away { padding: 5px 10px; font-size: .82rem; } }

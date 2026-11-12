@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>דמו מוביל/ה · סט חי</title>
+  <meta name="robots" content="noindex">
+  <script src="../theme.js?v=1"></script>
+  <link rel="stylesheet" href="../style.css?v=46">
+  <link rel="stylesheet" href="ws.css?v=59">
+  <style>
+    body { padding: 16px; } .box { max-width: 560px; margin: auto; display: grid; gap: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .big { font-size: 1.3rem; }
+    .link { word-break: break-all; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+    #qr { background: #fff; padding: 8px; border-radius: 10px; width: max-content; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>דמו: מסך המוביל/ה</h2>
+    <p>דף בדיקה לסט החי, עם שירי דוגמה בלבד (לא נוגע בנתוני האתר). סורקים את הקוד בטלפון (או בכמה טלפונים) ומזיזים מכאן.</p>
+    <div id="qr"></div>
+    <div class="link" id="link"></div>
+    <div class="row big"><b id="now"></b> · סולם <b id="key" dir="ltr"></b></div>
+    <div class="row">
+      <button class="tool" data-a="prev">→ הקודם</button><button class="tool" data-a="next">הבא ←</button>
+      <button class="tool" data-a="down">−½</button><button class="tool" data-a="up">+½</button>
+      <button class="tool" data-a="end">⏹ סיום סט</button>
+    </div>
+    <p id="guests" class="status"></p>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script>
+    const sb = window.supabase.createClient("https://pualpwrkztjzhgpaqudm.supabase.co", "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9", { db: { schema: "or_hasharon_worship" } });
+    const esc = (s) => String(s ?? "");
+  </script>
+  <script src="chords.js?v=1"></script>
+  <script>
+    const songs = [
+      { id: 101, title: "הללו את אדוני (דמו)", key: "G", notes: "פזמון פעמיים", content: "{בית}\n[G]הללו את [C]אדוני כל [D]גוים\n[Em]שבחוהו כל [C]האומים [D]\n{פזמון}\n[G]כי גבר [D/F#]עלינו [Em]חסדו\n[C]ואמת [D]אדוני [G]לעולם" },
+      { id: 102, title: "שלום עולם (דמו)", key: "Am", notes: "", content: "{capo: 2}\n{בית}\n[Am]שלום [G]עולם [F]ומלואו\n[Dm]כל ה[E]ארץ [Am]שירו\n{פזמון}\n[F]שירו [G]לו [C]שיר [Am]חדש" },
+      { id: 103, title: "באור פניך (דמו)", key: "D", notes: "מעבר ל-E בסוף", content: "[D]באור פ[A/C#]ניך נ[Bm]לך\n[G]ובשמך [A]נגיל כל [D]היום" }];
+    const code = (crypto.getRandomValues(new Uint8Array(12)).reduce((s, b) => s + (b % 36).toString(36), "")) + "demo";
+    const url = location.origin + location.pathname.replace(/[^/]*$/, "") + "live.html?c=" + code;
+    const leader = { email: "demo@leader", name: "מוביל/ת דמו", ts: Date.now() };
+    let idx = 0, seq = 0; const shifts = {};
+    document.getElementById("link").innerHTML = `<a href="${url}" target="_blank">${url}</a>`;
+    new QRCode(document.getElementById("qr"), { text: url, width: 200, height: 200 });
+
+    const ch = sb.channel("ws-guest-" + code, { config: { broadcast: { self: false }, presence: { key: "leader" } } });
+    const send = (event, payload) => ch.send({ type: "broadcast", event, payload });
+    const state = () => send("state", { itemId: songs[idx].id, shifts: { ...shifts }, leader, seq: ++seq, ts: Date.now() });
+    ch.on("broadcast", { event: "hello" }, () => { send("songs", { songs }); state(); })
+      .on("presence", { event: "sync" }, () => { const n = Object.keys(ch.presenceState()).filter((k) => k !== "leader").length; document.getElementById("guests").textContent = `מחוברים: ${n}`; })
+      .subscribe((s) => { if (s === "SUBSCRIBED") ch.track({ leader: true }); });
+
+    function show() {
+      const s = songs[idx], sh = shifts[s.id] || 0;
+      document.getElementById("now").textContent = `${idx + 1}/${songs.length} · ${s.title}`;
+      document.getElementById("key").textContent = transposeChord(s.key, sh);
+    }
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest("[data-a]")?.dataset.a; if (!a) return;
+      const s = songs[idx];
+      if (a === "next" && idx < songs.length - 1) idx++;
+      if (a === "prev" && idx > 0) idx--;
+      if (a === "up") shifts[s.id] = (shifts[s.id] || 0) + 1;
+      if (a === "down") shifts[s.id] = (shifts[s.id] || 0) - 1;
+      if (a === "end") { send("end", {}); return; }
+      show(); state();
+    });
+    show();
+  </script>
+</body>
+</html>

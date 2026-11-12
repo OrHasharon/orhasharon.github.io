@@ -1,139 +1,11 @@
-﻿// Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js.
+﻿// Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js and the chord helpers from chords.js.
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 const songsState = { loaded: false, list: [], query: "", view: "list", current: null, shift: 0, noCapo: false, present: false, presentChords: false, drafts: [], importing: false };
 let songScale = 1;
 try { songScale = Number(localStorage.getItem("ws-song-scale")) || 1; } catch {}
 
-// ---------- chords ----------
-const CHORD_RE = /^[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-Ga-g][#b]?)?$/;
-const FILLER_RE = /^(?:\||\/|-|–|x\d+|\(|\)|\.+)$/i;
-const isChordLine = (text) => {
-  const toks = text.trim().split(/\s+/).map((t) => (/^[()]?[A-G]/.test(t) ? t.replace(/^[()]+|[()]+$/g, "") : t)).filter(Boolean);
-  return toks.length > 0 && toks.some((t) => CHORD_RE.test(t)) && toks.every((t) => CHORD_RE.test(t) || FILLER_RE.test(t));
-};
-const SHARPS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-const noteIndex = (n) => { const i = SHARPS.indexOf(n); return i >= 0 ? i : FLATS.indexOf(n); };
-function transposeNote(n, shift, flats) {
-  const i = noteIndex(n);
-  if (i < 0) return n;
-  return (flats ? FLATS : SHARPS)[(i + shift + 120) % 12];
-}
-function transposeChord(ch, shift) {
-  if (!shift) return ch;
-  const m = ch.match(/^([A-G][#b]?)(.*?)(?:\/([A-G][#b]?))?$/);
-  if (!m) return ch;
-  const flats = ch.includes("b");
-  return transposeNote(m[1], shift, flats) + m[2] + (m[3] ? "/" + transposeNote(m[3], shift, flats) : "");
-}
-const firstChord = (content) => (content.match(/\[([^\]]+)\]/) || [])[1] || null;
-
-const HEB = /[֐-׿]/;
-
-// Clean niqqud that the PDF put on the wrong letter (shows as ◌): marks with no letter, duplicate marks,
-// and the shin/sin dot on a letter that isn't ש (moved to a nearby ש that lacks one, otherwise dropped).
-// same, for a line with [chord] markers: fix the lyrics as one piece, then put each chord back before the same letter
-function fixNiqqudLine(line) {
-  if (!line.includes("[")) return fixNiqqud(line);
-  const MARK = /[֑-ׇ]/;
-  const chords = []; let plain = "", bases = 0;
-  for (const part of line.split(/(\[[^\]]*\])/)) {
-    if (/^\[[^\]]*\]$/.test(part)) { chords.push({ at: bases, c: part }); continue; }
-    plain += part; bases += [...part].filter((ch) => !MARK.test(ch)).length;
-  }
-  const fixed = fixNiqqud(plain);
-  let out = "", n = 0, k = 0;
-  for (const ch of fixed) {
-    if (!MARK.test(ch)) { while (k < chords.length && chords[k].at === n) out += chords[k++].c; n++; }
-    out += ch;
-  }
-  while (k < chords.length) out += chords[k++].c;
-  return out;
-}
-
-function fixNiqqud(text) {
-  const MARK = /[\u0591-\u05C7]/, LETTER = /[\u05D0-\u05EA]/;
-  const out = []; // clusters: { base, marks: [] }
-  for (const ch of text) {
-    if (MARK.test(ch)) {
-      const last = out[out.length - 1];
-      if (last && LETTER.test(last.base) && !last.marks.includes(ch)) last.marks.push(ch);
-      continue; // orphan or duplicate
-    }
-    out.push({ base: ch, marks: [] });
-  }
-  const DOTS = ["\u05C1", "\u05C2"];
-  out.forEach((c, i) => {
-    const dot = c.marks.find((m) => DOTS.includes(m));
-    if (!dot || c.base === "ש") return;
-    c.marks = c.marks.filter((m) => !DOTS.includes(m));
-    for (const j of [i + 1, i - 1, i + 2, i - 2]) {
-      const n = out[j];
-      if (n && n.base === "ש" && !n.marks.some((m) => DOTS.includes(m))) { n.marks.push(dot); break; }
-    }
-  });
-  // the PDF tends to hang a ו's mark on the letter before it: "תֹו" -> "תוֹ" (holam male), "שּו" -> "שׁוּ" (shuruk)
-  out.forEach((c, i) => {
-    const prev = out[i - 1];
-    if (c.base !== "ו" || c.marks.length || !prev || !LETTER.test(prev.base)) return;
-    const VOWELS = /[ְ-ׇֻ]/;
-    if (prev.marks.includes("ֹ")) { prev.marks = prev.marks.filter((m) => m !== "ֹ"); c.marks.push("ֹ"); return; }
-    if (prev.marks.includes("ּ") && !prev.marks.some((m) => VOWELS.test(m))) {
-      prev.marks = prev.marks.filter((m) => m !== "ּ"); c.marks.push("ּ");
-    }
-  });
-  return out.map((c) => c.base + c.marks.join("")).join("").normalize("NFC");
-}
-
-// ---------- render ChordPro ----------
-// directives: {capo: 2} {artist: ...}; a line that is only {…} is a section label, e.g. {פזמון}
-const META_RE = /^\{\s*(capo|artist|key)\s*:\s*(.*?)\s*\}$/i;
-function songMeta(content) {
-  const meta = {};
-  for (const line of content.split("\n")) { const m = line.trim().match(META_RE); if (m) meta[m[1].toLowerCase()] = m[2]; }
-  return meta;
-}
-
-function renderChordPro(content, shift = 0, { chords = true } = {}) {
-  const songDir = HEB.test(content) ? "rtl" : "ltr";
-  return content.split("\n").map((raw) => {
-    const line = /^\s*\{.*\}\s*$/.test(raw) ? raw : fixNiqqudLine(raw);
-    const t = line.trim();
-    if (!t) return `<div class="cp-line cp-empty"></div>`;
-    if (META_RE.test(t)) return "";
-    const label = t.match(/^\{(.+)\}$/);
-    if (label) return `<div class="cp-section" dir="auto">[${esc(label[1])}]</div>`;
-    // direction comes from the lyrics, not the (Latin) chords
-    const lyricsOnly = line.replace(/\[[^\]]*\]/g, "");
-    const dir = HEB.test(lyricsOnly) ? "rtl" : "ltr";
-    if (!line.includes("[") && isChordLine(cleanStr(line))) {
-      if (!chords) return "";
-      const row = cleanStr(line).replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift) : tok));
-      return `<div class="cp-line cp-bare-chords" dir="${songDir}">${esc(row)}</div>`;
-    }
-    if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(line))}</div>`;
-    if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(lyricsOnly))}</div>` : "";
-    const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
-    const segs = [{ ch: "", ly: parts[0] || "" }];
-    for (let k = 1; k < parts.length; k += 2) segs.push({ ch: transposeChord(parts[k], shift), ly: parts[k + 1] || "" });
-    // group the pieces into whole words, so a long line wraps between words and never inside one
-    const words = [];
-    let cur = [];
-    for (const sg of segs) {
-      if (!sg.ly && !sg.ch) continue;
-      const pieces = sg.ly ? sg.ly.split(/(?<=\s)/) : [""];
-      pieces.forEach((pc, n) => {
-        cur.push({ ch: n ? "" : sg.ch, ly: pc });
-        if (/\s$/.test(pc)) { words.push(cur); cur = []; }
-      });
-    }
-    if (cur.length) words.push(cur);
-    const html = words.map((w) => `<span class="w">${w.map((sg) =>
-      `<span class="seg"><span class="ch">${esc(sg.ch)}</span><span class="ly">${sg.ly ? esc(sg.ly) : "&nbsp;"}</span></span>`).join("")}</span>`).join("");
-    return `<div class="cp-line${lyricsOnly.trim() ? "" : " cp-chords-only"}" dir="${dir}">${html}</div>`;
-  }).join("");
-}
+// chord helpers (CHORD_RE, transposeChord, renderChordPro, songMeta, cleanStr, …) live in chords.js
 
 // "76. תודה לך אבי (capo 2)" -> title "תודה לך אבי" + {capo: 2}
 function cleanTitle(raw) {
@@ -148,7 +20,6 @@ function cleanTitle(raw) {
 }
 
 // ---------- PDF -> songs ----------
-const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/[\u00A0\u2000-\u200A\u202F]/g, " ");
 const median = (arr) => { const a = [...arr].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
 
 async function pdfToSongs(file) {

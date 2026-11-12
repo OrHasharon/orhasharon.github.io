@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>סט הלל חי · אור השרון</title>
+  <meta name="robots" content="noindex">
+  <meta property="og:title" content="סט הלל חי · צוותי הלל וסאונד">
+  <meta property="og:description" content="מצטרפים לסט ורואים את השיר הנוכחי, באותו סולם כמו כולם">
+  <meta property="og:image" content="https://orhasharon.github.io/logo.png">
+  <script src="../theme.js?v=1"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="stylesheet" href="../style.css?v=46">
+  <link rel="stylesheet" href="ws.css?v=59">
+  <style>
+    .guest-msg { margin: auto; max-width: 420px; text-align: center; padding: 24px; }
+    .guest-msg h2 { font-family: "Frank Ruhl Libre", serif; color: var(--accent-ink); margin: 0 0 8px; }
+    .guest-msg .tool { margin-top: 12px; }
+    /* one scrolling column: guests have no sideways columns */
+    .live-view .live-body { overflow-y: auto; overflow-x: hidden; scroll-snap-type: none; }
+    .live-view .live-body .song-body { height: auto; width: auto !important; column-width: auto !important; }
+  </style>
+</head>
+<body>
+  <div id="live-view" class="live-view"><div class="guest-msg"><p class="status">טוען…</p></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SB = "https://pualpwrkztjzhgpaqudm.supabase.co", KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  </script>
+  <script src="chords.js?v=1"></script>
+  <script>
+    // Guest view of a live set: no account, sees only this set, follows the leader (songs come from the leader's phone).
+    const sb = window.supabase.createClient(SB, KEY, { db: { schema: "or_hasharon_worship" } });
+    const code = new URLSearchParams(location.search).get("c") || "";
+    const el = document.getElementById("live-view");
+    const g = { songs: [], itemId: null, shifts: {}, leader: null, seq: -1, follow: true, idx: 0, ended: false, online: false,
+      chords: true, zoom: 1, myCapo: 0, noCapo: {}, wake: null, ch: null };
+    try { g.zoom = Number(localStorage.getItem("ws-live-zoom")) || 1; g.myCapo = Number(localStorage.getItem("ws-live-capo")) || 0; } catch {}
+
+    const msg = (title, text = "", extra = "") => { el.innerHTML = `<div class="guest-msg"><h2>${title}</h2>${text ? `<p>${text}</p>` : ""}${extra}</div>`; };
+
+    function render() {
+      if (g.ended) return msg("הסט הסתיים", "תודה שהצטרפת 🙏");
+      if (!g.songs.length) return msg("ממתינים למוביל/ה…", g.slow ? "המוביל/ה עוד לא פתח/ה את הסט. הדף יתעדכן לבד." : "");
+      if (g.follow) { const k = g.songs.findIndex((s) => s.id === g.itemId); if (k >= 0) g.idx = k; }
+      g.idx = Math.max(0, Math.min(g.idx, g.songs.length - 1));
+      const s = g.songs[g.idx], meta = songMeta(s.content), capo = Number(meta.capo) || 0;
+      const shift = (g.shifts[s.id] || 0) + (g.noCapo[s.id] ? capo : 0) - g.myCapo;
+      const base = s.key || firstChord(s.content);
+      const key = base ? transposeChord(base, shift) : "";
+      const next = g.songs[g.idx + 1];
+      const leadSong = g.songs.find((x) => x.id === g.itemId);
+      el.style.setProperty("--live-zoom", g.zoom);
+      el.innerHTML = `
+        <div class="live-bar">
+          <span class="live-pos">${g.idx + 1} / ${g.songs.length}</span>
+          <strong class="live-title">${esc(s.title)}</strong>
+          ${s.notes ? `<span class="live-note">📝 ${esc(s.notes)}</span>` : ""}
+          <span class="live-tools">
+            <span class="live-dot${g.online ? " on" : ""}"></span>
+            <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b></span>
+            ${g.leader ? `<span class="tool-label">👑 ${esc(g.leader.name || "")}</span>` : ""}
+            <button class="tool${g.follow ? " on" : ""}" data-g="follow">${g.follow ? "עוקב/ת ✓" : "לא עוקב/ת"}</button>
+            ${capo ? `<button class="tool${g.noCapo[s.id] ? " on" : ""}" data-g="capo">${g.noCapo[s.id] ? "עם קאפו " + capo : "בלי קאפו"}</button>` : ""}
+            <button class="tool" data-g="capo-me" title="קאפו אישי, רק אצלך">קאפו שלי ${g.myCapo}</button>
+            <button class="tool" data-g="zoom+1" title="הגדלה">🔍+</button><button class="tool" data-g="zoom-1" title="הקטנה">🔍−</button>
+            <button class="tool${g.chords ? " on" : ""}" data-g="chords">אקורדים</button>
+          </span>
+        </div>
+        ${!g.follow && leadSong ? `<div class="live-away">המוביל/ה בשיר: <b>${esc(leadSong.title)}</b> <button class="tool" data-g="follow">חזרה למעקב</button></div>` : ""}
+        <div class="live-body"><div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: g.chords })}</div></div>
+        <div class="live-nav">
+          <button class="tool" data-g="prev" ${g.idx ? "" : "disabled"}>→ הקודם</button>
+          <span class="live-next">${next ? `הבא: ${esc(next.title)}` : "שיר אחרון"}</span>
+          <button class="tool" data-g="next" ${next ? "" : "disabled"}>הבא ←</button>
+        </div>`;
+    }
+
+    function act(a) {
+      const s = g.songs[g.idx];
+      if (a === "follow") g.follow = !g.follow;
+      else if (a === "next" || a === "prev") { g.follow = false; g.idx += a === "next" ? 1 : -1; }
+      else if (a === "capo" && s) g.noCapo[s.id] = !g.noCapo[s.id];
+      else if (a === "capo-me") { g.myCapo = (g.myCapo + 1) % 8; try { localStorage.setItem("ws-live-capo", g.myCapo); } catch {} }
+      else if (a.startsWith("zoom")) { g.zoom = Math.min(3, Math.max(0.6, +(g.zoom + 0.15 * Number(a.slice(4))).toFixed(2))); try { localStorage.setItem("ws-live-zoom", g.zoom); } catch {} }
+      else if (a === "chords") g.chords = !g.chords;
+      render();
+    }
+    document.addEventListener("click", (e) => { const b = e.target.closest("[data-g]"); if (b) act(b.dataset.g); });
+
+    async function wakeOn() { try { if ("wakeLock" in navigator && !g.wake) { g.wake = await navigator.wakeLock.request("screen"); g.wake.addEventListener("release", () => { g.wake = null; }); } } catch {} }
+    const hello = () => g.ch?.send({ type: "broadcast", event: "hello", payload: {} });
+
+    function join() {
+      g.ch = sb.channel("ws-guest-" + code, { config: { broadcast: { self: false }, presence: { key: "g-" + Math.random().toString(36).slice(2) } } });
+      g.ch.on("broadcast", { event: "songs" }, ({ payload }) => { g.songs = payload.songs || []; render(); })
+        .on("broadcast", { event: "state" }, ({ payload: p }) => {
+          if (!p?.leader) return;
+          if (g.leader && (p.leader.email !== g.leader.email || p.leader.ts !== g.leader.ts)) { if (p.leader.ts < g.leader.ts) return; g.seq = -1; }
+          if (p.seq <= g.seq) return;
+          g.leader = p.leader; g.seq = p.seq; g.itemId = p.itemId; g.shifts = p.shifts || {};
+          render();
+        })
+        .on("broadcast", { event: "end" }, () => { g.ended = true; render(); sb.removeChannel(g.ch); })
+        .subscribe((status) => {
+          g.online = status === "SUBSCRIBED";
+          if (g.online) { g.ch.track({ guest: true }); hello(); }
+          render();
+        });
+    }
+
+    if (!/^[0-9a-z]{12,40}$/.test(code)) msg("הלינק לא תקין", "בקשו מהמוביל/ה לינק חדש.");
+    else {
+      join(); wakeOn();
+      setTimeout(() => { g.slow = true; if (!g.songs.length && !g.ended) render(); }, 10000);
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !g.ended) { wakeOn(); hello(); } });
+      window.addEventListener("online", () => { if (!g.ended) hello(); });
+    }
+  </script>
+</body>
+</html>
