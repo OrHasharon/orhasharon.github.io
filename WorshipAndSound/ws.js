@@ -451,6 +451,7 @@ function render() {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
   for (const id of ["signup", "team", "songs", "users"]) $(id).hidden = state.tab !== id;
   $("more").hidden = true;
+  if (typeof renderHero === "function") renderHero(); // the upcoming assembly, above the tabs (next-card.js)
   if (state.tab === "signup") renderSignup();
   else if (state.tab === "team") renderTeam();
   else if (state.tab === "songs") renderSongs();

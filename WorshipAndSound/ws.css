@@ -465,3 +465,64 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
   .site-header { padding: 16px 0 14px; }
   .verse { font-size: .84rem; line-height: 1.45; }
 }
+
+/* ---------- "the upcoming assembly" card (next-card.js) ---------- */
+.next-card { background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius); padding: 16px 18px; margin: 4px 0 18px; box-shadow: var(--shadow); }
+.nc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 14px; }
+.nc-head .tag { color: var(--accent-ink); font-weight: 700; font-size: .8rem; width: 100%; }
+.nc-head h2 { margin: 0; font-family: "Google Sans", "Noto Sans Hebrew", sans-serif; font-weight: 500; letter-spacing: .03em; font-size: 1.5rem; }
+.nc-place { color: var(--muted); font-size: .92rem; }
+.nc-cols { display: grid; grid-template-columns: 1fr 1.2fr 1.3fr; gap: 0; }
+.nc-col { padding: 0 16px; border-inline-start: 1px solid var(--line); }
+.nc-col:first-child { padding-inline-start: 0; border-inline-start: 0; }
+.nc-col:last-child { padding-inline-end: 0; }
+.nc-block + .nc-block { margin-top: 14px; }
+.nc-label { color: var(--muted); font-size: .85rem; margin-bottom: 4px; }
+.nc-lead-name { font-size: 1.25rem; font-weight: 600; color: var(--accent-ink); }
+.nc-band { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.nc-band li { display: flex; justify-content: space-between; gap: 10px; padding-bottom: 6px; border-bottom: 1px dashed var(--line); }
+.nc-band li:last-child { border-bottom: 0; }
+.nc-inst { color: var(--muted); white-space: nowrap; }
+.nc-name { font-weight: 600; }
+.nc-name.pending { font-weight: 400; opacity: .8; }
+.nc-missing { color: var(--accent-ink); font-size: .92rem; }
+.nc-muted { color: var(--muted); margin: 0; }
+.nc-songs { margin: 0; padding-inline-start: 20px; line-height: 1.8; }
+.nc-songs small { color: var(--muted); }
+.nc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.nc-actions .btn { min-height: 48px; font-size: 1rem; justify-content: center; text-align: center; width: 100%; }
+.nc-actions .nc-wide { grid-column: 1 / -1; }
+.nc-actions .btn:disabled { opacity: .45; cursor: default; }
+@media (max-width: 860px) {
+  .nc-cols { grid-template-columns: 1fr; }
+  .nc-col { padding: 14px 0 0; border-inline-start: 0; border-top: 1px solid var(--line); margin-top: 14px; }
+  .nc-col:first-child { padding-top: 0; border-top: 0; margin-top: 0; }
+  .next-card { padding: 14px; }
+  .nc-head h2 { font-size: 1.3rem; }
+}
+.nc-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.nc-actions .btn.ghost { color: var(--ink); font-weight: 500; }
+/* the card as the page's hero, above the tabs */
+.hero { margin: 6px 0 22px; }
+.hero .next-card { margin: 0; padding: 22px 24px; border-width: 1.5px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface) 55%); }
+.hero .nc-head h2 { font-size: clamp(1.4rem, 3.2vw, 2rem); }
+.hero .nc-head .tag { font-size: .85rem; letter-spacing: .04em; }
+@media (max-width: 860px) { .hero .next-card { padding: 16px; } }
+/* hero layout: desktop = leader | band | songs + buttons; phone = buttons first, then who, then songs */
+.nc-cols { grid-template-areas: "c1 c2 c3" "c1 c2 act"; grid-template-rows: auto 1fr; }
+.nc-c1 { grid-area: c1; } .nc-c2 { grid-area: c2; } .nc-c3 { grid-area: c3; }
+.nc-act { grid-area: act; border-inline-start: 1px solid var(--line); padding-inline-end: 0; }
+.nc-act .nc-actions { margin-top: 12px; }
+@media (max-width: 860px) {
+  .nc-cols { grid-template-areas: "act" "c1" "c2" "c3"; grid-template-rows: none; }
+  .nc-act { border: 0 !important; padding: 0 !important; margin: 0 !important; }
+  .nc-act .nc-actions { margin-top: 0; }
+  .nc-c1 { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+  /* leader / sound / set-up side by side */
+  .nc-c1 { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; }
+  .nc-c1 .nc-block + .nc-block { margin-top: 0; }
+  .nc-c1 .nc-lead-name { font-size: 1.05rem; }
+}
+.nc-c3 { padding-inline-end: 0; }
+@media (max-width: 860px) { .nc-col.nc-c1 { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; } }
