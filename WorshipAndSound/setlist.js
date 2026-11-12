@@ -16,10 +16,9 @@ function setlistButton(iso) {
   return `<button class="setlist-btn${n ? " has" : ""}" data-open-setlist="${iso}">🎵 סשן הלל${n ? ` (${n})` : ""}</button>`;
 }
 
-// ---------- who may change a session: that meeting's worship leader, or an admin (the DB enforces the same, setlist_leader.sql) ----------
+// ---------- who may change a session: that meeting's worship leader only, admins too (the DB enforces the same, setlist_leader.sql) ----------
 function canEditSetlist(iso) {
   if (typeof user === "undefined" || !user) return true; // open mode without sign-in
-  if (isAdmin) return true;
   return myMemberId != null && state.signups.some((s) => s.meeting_date === iso && s.role === "leader" && s.member_id === myMemberId);
 }
 function leaderOnly(iso) {

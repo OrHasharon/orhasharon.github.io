@@ -1,8 +1,8 @@
--- Worship sessions: only that meeting's worship leader (or an admin) can add, reorder, edit notes or remove songs.
+-- Worship sessions: only that meeting's worship leader can (admins included) add, reorder, edit notes or remove songs.
 -- Everyone signed in can still read the session. Safe to re-run.
 create or replace function or_hasharon_worship.can_edit_setlist(d date) returns boolean
   language sql stable security definer set search_path = '' as $$
-  select or_hasharon_worship.is_admin() or exists (
+  select exists (
     select 1
     from or_hasharon_worship.signups s
     join or_hasharon_worship.allowed_users u on u.member_id = s.member_id
