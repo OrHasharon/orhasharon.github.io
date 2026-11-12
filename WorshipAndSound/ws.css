@@ -48,7 +48,7 @@
 .empty { color: var(--muted); font-size: .88rem; }
 
 /* team */
-.team-section h2 { font-family: "Frank Ruhl Libre", serif; font-size: 1.35rem; margin: 18px 0 10px; }
+.team-section h2 { font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; font-size: 1.35rem; margin: 18px 0 10px; }
 .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .member {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
@@ -79,7 +79,7 @@
 
 .tabs { margin-top: 22px; }
 .assign { padding: 3px 10px; border-radius: 999px; border: 1px dashed var(--accent); color: var(--accent-ink); cursor: pointer; font-size: .88rem; }
-.summary h2, .section-title { font-family: "Frank Ruhl Libre", serif; font-size: 1.3rem; margin: 6px 0 10px; }
+.summary h2, .section-title { font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; font-size: 1.3rem; margin: 6px 0 10px; }
 .section-title { margin-top: 26px; }
 .summary .duty-table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 10px; margin: 0; }
 .summary td small { color: var(--muted); }
@@ -143,7 +143,7 @@
 .song-row small { color: var(--accent-ink); font-weight: 700; }
 .song-view { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
 .song-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
-.song-head h2 { font-family: "Frank Ruhl Libre", serif; margin: 0; font-size: 1.5rem; flex: 1; }
+.song-head h2 { font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; margin: 0; font-size: 1.5rem; flex: 1; }
 .song-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); }
 .song-tools .btn.ghost { padding: 4px 10px; }
 .chordpro { font-size: 1.1rem; line-height: 1.25; }
@@ -168,7 +168,7 @@
 /* song page (Project Yuval style) */
 .song-view { --song-scale: 1; }
 .song-top { margin-bottom: 10px; }
-.song-title { font-family: "Frank Ruhl Libre", serif; font-size: 2.2rem; line-height: 1.15; margin: 6px 0 2px; color: var(--accent-ink); }
+.song-title { font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; font-size: 2.2rem; line-height: 1.15; margin: 6px 0 2px; color: var(--accent-ink); }
 .song-artist { margin: 0; color: var(--muted); font-size: 1.15rem; }
 .song-toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
 .tool-group { display: inline-flex; align-items: center; gap: 4px; }
@@ -227,7 +227,7 @@
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 28px 24px;
 }
-.login h2 { font-family: "Frank Ruhl Libre", serif; margin: 0 0 8px; }
+.login h2 { font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; margin: 0 0 8px; }
 .login p { color: var(--muted); margin: 0 0 18px; }
 .btn.google { font-size: 1rem; padding: 10px 22px; }
 
@@ -259,7 +259,7 @@
 /* song index */
 .song-index { columns: 3 260px; column-gap: 28px; }
 .idx-group { break-inside: avoid; margin-bottom: 14px; }
-.idx-group h3 { margin: 0 0 4px; font-family: "Frank Ruhl Libre", serif; font-size: 1.3rem; color: var(--accent-ink); border-bottom: 1px solid var(--line); }
+.idx-group h3 { margin: 0 0 4px; font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; font-size: 1.3rem; color: var(--accent-ink); border-bottom: 1px solid var(--line); }
 .idx-song { display: block; width: 100%; text-align: start; background: none; border: 0; color: var(--ink); font: inherit; padding: 3px 2px; cursor: pointer; }
 .idx-song:hover { color: var(--accent-ink); }
 .idx-song small { color: var(--muted); font-size: .78em; }
@@ -282,7 +282,7 @@
 .setlist-dialog { border: 0; padding: 0; background: transparent; width: min(640px, 100vw - 24px); max-width: none; }
 .setlist-dialog::backdrop { background: rgba(5, 7, 13, .8); }
 .sl-box { position: relative; background: #111827; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
-.sl-box h2 { font-family: "Frank Ruhl Libre", serif; margin: 0 0 14px; font-size: 1.4rem; color: var(--accent-ink); }
+.sl-box h2 { font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; margin: 0 0 14px; font-size: 1.4rem; color: var(--accent-ink); }
 .sl-close { position: absolute; top: 12px; left: 12px; background: none; border: 0; color: var(--muted); font-size: 1.1rem; cursor: pointer; }
 .sl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .sl-list li { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
@@ -323,7 +323,7 @@
 [data-theme="light"] .live-view { background: #f7f6f2; }
 .live-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .live-pos { color: var(--muted); font-size: .9rem; }
-.live-title { font-family: "Frank Ruhl Libre", serif; font-size: 1.4rem; color: var(--accent-ink); }
+.live-title { font-family: "Google Sans", "Heebo", sans-serif; font-weight: 500; font-size: 1.4rem; color: var(--accent-ink); }
 .live-note { color: var(--hallel); font-size: .95rem; }
 .live-tools { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .live-body { flex: 1; overflow: auto; padding: 2vh 5vw; }
@@ -413,3 +413,6 @@
 .lead-actions { display: grid; gap: 8px; margin-top: 14px; }
 .lead-actions .btn { font-size: 1.05rem; padding: 12px; }
 .lead-foot { margin: 14px 0 0; text-align: center; }
+/* worship site: headings in Google Sans Medium (style.css keeps Frank Ruhl Libre for the community site) */
+h1, .verse { font-family: "Google Sans", "Heebo", sans-serif; }
+h1 { font-weight: 500; }
