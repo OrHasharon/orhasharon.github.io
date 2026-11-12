@@ -551,3 +551,14 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .btn .ok-icon { color: currentColor; }
 .btn .ok-icon circle { fill: none; stroke: currentColor; stroke-width: 2; }
 .btn .ok-icon path { stroke: currentColor; }
+/* instrument icons (icons.js) — each instrument its own colour, readable on both dark and light */
+.ic-mic-vocal { color: #e8618c; }      /* שירה */
+.ic-guitar    { color: #e8964a; }      /* גיטרה / בס / חשמלית */
+.ic-piano     { color: #4fa3e0; }      /* קלידים / פסנתר */
+.ic-drum      { color: #d8734f; }      /* תופים / קחון */
+.ic-music-2   { color: #9b7be0; }      /* כינור / סקסופון */
+[data-theme="light"] .ic-mic-vocal { color: #c93d6c; }
+[data-theme="light"] .ic-guitar    { color: #c46a1c; }
+[data-theme="light"] .ic-piano     { color: #2378b8; }
+[data-theme="light"] .ic-drum      { color: #b44f2c; }
+[data-theme="light"] .ic-music-2   { color: #7352c4; }
