@@ -500,8 +500,10 @@ document.addEventListener("click", (e) => {
 // keyboard / foot pedal: arrows or PageUp/PageDown change song, +/- zoom, Esc leaves
 document.addEventListener("keydown", (e) => {
   if (!live.on) return;
-  if (["ArrowLeft", "PageDown", " "].includes(e.key)) { e.preventDefault(); liveCanScroll("next") ? liveScroll("next") : liveAction("next"); }
-  else if (["ArrowRight", "PageUp"].includes(e.key)) { e.preventDefault(); liveCanScroll("prev") ? liveScroll("prev") : liveAction("prev"); }
+  // while following the leader, the pedal / arrows only turn columns inside the song: the leader changes songs
+  const locked = typeof syncLocksKey === "function" && syncLocksKey();
+  if (["ArrowLeft", "PageDown", " "].includes(e.key)) { e.preventDefault(); liveCanScroll("next") ? liveScroll("next") : locked || liveAction("next"); }
+  else if (["ArrowRight", "PageUp"].includes(e.key)) { e.preventDefault(); liveCanScroll("prev") ? liveScroll("prev") : locked || liveAction("prev"); }
   else if (e.key === "+" || e.key === "=") liveAction("zoom+1");
   else if (e.key === "-") liveAction("zoom-1");
   else if (e.key === "Escape") liveAction("exit");
@@ -516,7 +518,9 @@ document.addEventListener("touchstart", (e) => {
 document.addEventListener("touchend", (e) => {
   if (!live.on || touchX === null) return;
   const dx = e.changedTouches[0].clientX - touchX; touchX = null;
-  // finger to the right reveals the next column (Hebrew reads right to left); past the last column = next song
+  // finger to the right reveals the next column (Hebrew reads right to left); past the last column = next song,
+  // except while following the leader (then a swipe never changes the song by accident)
+  if (typeof syncLocksKey === "function" && syncLocksKey()) return;
   if (dx > 70 && touchNext) liveAction("next");
   else if (dx < -70 && touchPrev) liveAction("prev");
 }, { passive: true });
