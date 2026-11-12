@@ -73,6 +73,7 @@ function claimLead() {
   sync.leader = { email: syncEmail(), name: myName(), ts: Date.now() };
   send("lead", sync.leader);
   sync.ch?.track({ name: myName(), lead: true });
+  guestServe(); // the team's link (guest view) follows whoever leads
   broadcastState();
   renderLive();
 }
@@ -83,7 +84,7 @@ function onLead(p) {
   if (cur && (p.ts < cur.ts || (p.ts === cur.ts && p.email < cur.email))) return; // the latest claim wins
   const lost = sync.iLead && p.email !== syncEmail();
   sync.leader = p; sync.lastSeq = -1;
-  if (lost) { sync.iLead = false; sync.ch?.track({ name: myName(), lead: false }); toast(`ההובלה עברה ל${p.name ? "-" + p.name : "מישהו אחר"}`); }
+  if (lost) { sync.iLead = false; sync.ch?.track({ name: myName(), lead: false }); guestUnserve(); toast(`ההובלה עברה ל${p.name ? "-" + p.name : "מישהו אחר"}`); }
   renderLive();
 }
 
@@ -149,11 +150,16 @@ function syncResume() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") syncResume(); });
 window.addEventListener("online", syncResume);
 
-// ---------- guest link ----------
-function guestCode() {
-  const a = new Uint8Array(12);
-  crypto.getRandomValues(a);
-  return [...a].map((b) => (b % 36).toString(36)).join("") + Date.now().toString(36).slice(-4);
+// ---------- team / guest link ----------
+// One link per meeting date, the same on every device, so it can be sent days ahead (Saturday night for Sunday) and
+// keeps working whoever ends up leading. It opens live.html, which follows the leader without signing in; the songs
+// come from the leader's phone, so the link shows something only while someone leads that set.
+async function guestCodeFor(date) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("orhasharon-ws-live:" + date));
+  return [...new Uint8Array(buf)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function guestLink(date) {
+  return location.origin + location.pathname.replace(/[^/]*$/, "") + "live.html?c=" + (await guestCodeFor(date)) + "&d=" + date;
 }
 
 function guestSongs() {
@@ -167,21 +173,89 @@ function sendGuestSongs(force = false) {
   send("songs", { songs }, sync.guestCh);
 }
 
-function guestOpen() {
-  if (!sync.iLead) return;
-  if (!sync.guestCh) {
-    sync.guestCode = guestCode();
-    const ch = sb.channel("ws-guest-" + sync.guestCode, { config: { broadcast: { self: false }, presence: { key: "leader" } } });
-    ch.on("broadcast", { event: "hello" }, () => { if (!sync.iLead) return; sendGuestSongs(true); send("state", buildState(), ch); })
-      .on("presence", { event: "sync" }, () => { sync.guestCount = Object.keys(ch.presenceState()).filter((k) => k !== "leader").length; renderLive(); })
-      .subscribe((status) => { if (status === "SUBSCRIBED") ch.track({ leader: true }); });
-    sync.guestCh = ch;
-  }
-  const url = location.origin + location.pathname.replace(/[^/]*$/, "") + "live.html?c=" + sync.guestCode;
-  const text = "הצטרפות לסט ההלל (צפייה בלבד):";
-  if (navigator.share) navigator.share({ title: "סט הלל", text, url }).catch(() => {});
-  else navigator.clipboard?.writeText(url).then(() => toast("הלינק לאורח/ת הועתק"), () => prompt("לינק לאורח/ת:", url));
+// while I lead: answer the guest page (songs + where we are)
+async function guestServe() {
+  if (sync.guestCh || !sync.date) return;
+  const date = sync.date, code = await guestCodeFor(date);
+  if (!sync.iLead || sync.guestCh || sync.date !== date) return;
+  sync.guestCode = code;
+  const ch = sb.channel("ws-guest-" + code, { config: { broadcast: { self: false }, presence: { key: "leader" } } });
+  const push = () => { if (!sync.iLead) return; sendGuestSongs(true); send("state", buildState(), ch); };
+  ch.on("broadcast", { event: "hello" }, push)
+    .on("presence", { event: "sync" }, () => { sync.guestCount = Object.keys(ch.presenceState()).filter((k) => k !== "leader").length; renderLive(); })
+    .subscribe((status) => { if (status === "SUBSCRIBED") { ch.track({ leader: true }); push(); } });
+  sync.guestCh = ch;
 }
+function guestUnserve() {
+  if (sync.guestCh) sb.removeChannel(sync.guestCh);
+  Object.assign(sync, { guestCh: null, guestCode: null, guestCount: 0, guestSongsSig: "" });
+}
+
+async function guestShare() {
+  const url = await guestLink(sync.date);
+  const text = "הצטרפות לסט ההלל (צפייה, בלי התחברות):";
+  if (navigator.share) navigator.share({ title: "סט הלל", text, url }).catch(() => {});
+  else navigator.clipboard?.writeText(url).then(() => toast("הלינק הועתק"), () => prompt("הלינק לסט:", url));
+}
+
+// ---------- "📣 send the live-set link to the team" (from the session dialog) ----------
+const TEAM_ROLES = ["leader", "musician", "sound"];
+const teamFor = (date) => state.signups
+  .filter((s) => s.meeting_date === date && TEAM_ROLES.includes(s.role) && s.status !== "declined")
+  .sort((a, b) => TEAM_ROLES.indexOf(a.role) - TEAM_ROLES.indexOf(b.role));
+
+function teamText(date, url, firstName = "") {
+  const mt = state.meetings.find((x) => x.iso === date);
+  const ld = state.signups.find((s) => s.meeting_date === date && s.role === "leader");
+  const leaderName = ld ? byId(ld.member_id)?.name : "";
+  const when = `${mt ? meetingKind(mt) + " " : ""}${date.split("-").reverse().join("/")}`;
+  return `היי ${firstName || "צוות"}! 🎶\n` +
+    `הסט של ההלל ב*${when}* מוכן.\n` +
+    `בזמן ההלל הלינק מראה את השיר הנוכחי בסולם הנכון, וזז יחד עם ${leaderName ? "*" + leaderName + "*" : "מוביל/ת ההלל"}. בלי התחברות:\n` +
+    `${url}\n\n` +
+    `אפשר לפתוח כבר עכשיו — הדף יתעדכן לבד כשהסט יתחיל. כדאי לשמור אותו במסך הבית.\n\n` +
+    `_הודעה ממערכת OrHasharon/WorshipAndSound_`;
+}
+
+async function showTeamLinkDialog(date) {
+  const url = await guestLink(date);
+  const team = teamFor(date);
+  const rows = team.map((s) => {
+    const m = byId(s.member_id); if (!m) return "";
+    const c = contactOf(s.member_id) || {};
+    const role = SLOTS.find((x) => x.role === s.role)?.label || "";
+    const text = teamText(date, url, m.name.split(" ")[0]);
+    const wa = `https://wa.me/${c.phone ? waNumber(c.phone) : ""}?text=${encodeURIComponent(text)}`;
+    return `<li class="team-row"><span><b>${esc(m.name)}</b> <small>${esc(role)}${s.instrument ? " · " + esc(s.instrument) : ""}</small></span>
+      ${isMe(s.member_id) ? `<small>(את/ה)</small>` : `<a class="btn wa" href="${wa}" target="_blank" rel="noopener" data-team-sent>💬 ${c.phone ? "שליחה" : "בחירת נמען/ת"}</a>`}</li>`;
+  }).join("");
+  const group = teamText(date, url);
+  let d = document.getElementById("team-dialog");
+  if (!d) { d = document.createElement("dialog"); d.id = "team-dialog"; d.className = "setlist-dialog"; document.body.append(d); }
+  d.innerHTML = `<div class="sl-box">
+    <button class="sl-close" data-close-team aria-label="סגירה">✕</button>
+    <h2>📣 לינק לסט החי לצוות</h2>
+    <p class="hint">לינק אחד לכל המפגש, בלי התחברות. הוא מראה את השיר כשמישהו מוביל את הסט (פותח/ת "מצב הלל"). אפשר לשלוח כבר עכשיו.</p>
+    <div class="sl-actions">
+      <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(group)}" target="_blank" rel="noopener">💬 לקבוצת הוואטסאפ</a>
+      <button class="btn ghost" type="button" data-team-copy>📋 העתקת ההודעה</button>
+    </div>
+    ${rows ? `<p class="hint">או לכל אחד/ת בנפרד:</p><ul class="team-list">${rows}</ul>` : `<p class="status">אין עדיין משובצים להלל במפגש הזה.</p>`}
+  </div>`;
+  d._group = group;
+  if (!d.open) d.showModal();
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-sl-team]")) { showTeamLinkDialog(setlist.openDate); return; }
+  if (e.target.closest("[data-close-team]") || e.target.id === "team-dialog") { document.getElementById("team-dialog")?.close(); return; }
+  if (e.target.closest("[data-team-copy]")) {
+    const g = document.getElementById("team-dialog")?._group || "";
+    navigator.clipboard?.writeText(g).then(() => toast("ההודעה הועתקה"), () => prompt("ההודעה:", g));
+    return;
+  }
+  const sent = e.target.closest("[data-team-sent]");
+  if (sent) sent.classList.add("sent");
+});
 
 // ---------- what the live view shows ----------
 function syncToolsHtml() {
@@ -190,7 +264,7 @@ function syncToolsHtml() {
   const dot = `<span class="live-dot${sync.online ? " on" : ""}" title="${sync.online ? "מחובר/ת" : "מתחבר/ת…"}"></span>`;
   const who = sync.leader ? `👑 ${esc(sync.leader.name || "")}` : "אין מוביל/ה";
   let html = `${dot}<button class="tool link" data-live="people">${who} · ${n} מחוברים${sync.guestCount ? ` + ${sync.guestCount} אורחים` : ""}</button>`;
-  if (sync.iLead) html += `<button class="tool" data-live="guest">🔗 לינק לאורח/ת</button><button class="tool" data-live="end">⏹ סיום סט</button>`;
+  if (sync.iLead) html += `<button class="tool" data-live="guest">🔗 לינק לצוות</button><button class="tool" data-live="end">⏹ סיום סט</button>`;
   else {
     html += `<button class="tool${sync.follow ? " on" : ""}" data-live="follow">${sync.follow ? "עוקב/ת ✓" : "לא עוקב/ת"}</button>`;
     if (mayLead(sync.date)) html += `<button class="tool" data-live="lead">קח/י הובלה</button>`;
@@ -222,7 +296,7 @@ function syncAction(a) {
   if (a === "follow") { sync.follow = !sync.follow; if (sync.follow && sync.remote) applyRemote(sync.remote); return true; }
   if (a === "back") { sync.follow = true; if (sync.remote) applyRemote(sync.remote); return true; }
   if (a === "lead") { claimLead(); return true; }
-  if (a === "guest") { guestOpen(); return true; }
+  if (a === "guest") { guestShare(); return true; }
   if (a === "end") { if (confirm("לסיים את הסט לכולם?")) { syncEnd(); live.on = false; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } return true; }
   if (a === "capo-me") { live.myCapo = ((live.myCapo || 0) + 1) % 8; try { localStorage.setItem("ws-live-capo", live.myCapo); } catch {} return true; }
   return false;

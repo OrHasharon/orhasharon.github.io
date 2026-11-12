@@ -397,3 +397,9 @@
 .live-away { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 16px; background: var(--hallel); color: #fff; font-size: .95rem; }
 .live-away .tool { background: #fff; color: var(--hallel); border-color: #fff; }
 @media (max-width: 760px) { .live-people, .live-away { padding: 5px 10px; font-size: .82rem; } }
+/* "📣 live-set link to the team" dialog */
+.team-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.team-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.team-row small { color: var(--muted); }
+.team-row .btn { padding: 6px 12px; font-size: .9rem; white-space: nowrap; }
+.team-row .btn.sent::after { content: " ✓"; }

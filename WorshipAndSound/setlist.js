@@ -57,6 +57,7 @@ function renderSetlistDialog() {
       </li>`).join("")}</ol>` : `<p class="status">עדיין אין שירים בסשן. מוסיפים מלשונית "שירים" ← פתיחת שיר ← "לסשן הלל".</p>`}
     <div class="sl-actions">
       <button class="btn" data-sl-live ${items.length ? "" : "disabled"}>▶ מצב הלל (מסך מלא)</button>
+      ${LIVE_SYNC_ON && (isAdmin || canEditSetlist(iso)) ? `<button class="btn ghost" data-sl-team>📣 לינק לסט החי לצוות</button>` : ""}
       <button class="btn ghost" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
       <button class="btn ghost" data-sl-pdf ${items.length ? "" : "disabled"}>📄 הורדת השירים כ-PDF</button>
       <a id="sl-download" class="link-btn" hidden></a>
@@ -395,7 +396,8 @@ function renderLive() {
   const myCapo = syncActive() ? live.myCapo || 0 : 0;
   const shift = (live.shift[it.id] || 0) + (live.noCapo[it.id] ? capo : 0) - myCapo;
   const base = song.song_key || firstChord(song.content);
-  const key = base ? transposeChord(base, shift) : "";
+  const key = base ? transposeChord(base, shift + myCapo) : "";          // the key everyone plays in
+  const shapes = base && myCapo ? transposeChord(base, shift) : "";       // what my fingers play with my capo
   const next = items[live.idx + 1];
   el.hidden = false;
   el.style.setProperty("--live-zoom", live.zoom);
@@ -405,7 +407,7 @@ function renderLive() {
       <strong class="live-title">${esc(song.title)}</strong>
       ${it.notes ? `<span class="live-note">📝 ${esc(it.notes)}</span>` : ""}
       <span class="live-tools">
-        <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b></span>
+        <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b>${shapes ? ` · קאפו ${myCapo}: <b dir="ltr">${esc(shapes)}</b>` : ""}</span>
         ${syncLocksKey() ? "" : `<button class="tool" data-live="key-1" title="חצי טון למטה">−½</button><button class="tool" data-live="key+1" title="חצי טון למעלה">+½</button>
         ${live.shift[it.id] ? `<button class="tool link" data-live="key0">מקורי</button>` : ""}`}
         ${capo ? `<button class="tool${live.noCapo[it.id] ? " on" : ""}" data-live="capo">${live.noCapo[it.id] ? "עם קאפו " + capo : "בלי קאפו"}</button>` : ""}

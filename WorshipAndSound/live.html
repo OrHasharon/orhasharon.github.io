@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="stylesheet" href="../style.css?v=46">
-  <link rel="stylesheet" href="ws.css?v=59">
+  <link rel="stylesheet" href="ws.css?v=60">
   <style>
     .guest-msg { margin: auto; max-width: 420px; text-align: center; padding: 24px; }
     .guest-msg h2 { font-family: "Frank Ruhl Libre", serif; color: var(--accent-ink); margin: 0 0 8px; }
@@ -36,7 +36,8 @@
   <script>
     // Guest view of a live set: no account, sees only this set, follows the leader (songs come from the leader's phone).
     const sb = window.supabase.createClient(SB, KEY, { db: { schema: "or_hasharon_worship" } });
-    const code = new URLSearchParams(location.search).get("c") || "";
+    const params = new URLSearchParams(location.search), code = params.get("c") || "";
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(params.get("d") || "") ? params.get("d").split("-").reverse().slice(0, 2).join("/") : "";
     const el = document.getElementById("live-view");
     const g = { songs: [], itemId: null, shifts: {}, leader: null, seq: -1, follow: true, idx: 0, ended: false, online: false,
       chords: true, zoom: 1, myCapo: 0, noCapo: {}, wake: null, ch: null };
@@ -46,13 +47,14 @@
 
     function render() {
       if (g.ended) return msg("הסט הסתיים", "תודה שהצטרפת 🙏");
-      if (!g.songs.length) return msg("ממתינים למוביל/ה…", g.slow ? "המוביל/ה עוד לא פתח/ה את הסט. הדף יתעדכן לבד." : "");
+      if (!g.songs.length) return msg(`סט ההלל${day ? " · " + day : ""}`, "ממתינים למוביל/ה… כשהסט יתחיל, השיר יופיע כאן לבד. אפשר להשאיר את הדף פתוח.");
       if (g.follow) { const k = g.songs.findIndex((s) => s.id === g.itemId); if (k >= 0) g.idx = k; }
       g.idx = Math.max(0, Math.min(g.idx, g.songs.length - 1));
       const s = g.songs[g.idx], meta = songMeta(s.content), capo = Number(meta.capo) || 0;
       const shift = (g.shifts[s.id] || 0) + (g.noCapo[s.id] ? capo : 0) - g.myCapo;
       const base = s.key || firstChord(s.content);
-      const key = base ? transposeChord(base, shift) : "";
+      const key = base ? transposeChord(base, shift + g.myCapo) : "";
+      const shapes = base && g.myCapo ? transposeChord(base, shift) : "";
       const next = g.songs[g.idx + 1];
       const leadSong = g.songs.find((x) => x.id === g.itemId);
       el.style.setProperty("--live-zoom", g.zoom);
@@ -63,7 +65,7 @@
           ${s.notes ? `<span class="live-note">📝 ${esc(s.notes)}</span>` : ""}
           <span class="live-tools">
             <span class="live-dot${g.online ? " on" : ""}"></span>
-            <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b></span>
+            <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b>${shapes ? ` · קאפו ${g.myCapo}: <b dir="ltr">${esc(shapes)}</b>` : ""}</span>
             ${g.leader ? `<span class="tool-label">👑 ${esc(g.leader.name || "")}</span>` : ""}
             <button class="tool${g.follow ? " on" : ""}" data-g="follow">${g.follow ? "עוקב/ת ✓" : "לא עוקב/ת"}</button>
             ${capo ? `<button class="tool${g.noCapo[s.id] ? " on" : ""}" data-g="capo">${g.noCapo[s.id] ? "עם קאפו " + capo : "בלי קאפו"}</button>` : ""}
@@ -114,10 +116,10 @@
         });
     }
 
+    if (day) document.title = `סט הלל ${day} · אור השרון`;
     if (!/^[0-9a-z]{12,40}$/.test(code)) msg("הלינק לא תקין", "בקשו מהמוביל/ה לינק חדש.");
     else {
       join(); wakeOn();
-      setTimeout(() => { g.slow = true; if (!g.songs.length && !g.ended) render(); }, 10000);
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !g.ended) { wakeOn(); hello(); } });
       window.addEventListener("online", () => { if (!g.ended) hello(); });
     }
