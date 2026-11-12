@@ -47,6 +47,7 @@ function renderSetlistDialog() {
     <div class="sl-actions">
       <button class="btn" data-sl-live ${items.length ? "" : "disabled"}>▶ מצב הלל (מסך מלא)</button>
       <button class="btn ghost" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
+      <button class="btn ghost" data-sl-pdf ${items.length ? "" : "disabled"}>📄 הורדת השירים כ-PDF</button>
       <a id="sl-download" class="link-btn" hidden></a>
     </div>
   </div>`;
@@ -312,6 +313,38 @@ document.addEventListener("click", async (e) => {
     b.disabled = false; b.textContent = "📽️ הורדת מצגת PowerPoint";
   }
 });
+
+// ---------- PDF of the songs themselves (chords + lyrics), one song per page, via the browser's "Save as PDF" ----------
+function printSongs(iso) {
+  const items = itemsFor(iso).filter((i) => i.songs);
+  if (!items.length) return;
+  const mt = state.meetings.find((m) => m.iso === iso);
+  const date = iso.split("-").reverse().join("-");
+  document.getElementById("print-book")?.remove();
+  const book = document.createElement("div");
+  book.id = "print-book";
+  book.innerHTML = items.map((it, k) => {
+    const s = it.songs, meta = songMeta(s.content);
+    const key = s.song_key || firstChord(s.content);
+    const info = [key && `סולם <b dir="ltr">${esc(key)}</b>`, Number(meta.capo) && `קאפו ${Number(meta.capo)}`].filter(Boolean).join(" · ");
+    return `<section class="pb-song">
+      <div class="pb-head"><span class="pb-num">${k + 1}</span><h2 class="song-title">${esc(s.title)}</h2></div>
+      ${meta.artist ? `<p class="song-artist">${esc(meta.artist)}</p>` : ""}
+      ${info ? `<p class="pb-info">${info}</p>` : ""}
+      ${it.notes ? `<p class="pb-note">📝 ${esc(it.notes)}</p>` : ""}
+      <div class="chordpro song-body" style="--song-scale:1">${renderChordPro(s.content, 0)}</div>
+    </section>`;
+  }).join("");
+  document.body.append(book);
+  const oldTitle = document.title;
+  document.title = `סשן הלל ${date}${mt ? " " + meetingKind(mt) : ""}`; // the PDF's default file name
+  document.body.classList.add("print-book");
+  const done = () => { document.body.classList.remove("print-book"); book.remove(); document.title = oldTitle; removeEventListener("afterprint", done); };
+  addEventListener("afterprint", done);
+  dialogEl().close();
+  setTimeout(() => window.print(), 50);
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-sl-pdf]")) printSongs(setlist.openDate); });
 
 // notes save when you leave the field
 document.addEventListener("change", async (e) => {

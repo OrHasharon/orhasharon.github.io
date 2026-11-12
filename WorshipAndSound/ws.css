@@ -199,9 +199,24 @@
   body::before, .site-header, .tabs, .footer, .no-print, .toast, #more, .present-bar { display: none !important; }
   .song-view { background: #fff !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; color: #000; }
   .song-title { color: #000 !important; }
-  .song-body .seg .ch { color: #b00020 !important; }
+  .song-body .seg .ch, .cp-bare-chords { color: #b00020 !important; }
   .song-body, .cp-section, .song-artist { color: #000 !important; }
 }
+
+/* session songbook PDF: only #print-book is printed, one song per page */
+#print-book { display: none; }
+@media print {
+  body.print-book > *:not(#print-book) { display: none !important; }
+  body.print-book #print-book { display: block; color: #000; }
+  #print-book .pb-song + .pb-song { break-before: page; }
+  #print-book .pb-head { display: flex; align-items: baseline; gap: 10px; }
+  #print-book .pb-num { color: #777; font-size: 1.1rem; }
+  #print-book .song-title { font-size: 1.8rem; margin: 0; }
+  #print-book .pb-info, #print-book .pb-note { margin: 4px 0; color: #333 !important; font-size: .95rem; }
+  #print-book .song-body { margin-top: 12px; font-size: 1.15rem; }
+  #print-book .cp-line { break-inside: avoid; }
+}
+@page { margin: 14mm; }
 
 /* sign-in */
 .account { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
