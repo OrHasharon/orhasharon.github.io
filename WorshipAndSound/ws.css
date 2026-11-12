@@ -421,3 +421,47 @@ h1 { font-weight: 500; }
 /* Google Sans headings: a little more air between the letters */
 h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-title, .login h2, .idx-group h3, .sl-box h2, .live-title,
 .guest-msg h2, .respond h2 { letter-spacing: .03em; }
+
+/* ---------- UX pass (12.11) ---------- */
+/* live view: title + key on top, a few large actions, the rest behind "⚙ תצוגה" */
+.live-bar { display: block; padding: 8px 14px; }
+.live-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.live-row + .live-row, .live-bar .live-note { margin-top: 6px; }
+.live-bar .live-title { flex: 1; min-width: 0; font-size: 1.35rem; }
+.live-key { white-space: nowrap; color: var(--muted); }
+.live-key b { color: var(--ink); font-size: 1.1rem; }
+.live-keys { display: inline-flex; gap: 4px; }
+.live-who { display: inline-flex; align-items: center; gap: 6px; color: var(--muted) !important; padding-inline: 2px !important; }
+.live-quick .live-gear { margin-inline-start: auto; }
+.live-panel { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(127,127,127,.07); }
+.live-zoom { display: inline-flex; gap: 4px; }
+.live-end { color: #ff8a80; border-color: rgba(255,138,128,.45); }
+.live-view .tool { min-height: 40px; padding: 6px 12px; font-size: .95rem; }
+.live-view .live-exit { min-width: 40px; padding: 6px 10px; }
+.live-body { scrollbar-width: none; }
+.live-body::-webkit-scrollbar { display: none; }
+@media (max-width: 760px) {
+  .live-bar { padding: 6px 10px; }
+  .live-bar .live-title { font-size: 1.15rem; }
+  .live-view .tool { min-height: 40px; font-size: .88rem; padding: 6px 10px; }
+  .live-nav .tool { min-height: 44px; }
+}
+
+/* touch: the ✕ / 💬 on a scheduled person get a real finger-size target */
+@media (pointer: coarse) {
+  .person button, .person [data-notify] { min-width: 34px; min-height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }
+  .person { padding-block: 0; }
+}
+
+/* the leader's own meeting: a clear "👑 הובלה" next to the session button */
+.setlist-btn.lead-btn { border: 1px solid var(--accent); color: var(--accent-ink); font-weight: 600; }
+.meeting-head .setlist-btn.lead-btn { margin-inline-start: 6px; }
+
+/* session dialog on a phone: one full-width button per row, the main one first */
+@media (max-width: 600px) {
+  .sl-actions { gap: 8px; }
+  .sl-actions .btn, .sl-actions a.btn { flex: 1 1 100%; justify-content: center; text-align: center; padding-block: 11px; }
+  /* a lighter header so the meetings start higher on the screen */
+  .site-header { padding: 16px 0 14px; }
+  .verse { font-size: .84rem; line-height: 1.45; }
+}

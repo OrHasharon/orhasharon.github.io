@@ -123,6 +123,8 @@ document.addEventListener("click", async (e) => {
     document.getElementById("lead-search")?.focus();
     return;
   }
+  const open = t.closest("[data-lead-open]");
+  if (open) { showLeadScreen(open.dataset.leadOpen); return; }
   if (t.closest("[data-lead-edit]")) { leadDialog().close(); openSetlist(lead.date); return; }
   if (t.closest("[data-lead-start]")) {
     leadDialog().close();

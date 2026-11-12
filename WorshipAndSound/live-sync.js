@@ -268,18 +268,27 @@ document.addEventListener("click", (e) => {
 });
 
 // ---------- what the live view shows ----------
-function syncToolsHtml() {
+// the live bar: who leads + connection (always visible)
+function syncStatusHtml() {
   if (!syncActive()) return "";
   const n = Object.keys(sync.people).length;
   const dot = `<span class="live-dot${sync.online ? " on" : ""}" title="${sync.online ? "מחובר/ת" : "מתחבר/ת…"}"></span>`;
   const who = sync.leader ? `👑 ${esc(sync.leader.name || "")}` : "אין מוביל/ה";
-  let html = `${dot}<button class="tool link" data-live="people">${who} · ${n} מחוברים${sync.guestCount ? ` + ${sync.guestCount} אורחים` : ""}</button>`;
-  if (sync.iLead) html += `<button class="tool" data-live="guest">🔗 לינק לצוות</button><button class="tool" data-live="end">⏹ סיום סט</button>`;
-  else {
-    html += `<button class="tool${sync.follow ? " on" : ""}" data-live="follow">${sync.follow ? "עוקב/ת ✓" : "לא עוקב/ת"}</button>`;
-    if (mayLead(sync.date)) html += `<button class="tool" data-live="lead">קח/י הובלה</button>`;
-  }
-  html += `<button class="tool" data-live="capo-me" title="קאפו אישי, רק אצלך">קאפו שלי ${live.myCapo || 0}</button>`;
+  const people = n === 1 ? "מחובר/ת 1" : `${n} מחוברים`;
+  return `<button class="tool link live-who" data-live="people">${dot}${who} · ${people}${sync.guestCount ? ` + ${sync.guestCount} בלינק` : ""}</button>`;
+}
+// quick actions next to it: the leader shares the link, a follower follows / not
+function syncQuickHtml() {
+  if (!syncActive()) return "";
+  if (sync.iLead) return `<button class="tool" data-live="guest">🔗 לינק לצוות</button>`;
+  return `<button class="tool${sync.follow ? " on" : ""}" data-live="follow">${sync.follow ? "עוקב/ת ✓" : "לא עוקב/ת"}</button>`;
+}
+// inside "⚙ תצוגה": my capo, take the lead, end the set
+function syncPanelHtml() {
+  if (!syncActive()) return "";
+  let html = `<button class="tool${live.myCapo ? " on" : ""}" data-live="capo-me" title="קאפו אישי, רק אצלך">${live.myCapo ? "קאפו שלי: " + live.myCapo : "קאפו שלי"}</button>`;
+  if (!sync.iLead && mayLead(sync.date)) html += `<button class="tool" data-live="lead">👑 לקחת הובלה</button>`;
+  if (sync.iLead) html += `<button class="tool live-end" data-live="end">⏹ סיום הסט לכולם</button>`;
   return html;
 }
 

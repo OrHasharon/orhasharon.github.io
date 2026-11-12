@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="stylesheet" href="../style.css?v=46">
-  <link rel="stylesheet" href="ws.css?v=64">
+  <link rel="stylesheet" href="ws.css?v=65">
   <style>
     .guest-msg { margin: auto; max-width: 420px; text-align: center; padding: 24px; }
     .guest-msg h2 { font-family: "Google Sans", "Noto Sans Hebrew", sans-serif; font-weight: 500; color: var(--accent-ink); margin: 0 0 8px; }
@@ -60,19 +60,23 @@
       el.style.setProperty("--live-zoom", g.zoom);
       el.innerHTML = `
         <div class="live-bar">
-          <span class="live-pos">${g.idx + 1} / ${g.songs.length}</span>
-          <strong class="live-title">${esc(s.title)}</strong>
-          ${s.notes ? `<span class="live-note">📝 ${esc(s.notes)}</span>` : ""}
-          <span class="live-tools">
-            <span class="live-dot${g.online ? " on" : ""}"></span>
-            <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b>${shapes ? ` · קאפו ${g.myCapo}: <b dir="ltr">${esc(shapes)}</b>` : ""}</span>
-            ${g.leader ? `<span class="tool-label">👑 ${esc(g.leader.name || "")}</span>` : ""}
+          <div class="live-row">
+            <span class="live-pos">${g.idx + 1}/${g.songs.length}</span>
+            <strong class="live-title">${esc(s.title)}</strong>
+            <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${g.myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}</span>
+          </div>
+          ${s.notes ? `<div class="live-note">📝 ${esc(s.notes)}</div>` : ""}
+          <div class="live-row live-quick">
+            <span class="live-who"><span class="live-dot${g.online ? " on" : ""}"></span>${g.leader ? `👑 ${esc(g.leader.name || "")}` : "ממתינים למוביל/ה"}</span>
             <button class="tool${g.follow ? " on" : ""}" data-g="follow">${g.follow ? "עוקב/ת ✓" : "לא עוקב/ת"}</button>
+            <button class="tool live-gear${g.panel ? " on" : ""}" data-g="panel" aria-expanded="${!!g.panel}">⚙ תצוגה</button>
+          </div>
+          ${g.panel ? `<div class="live-panel">
+            <span class="live-zoom"><button class="tool" data-g="zoom-1" aria-label="הקטנה">א−</button><button class="tool" data-g="zoom+1" aria-label="הגדלה">א+</button></span>
+            <button class="tool${g.chords ? " on" : ""}" data-g="chords">${g.chords ? "אקורדים ✓" : "בלי אקורדים"}</button>
             ${capo ? `<button class="tool${g.noCapo[s.id] ? " on" : ""}" data-g="capo">${g.noCapo[s.id] ? "עם קאפו " + capo : "בלי קאפו"}</button>` : ""}
-            <button class="tool" data-g="capo-me" title="קאפו אישי, רק אצלך">קאפו שלי ${g.myCapo}</button>
-            <button class="tool" data-g="zoom+1" title="הגדלה">🔍+</button><button class="tool" data-g="zoom-1" title="הקטנה">🔍−</button>
-            <button class="tool${g.chords ? " on" : ""}" data-g="chords">אקורדים</button>
-          </span>
+            <button class="tool${g.myCapo ? " on" : ""}" data-g="capo-me" title="קאפו אישי, רק אצלך">${g.myCapo ? "קאפו שלי: " + g.myCapo : "קאפו שלי"}</button>
+          </div>` : ""}
         </div>
         ${!g.follow && leadSong ? `<div class="live-away">המוביל/ה בשיר: <b>${esc(leadSong.title)}</b> <button class="tool" data-g="follow">חזרה למעקב</button></div>` : ""}
         <div class="live-body"><div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: g.chords })}</div></div>
@@ -85,7 +89,8 @@
 
     function act(a) {
       const s = g.songs[g.idx];
-      if (a === "follow") g.follow = !g.follow;
+      if (a === "panel") g.panel = !g.panel;
+      else if (a === "follow") g.follow = !g.follow;
       else if (a === "next" || a === "prev") { g.follow = false; g.idx += a === "next" ? 1 : -1; }
       else if (a === "capo" && s) g.noCapo[s.id] = !g.noCapo[s.id];
       else if (a === "capo-me") { g.myCapo = (g.myCapo + 1) % 8; try { localStorage.setItem("ws-live-capo", g.myCapo); } catch {} }

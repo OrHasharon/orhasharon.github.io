@@ -14,7 +14,9 @@ const itemsFor = (iso) => setlist.items.filter((i) => i.meeting_date === iso).so
 function setlistButton(iso) {
   if (!setlist.ready || setlist.missing) return "";
   const n = itemsFor(iso).length;
-  return `<button class="setlist-btn${n ? " has" : ""}" data-open-setlist="${iso}">🎵 סשן הלל${n ? ` (${n})` : ""}</button>`;
+  const lead = LIVE_SYNC_ON && typeof user !== "undefined" && user && canEditSetlist(iso)
+    ? `<button class="setlist-btn lead-btn" data-lead-open="${iso}">👑 הובלה</button>` : ""; // the leader's own meeting (lead.js)
+  return `<button class="setlist-btn${n ? " has" : ""}" data-open-setlist="${iso}">🎵 סשן הלל${n ? ` (${n})` : ""}</button>${lead}`;
 }
 
 // ---------- who may change a session: that meeting's worship leader only, admins too (the DB enforces the same, setlist_leader.sql) ----------
@@ -377,7 +379,7 @@ document.addEventListener("change", async (e) => {
 });
 
 // ---------- live worship mode: the whole session full screen, for the musicians ----------
-const live = { on: false, idx: 0, shift: {}, noCapo: {}, chords: true, zoom: 1, myCapo: 0 };
+const live = { on: false, idx: 0, shift: {}, noCapo: {}, chords: true, zoom: 1, myCapo: 0, panel: false };
 try { live.zoom = Number(localStorage.getItem("ws-live-zoom")) || 1; } catch {}
 try { live.myCapo = Number(localStorage.getItem("ws-live-capo")) || 0; } catch {} // personal capo, only with live sync (live-sync.js)
 
@@ -404,19 +406,25 @@ function renderLive() {
   el.style.setProperty("--live-zoom", live.zoom);
   el.innerHTML = `
     <div class="live-bar">
-      <span class="live-pos">${live.idx + 1} / ${items.length}</span>
-      <strong class="live-title">${esc(song.title)}</strong>
-      ${it.notes ? `<span class="live-note">📝 ${esc(it.notes)}</span>` : ""}
-      <span class="live-tools">
-        <span class="tool-label">סולם <b dir="ltr">${esc(key)}</b>${shapes ? ` · קאפו ${myCapo}: <b dir="ltr">${esc(shapes)}</b>` : ""}</span>
-        ${syncLocksKey() ? "" : `<button class="tool" data-live="key-1" title="חצי טון למטה">−½</button><button class="tool" data-live="key+1" title="חצי טון למעלה">+½</button>
-        ${live.shift[it.id] ? `<button class="tool link" data-live="key0">מקורי</button>` : ""}`}
+      <div class="live-row">
+        <span class="live-pos">${live.idx + 1}/${items.length}</span>
+        <strong class="live-title">${esc(song.title)}</strong>
+        <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}</span>
+        <button class="tool live-exit" data-live="exit" aria-label="יציאה ממצב הלל" title="יציאה">✕</button>
+      </div>
+      ${it.notes ? `<div class="live-note">📝 ${esc(it.notes)}</div>` : ""}
+      <div class="live-row live-quick">
+        ${syncStatusHtml()}
+        ${syncLocksKey() ? "" : `<span class="live-keys"><button class="tool" dir="ltr" data-live="key-1" aria-label="חצי טון למטה">−½</button><button class="tool" dir="ltr" data-live="key+1" aria-label="חצי טון למעלה">+½</button>${live.shift[it.id] ? `<button class="tool link" data-live="key0">מקורי</button>` : ""}</span>`}
+        ${syncQuickHtml()}
+        <button class="tool live-gear${live.panel ? " on" : ""}" data-live="panel" aria-expanded="${live.panel}">⚙ תצוגה</button>
+      </div>
+      ${live.panel ? `<div class="live-panel">
+        <span class="live-zoom"><button class="tool" data-live="zoom-1" aria-label="הקטנה">א−</button><button class="tool" data-live="zoom+1" aria-label="הגדלה">א+</button></span>
+        <button class="tool${live.chords ? " on" : ""}" data-live="chords">${live.chords ? "אקורדים ✓" : "בלי אקורדים"}</button>
         ${capo ? `<button class="tool${live.noCapo[it.id] ? " on" : ""}" data-live="capo">${live.noCapo[it.id] ? "עם קאפו " + capo : "בלי קאפו"}</button>` : ""}
-        <button class="tool" data-live="zoom+1" title="הגדלה">🔍+</button><button class="tool" data-live="zoom-1" title="הקטנה">🔍−</button>
-        <button class="tool${live.chords ? " on" : ""}" data-live="chords">אקורדים</button>
-        ${syncToolsHtml()}
-        <button class="tool" data-live="exit">✕ יציאה</button>
-      </span>
+        ${syncPanelHtml()}
+      </div>` : ""}
     </div>
     ${syncPeopleHtml()}${syncAwayHtml()}
     <div class="live-body"><div class="chordpro song-body">${renderChordPro(song.content, shift, { chords: live.chords })}</div></div>
@@ -461,6 +469,7 @@ function liveScroll(dir) {
 function liveAction(a) {
   const items = itemsFor(setlist.openDate).filter((i) => i.songs);
   const it = items[live.idx];
+  if (a === "panel") { live.panel = !live.panel; renderLive(); return; }
   if (syncAction(a)) { renderLive(); return; }
   // a follower who moves on their own stops following (a bar offers the way back), like OnSong
   if (syncActive() && !sync.iLead && sync.follow && (a === "next" || a === "prev")) sync.follow = false;

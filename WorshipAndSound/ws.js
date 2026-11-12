@@ -282,6 +282,10 @@ async function markConfirmed(token) {
 }
 
 async function removeSignup(id) {
+  const sgn = state.signups.find((x) => x.id === id);
+  const name = sgn ? byId(sgn.member_id)?.name : "";
+  const when = sgn ? sgn.meeting_date.split("-").reverse().slice(0, 2).join("/") : "";
+  if (!confirm(`להסיר את ${name || "המשובץ/ת"} מהשיבוץ${when ? " של " + when : ""}?`)) return;
   const { error } = await sb.from("signups").delete().eq("id", id);
   if (error) toast("ההסרה נכשלה, נסו שוב"); else toast("הוסר מהשיבוץ");
   await refreshSignups(); render();
