@@ -15,12 +15,22 @@ function transposeNote(n, shift, flats) {
   if (i < 0) return n;
   return (flats ? FLATS : SHARPS)[(i + shift + 120) % 12];
 }
-function transposeChord(ch, shift) {
+// flats = true/false from the song's key (prefersFlats); left out = as the chord itself is spelled (the old way)
+function transposeChord(ch, shift, flats) {
   if (!shift) return ch;
   const m = ch.match(/^([A-G][#b]?)(.*?)(?:\/([A-G][#b]?))?$/);
   if (!m) return ch;
-  const flats = ch.includes("b");
+  if (flats === undefined) flats = ch.includes("b");
   return transposeNote(m[1], shift, flats) + m[2] + (m[3] ? "/" + transposeNote(m[3], shift, flats) : "");
+}
+// After moving a song by `shift`, is the new key a "flat" key? F Bb Eb Ab Db major, Dm Gm Cm Fm Bbm Ebm minor
+// → spell Bb / Eb (not A# / D#); otherwise sharps. undefined = no key to go by.
+const FLAT_MAJOR = new Set([5, 10, 3, 8, 1]), FLAT_MINOR = new Set([2, 7, 0, 5, 10, 3]);
+function prefersFlats(key, shift) {
+  const m = (key || "").match(/^([A-G][#b]?)(m(?!aj))?/);
+  const i = m ? noteIndex(m[1]) : -1;
+  if (i < 0) return undefined;
+  return (m[2] ? FLAT_MINOR : FLAT_MAJOR).has((i + shift + 120) % 12);
 }
 const firstChord = (content) => (content.match(/\[([^\]]+)\]/) || [])[1] || null;
 
@@ -90,7 +100,8 @@ function songMeta(content) {
   return meta;
 }
 
-function renderChordPro(content, shift = 0, { chords = true } = {}) {
+function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
+  const flats = shift ? prefersFlats(key || songMeta(content).key || firstChord(content), shift) : undefined;
   const songDir = HEB.test(content) ? "rtl" : "ltr";
   return content.split("\n").map((raw) => {
     const line = /^\s*\{.*\}\s*$/.test(raw) ? raw : fixNiqqudLine(raw);
@@ -104,14 +115,14 @@ function renderChordPro(content, shift = 0, { chords = true } = {}) {
     const dir = HEB.test(lyricsOnly) ? "rtl" : "ltr";
     if (!line.includes("[") && isChordLine(cleanStr(line))) {
       if (!chords) return "";
-      const row = cleanStr(line).replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift) : tok));
+      const row = cleanStr(line).replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift, flats) : tok));
       return `<div class="cp-line cp-bare-chords" dir="${songDir}">${esc(row)}</div>`;
     }
     if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(line))}</div>`;
     if (!chords) return lyricsOnly.trim() ? `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(lyricsOnly))}</div>` : "";
     const parts = line.split(/\[([^\]]*)\]/); // text, chord, text, chord, ...
     const segs = [{ ch: "", ly: parts[0] || "" }];
-    for (let k = 1; k < parts.length; k += 2) segs.push({ ch: transposeChord(parts[k], shift), ly: parts[k + 1] || "" });
+    for (let k = 1; k < parts.length; k += 2) segs.push({ ch: transposeChord(parts[k], shift, flats), ly: parts[k + 1] || "" });
     // group the pieces into whole words, so a long line wraps between words and never inside one
     const words = [];
     let cur = [];

@@ -505,7 +505,7 @@ function renderSongView(el) {
   const capo = Number(meta.capo) || 0;
   const shift = songsState.shift + (songsState.noCapo ? capo : 0); // without capo: sounding chords = shapes + capo
   const baseKey = s.song_key || firstChord(s.content);
-  const key = baseKey ? transposeChord(baseKey, shift) : null;
+  const key = baseKey ? transposeChord(baseKey, shift, prefersFlats(baseKey, shift)) : null;
   el.innerHTML = `<div class="song-view${songsState.present ? " present" : ""}" style="--song-scale:${songScale}">
     <div class="song-top">
       <button class="link-btn no-print" data-song-back>→ לכל השירים</button>
@@ -527,7 +527,7 @@ function renderSongView(el) {
     </div>
     ${songsState.present ? `<div class="present-bar"><button class="tool" data-present-chords>${songsState.presentChords ? "הסתרת אקורדים" : "הצגת אקורדים"}</button>
       <button class="tool" data-scale="1">א+</button><button class="tool" data-scale="-1">א−</button><button class="tool" data-present>יציאה</button></div>` : ""}
-    <div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: !songsState.present || songsState.presentChords })}</div>
+    <div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: !songsState.present || songsState.presentChords, key: baseKey })}</div>
   </div>`;
 }
 
@@ -591,8 +591,9 @@ document.addEventListener("click", async (e) => {
   }
   if (t.closest("[data-save-key]")) {
     const cur = songsState.current, n = songsState.shift;
-    const content = cur.content.replace(/\[([^\]]+)\]/g, (_, c) => `[${transposeChord(c, n)}]`);
-    const row = { content, song_key: cur.song_key ? transposeChord(cur.song_key, n) : firstChord(content), updated_at: new Date().toISOString() };
+    const fl = prefersFlats(cur.song_key || firstChord(cur.content), n);
+    const content = cur.content.replace(/\[([^\]]+)\]/g, (_, c) => `[${transposeChord(c, n, fl)}]`);
+    const row = { content, song_key: cur.song_key ? transposeChord(cur.song_key, n, fl) : firstChord(content), updated_at: new Date().toISOString() };
     const { error } = await sb.from("songs").update(row).eq("id", cur.id);
     if (error) { toast("השמירה נכשלה"); return; }
     Object.assign(cur, row); songsState.shift = 0; toast("השיר נשמר בסולם החדש"); renderSongs(); return;

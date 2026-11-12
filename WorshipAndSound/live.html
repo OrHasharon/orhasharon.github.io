@@ -32,7 +32,7 @@
     const SB = "https://pualpwrkztjzhgpaqudm.supabase.co", KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   </script>
-  <script src="chords.js?v=1"></script>
+  <script src="chords.js?v=2"></script>
   <script>
     // Guest view of a live set: no account, sees only this set, follows the leader (songs come from the leader's phone).
     const sb = window.supabase.createClient(SB, KEY, { db: { schema: "or_hasharon_worship" } });
@@ -53,8 +53,8 @@
       const s = g.songs[g.idx], meta = songMeta(s.content), capo = Number(meta.capo) || 0;
       const shift = (g.shifts[s.id] || 0) + (g.noCapo[s.id] ? capo : 0) - g.myCapo;
       const base = s.key || firstChord(s.content);
-      const key = base ? transposeChord(base, shift + g.myCapo) : "";
-      const shapes = base && g.myCapo ? transposeChord(base, shift) : "";
+      const key = base ? transposeChord(base, shift + g.myCapo, prefersFlats(base, shift + g.myCapo)) : "";
+      const shapes = base && g.myCapo ? transposeChord(base, shift, prefersFlats(base, shift)) : "";
       const next = g.songs[g.idx + 1];
       const leadSong = g.songs.find((x) => x.id === g.itemId);
       el.style.setProperty("--live-zoom", g.zoom);
@@ -79,7 +79,7 @@
           </div>` : ""}
         </div>
         ${!g.follow && leadSong ? `<div class="live-away">המוביל/ה בשיר: <b>${esc(leadSong.title)}</b> <button class="tool" data-g="follow">חזרה למעקב</button></div>` : ""}
-        <div class="live-body"><div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: g.chords })}</div></div>
+        <div class="live-body"><div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: g.chords, key: base })}</div></div>
         <div class="live-nav">
           <button class="tool" data-g="prev" ${g.idx ? "" : "disabled"}>→ הקודם</button>
           <span class="live-next">${next ? `הבא: ${esc(next.title)}` : "שיר אחרון"}</span>

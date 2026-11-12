@@ -399,8 +399,8 @@ function renderLive() {
   const myCapo = syncActive() ? live.myCapo || 0 : 0;
   const shift = (live.shift[it.id] || 0) + (live.noCapo[it.id] ? capo : 0) - myCapo;
   const base = song.song_key || firstChord(song.content);
-  const key = base ? transposeChord(base, shift + myCapo) : "";          // the key everyone plays in
-  const shapes = base && myCapo ? transposeChord(base, shift) : "";       // what my fingers play with my capo
+  const key = base ? transposeChord(base, shift + myCapo, prefersFlats(base, shift + myCapo)) : "";          // the key everyone plays in
+  const shapes = base && myCapo ? transposeChord(base, shift, prefersFlats(base, shift)) : "";       // what my fingers play with my capo
   const next = items[live.idx + 1];
   el.hidden = false;
   el.style.setProperty("--live-zoom", live.zoom);
@@ -427,7 +427,7 @@ function renderLive() {
       </div>` : ""}
     </div>
     ${syncPeopleHtml()}${syncAwayHtml()}
-    <div class="live-body"><div class="chordpro song-body">${renderChordPro(song.content, shift, { chords: live.chords })}</div></div>
+    <div class="live-body"><div class="chordpro song-body">${renderChordPro(song.content, shift, { chords: live.chords, key: base })}</div></div>
     <div class="live-nav">
       <button class="tool" data-live="prev" ${live.idx ? "" : "disabled"}>→ הקודם</button>
       <span class="live-next">${next ? `הבא: ${esc(next.songs.title)}` : "שיר אחרון"}</span>
