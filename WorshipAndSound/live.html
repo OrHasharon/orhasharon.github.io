@@ -47,7 +47,8 @@
 
     function render() {
       if (g.ended) return msg("הסט הסתיים", "תודה שהצטרפת 🙏");
-      if (!g.songs.length) return msg(`סט ההלל${day ? " · " + day : ""}`, "ממתינים למוביל/ה… כשהסט יתחיל, השיר יופיע כאן לבד. אפשר להשאיר את הדף פתוח.");
+      if (!g.songs.length) return msg(`סט ההלל${day ? " · " + day : ""}`,
+        g.loading ? "טוען את הסט…" : "השירים יופיעו כאן ברגע שמוביל/ת ההלל פותח/ת את <b>מצב ההלל</b> באתר. אפשר להשאיר את הדף פתוח, הוא יתעדכן לבד.");
       if (g.follow) { const k = g.songs.findIndex((s) => s.id === g.itemId); if (k >= 0) g.idx = k; }
       g.idx = Math.max(0, Math.min(g.idx, g.songs.length - 1));
       const s = g.songs[g.idx], meta = songMeta(s.content), capo = Number(meta.capo) || 0;
@@ -78,6 +79,7 @@
             <button class="tool${g.myCapo ? " on" : ""}" data-g="capo-me" title="קאפו אישי, רק אצלך">${g.myCapo ? "קאפו שלי: " + g.myCapo : "קאפו שלי"}</button>
           </div>` : ""}
         </div>
+        ${!g.leader ? `<div class="live-away">הסט עוד לא התחיל · אפשר לדפדף בשירים. כשמוביל/ת ההלל יתחיל/תתחיל, הדף יעבור לשיר הנוכחי לבד.</div>` : ""}
         ${!g.follow && leadSong ? `<div class="live-away">המוביל/ה בשיר: <b>${esc(leadSong.title)}</b> <button class="tool" data-g="follow">חזרה למעקב</button></div>` : ""}
         <div class="live-body"><div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: g.chords, key: base })}</div></div>
         <div class="live-nav">
@@ -103,6 +105,18 @@
     async function wakeOn() { try { if ("wakeLock" in navigator && !g.wake) { g.wake = await navigator.wakeLock.request("screen"); g.wake.addEventListener("release", () => { g.wake = null; }); } } catch {} }
     const hello = () => g.ch?.send({ type: "broadcast", event: "hello", payload: {} });
 
+    // the set straight away, before anyone leads (live_set.sql; until it runs this quietly does nothing)
+    async function preload() {
+      g.loading = true; render();
+      try {
+        const { data, error } = await sb.rpc("live_set", { c: code });
+        if (!error && data?.length && !g.songs.length) {
+          g.songs = data.map((r) => ({ id: r.id, title: r.title, key: r.song_key || "", content: r.content || "", notes: r.notes || "" }));
+        }
+      } catch {}
+      g.loading = false; render();
+    }
+
     function join() {
       g.ch = sb.channel("ws-guest-" + code, { config: { broadcast: { self: false }, presence: { key: "g-" + Math.random().toString(36).slice(2) } } });
       g.ch.on("broadcast", { event: "songs" }, ({ payload }) => { g.songs = payload.songs || []; render(); })
@@ -124,7 +138,7 @@
     if (day) document.title = `סט הלל ${day} · אור השרון`;
     if (!/^[0-9a-z]{12,40}$/.test(code)) msg("הלינק לא תקין", "בקשו מהמוביל/ה לינק חדש.");
     else {
-      join(); wakeOn();
+      join(); wakeOn(); preload();
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !g.ended) { wakeOn(); hello(); } });
       window.addEventListener("online", () => { if (!g.ended) hello(); });
     }
