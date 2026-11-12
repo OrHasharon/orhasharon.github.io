@@ -40,7 +40,7 @@
     const day = /^\d{4}-\d{2}-\d{2}$/.test(params.get("d") || "") ? params.get("d").split("-").reverse().slice(0, 2).join("/") : "";
     const el = document.getElementById("live-view");
     const g = { songs: [], itemId: null, shifts: {}, leader: null, seq: -1, follow: true, idx: 0, ended: false, online: false,
-      chords: true, zoom: 1, myCapo: 0, noCapo: {}, wake: null, ch: null };
+      chords: true, zoom: 1, myCapo: 0, noCapo: {}, wake: null, ch: null, leaderHere: false };
     try { g.zoom = Number(localStorage.getItem("ws-live-zoom")) || 1; g.myCapo = Number(localStorage.getItem("ws-live-capo")) || 0; } catch {}
 
     const msg = (title, text = "", extra = "") => { el.innerHTML = `<div class="guest-msg"><h2>${title}</h2>${text ? `<p>${text}</p>` : ""}${extra}</div>`; };
@@ -68,7 +68,7 @@
           </div>
           ${s.notes ? `<div class="live-note">📝 ${esc(s.notes)}</div>` : ""}
           <div class="live-row live-quick">
-            <span class="live-who"><span class="live-dot${g.online ? " on" : ""}"></span>${g.leader ? `👑 ${esc(g.leader.name || "")}` : "ממתינים למוביל/ה"}</span>
+            <span class="live-who"><span class="live-dot${g.online && g.leaderHere ? " on" : ""}"></span>${g.leader ? `👑 ${esc(g.leader.name || "")}${g.leaderHere ? "" : " · לא מחובר/ת"}` : "ממתינים למוביל/ה"}</span>
             <button class="tool${g.follow ? " on" : ""}" data-g="follow">${g.follow ? "עוקב/ת ✓" : "לא עוקב/ת"}</button>
             <button class="tool live-gear${g.panel ? " on" : ""}" data-g="panel" aria-expanded="${!!g.panel}">⚙ תצוגה</button>
           </div>
@@ -79,6 +79,7 @@
             <button class="tool${g.myCapo ? " on" : ""}" data-g="capo-me" title="קאפו אישי, רק אצלך">${g.myCapo ? "קאפו שלי: " + g.myCapo : "קאפו שלי"}</button>
           </div>` : ""}
         </div>
+        ${g.leader && !g.leaderHere ? `<div class="live-away">המוביל/ה לא מחובר/ת כרגע · נשארים על השיר האחרון. כשהמוביל/ה יחזור/תחזור, הדף יתעדכן לבד.</div>` : ""}
         ${!g.leader ? `<div class="live-away">הסט עוד לא התחיל · אפשר לדפדף בשירים. כשמוביל/ת ההלל יתחיל/תתחיל, הדף יעבור לשיר הנוכחי לבד.</div>` : ""}
         ${!g.follow && leadSong ? `<div class="live-away">המוביל/ה בשיר: <b>${esc(leadSong.title)}</b> <button class="tool" data-g="follow">חזרה למעקב</button></div>` : ""}
         <div class="live-body"><div class="chordpro song-body">${renderChordPro(s.content, shift, { chords: g.chords, key: base })}</div></div>
@@ -119,6 +120,8 @@
 
     function join() {
       g.ch = sb.channel("ws-guest-" + code, { config: { broadcast: { self: false }, presence: { key: "g-" + Math.random().toString(36).slice(2) } } });
+      // is the leader's phone on the channel right now? (it tracks presence under the key "leader")
+      g.ch.on("presence", { event: "sync" }, () => { g.leaderHere = "leader" in g.ch.presenceState(); render(); });
       g.ch.on("broadcast", { event: "songs" }, ({ payload }) => { g.songs = payload.songs || []; render(); })
         .on("broadcast", { event: "state" }, ({ payload: p }) => {
           if (!p?.leader) return;
