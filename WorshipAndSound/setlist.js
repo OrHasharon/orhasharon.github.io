@@ -111,8 +111,8 @@ async function imageData(url, width) {
 // 5 testimonies & prayer, 6 home groups, 7 upcoming meetings. Fixed slides are kept as they are; songs are
 // cloned from the prototype (Arial 26 title, David 54 lyrics); groups and meetings are refilled from the site.
 // template.pptx slides, in order (scripts/build_template.py KEEP)
-const TPL = { welcome: 0, verse: 1, blank: 2, song: 3, communion: 4, communion_verse: 5, blessing: 6, sermon_title: 7,
-  testimonies: 8, groups: 9, meetings: 10, tithes: 11, closing: 12 };
+const TPL = { welcome: 0, verse: 1, blank: 2, song: 3, communion: 4, communion_verse: 5, parasha: 6, reading: 7, blessing: 8,
+  sermon_title: 9, testimonies: 10, prayers: 11, groups: 12, meetings: 13, tithes: 14, closing: 15 };
 const xmlEsc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // replace all paragraphs of a text body with new ones, styled like given sample paragraphs
@@ -194,18 +194,19 @@ async function buildPptx(iso) {
   const order = [];
   let blanks = 0;
   for (const e of deckPlan(items, (it) => it.songs.content)) {
-    if (e.sermon) continue; // the preacher's own slides are shown from the projection screen
+    if (e.sermon || e.weekly) continue; // the sermon PDF and the week's words live on the projection computer
     if (e.song) order.push(...(await songSlides(e.song)));
     else if (e.tpl === "blank") order.push(blanks++ ? await clone(TPL.blank) : tplSlides[TPL.blank]); // each slide once in a .pptx
     else order.push(tplSlides[TPL[e.tpl]]);
   }
 
-  // the song prototype itself is not used: remove it (and its notes)
-  const proto = tplSlides[TPL.song];
-  const protoRels = await read(relsPath(proto));
-  const protoNotes = (protoRels.match(/Target="\.\.\/notesSlides\/([^"]+)"/) || [])[1];
-  zip.remove(proto); zip.remove(relsPath(proto));
-  if (protoNotes) { zip.remove(`ppt/notesSlides/${protoNotes}`); zip.remove(`ppt/notesSlides/_rels/${protoNotes}.rels`); }
+  // template slides this presentation doesn't use (the song prototype, the weekly slides): remove them + their notes
+  const unused = tplSlides.filter((p) => !order.includes(p)), unusedNotes = [];
+  for (const p of unused) {
+    const n = ((await read(relsPath(p)).catch(() => "")).match(/Target="\.\.\/notesSlides\/([^"]+)"/) || [])[1];
+    if (n) { unusedNotes.push(n); zip.remove(`ppt/notesSlides/${n}`); zip.remove(`ppt/notesSlides/_rels/${n}.rels`); }
+    zip.remove(p); zip.remove(relsPath(p));
+  }
 
   // rewrite the slide list
   let rels = presRels.replace(/<Relationship [^>]*?Target="slides\/[^"]+"[^>]*?\/>/g, "");
@@ -217,8 +218,8 @@ async function buildPptx(iso) {
   zip.file("ppt/presentation.xml", presXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, `<p:sldIdLst>${ids}</p:sldIdLst>`));
   zip.file("ppt/_rels/presentation.xml.rels", rels);
   let ct = await read("[Content_Types].xml");
-  ct = ct.replace(new RegExp(`<Override PartName="/${proto}"[^>]*/>`), "");
-  if (protoNotes) ct = ct.replace(new RegExp(`<Override PartName="/ppt/notesSlides/${protoNotes}"[^>]*/>`), "");
+  for (const p of unused) ct = ct.replace(new RegExp(`<Override PartName="/${p}"[^>]*/>`), "");
+  for (const n of unusedNotes) ct = ct.replace(new RegExp(`<Override PartName="/ppt/notesSlides/${n}"[^>]*/>`), "");
   ct = ct.replace("</Types>", newParts.map((p) => `<Override PartName="/${p}" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join("") + "</Types>");
   zip.file("[Content_Types].xml", ct);
 

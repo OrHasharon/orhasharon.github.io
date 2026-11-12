@@ -20,6 +20,7 @@ const S = {
   bg: "tpl", size: 1, wake: null, opsTimer: null, ended: false,
   deck: null, deckSlides: [], pos: 0, meetings: [], groupLines: null, meetLines: [],
   sermon: [], // the preacher's PDF, one picture per page (kept on this computer, IndexedDB)
+  week: {},   // this week's words: opening verse, parasha + reading, prayer requests (this computer only)
 };
 try { S.bg = localStorage.getItem("ws-screen-bg") || "tpl"; S.size = Number(localStorage.getItem("ws-screen-size")) || 1; } catch {}
 
@@ -62,6 +63,7 @@ function buildDeck() {
   S.deckSlides = [];
   for (const e of deckPlan(S.songs, (x) => x.content)) {
     if (e.sermon) { S.sermon.forEach((src, page) => S.deckSlides.push({ key: "pdf", src, page })); continue; }
+    if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = lyricStanzas(e.song.content || "").flatMap((st) => chunks(st.lines, 4));
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
@@ -72,10 +74,84 @@ function buildDeck() {
 }
 const deckIndexOf = (id) => S.deckSlides.findIndex((d) => d.song && d.song.id === id);
 
+// ---------- this week's words (typed on this computer; never uploaded) ----------
+const WEEK_FIELDS = ["verse", "verseRef", "parasha", "parashaRefs", "readingRef", "reading", "prayers"];
+const weekKey = () => "ws-week-" + (S.date || "x");
+function loadWeek() { try { S.week = JSON.parse(localStorage.getItem(weekKey()) || "{}"); } catch { S.week = {}; } }
+function saveWeek() { try { localStorage.setItem(weekKey(), JSON.stringify(S.week)); } catch {} }
+const wk = (f) => (S.week[f] || "").trim();
+const linesOf = (t) => t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+// a long reading → slides of about 420 letters, cut between lines, or between sentences inside a long line
+function splitReading(text, max = 420) {
+  const parts = [];
+  for (const line of linesOf(text)) {
+    if (line.length <= max) { parts.push(line); continue; }
+    let rest = line;
+    while (rest.length > max) {
+      const cut = Math.max(rest.lastIndexOf(": ", max), rest.lastIndexOf(". ", max), rest.lastIndexOf(", ", max));
+      const at = cut > max * 0.5 ? cut + 1 : rest.lastIndexOf(" ", max) || max;
+      parts.push(rest.slice(0, at).trim()); rest = rest.slice(at).trim();
+    }
+    if (rest) parts.push(rest);
+  }
+  const pages = [];
+  let cur = [], len = 0;
+  for (const p of parts) {
+    if (cur.length && len + p.length > max) { pages.push(cur); cur = []; len = 0; }
+    cur.push(p); len += p.length;
+  }
+  if (cur.length) pages.push(cur);
+  return pages;
+}
+function weeklySlides(kind) {
+  if (kind === "verse") return wk("verse") ? [{ key: "verse" }] : [];
+  if (kind === "parasha") return wk("parasha") || wk("parashaRefs") ? [{ key: "parasha" }] : [];
+  if (kind === "reading") return splitReading(wk("reading")).map((lines) => ({ key: "reading", lines }));
+  if (kind === "prayers") {
+    const lines = linesOf(wk("prayers")), out = [];
+    for (let i = 0; i < lines.length; i += 9) out.push({ key: "prayers", lines: lines.slice(i, i + 9) });
+    return out;
+  }
+  return [];
+}
+
+function weekEditor() {
+  let d = document.getElementById("week-dialog");
+  if (!d) { d = document.createElement("dialog"); d.id = "week-dialog"; d.className = "week-dialog"; document.body.append(d); }
+  const v = (f) => esc(S.week[f] || "");
+  d.innerHTML = `<form method="dialog" class="week-form">
+    <h2>שקופיות השבוע · ${esc(day())}</h2>
+    <p class="note">נשמר רק במחשב הזה, לא עולה לאתר. שדה ריק = השקופית לא מוצגת.</p>
+    <label>פסוק פתיחה<textarea name="verse" rows="3">${v("verse")}</textarea></label>
+    <label>מקור הפסוק<input name="verseRef" value="${v("verseRef")}" placeholder="למשל: יהודה א 24-25"></label>
+    <label>פרשת השבוע<input name="parasha" value="${v("parasha")}" placeholder="למשל: פרשת וירא"></label>
+    <label>קריאות (שורה לכל אחת)<textarea name="parashaRefs" rows="2" placeholder="תורה, הפטרה, ברית חדשה">${v("parashaRefs")}</textarea></label>
+    <label>מקור קטע הקריאה<input name="readingRef" value="${v("readingRef")}" placeholder="למשל: בראשית כ״ב 1-3"></label>
+    <label>קטע הקריאה (ארוך מתחלק לבד לכמה שקופיות)<textarea name="reading" rows="6">${v("reading")}</textarea></label>
+    <label>בקשות תפילה (שורה לכל בקשה)<textarea name="prayers" rows="6">${v("prayers")}</textarea></label>
+    <div class="week-actions"><button value="save" class="primary">שמירה</button><button value="cancel">ביטול</button></div>
+  </form>`;
+  d.onclose = () => {
+    if (d.returnValue !== "save") return;
+    const f = d.querySelector("form");
+    for (const k of WEEK_FIELDS) S.week[k] = f.elements[k].value;
+    saveWeek(); buildDeck(); show(); flash("שקופיות השבוע נשמרו");
+  };
+  d.showModal();
+}
+
 // fonts the template names → what the browser has (David is on Windows; David Libre is loaded as its stand-in)
 const FONT = (f) => /david/i.test(f) ? '"David", "David Libre", serif' : /times/i.test(f) ? '"Times New Roman", "David Libre", serif' : 'Arial, "Noto Sans Hebrew", sans-serif';
 
 function tplParas(el, entry) {
+  const like = (i, text) => ({ ...(el.paras[i] || el.paras[0]), runs: text ? [{ ...(el.paras[i] || el.paras[0]).style, t: text }] : [] });
+  if (el.role === "verse") return [...linesOf(wk("verse")).map((t) => like(0, t)), ...(wk("verseRef") ? [like(1, wk("verseRef"))] : [])];
+  if (el.role === "parasha_name") return [like(0, wk("parasha"))];
+  if (el.role === "parasha_refs") return linesOf(wk("parashaRefs")).map((t) => like(0, t));
+  if (el.role === "reading_ref") return [like(0, wk("readingRef"))];
+  if (el.role === "reading_body") return (entry.lines || []).map((t) => like(0, t));
+  if (el.role === "prayers") return (entry.lines || []).map((t) => like(0, t));
   if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: entry.song.title }] }];
   if (el.role === "lyrics" && entry.song) {
     // David 54 like the template; long lines shrink so each stays on one line (the same rule as the PowerPoint export)
@@ -129,9 +205,19 @@ function tplHtml(entry) {
         : `<span style="font-size:${(p.endSz || 18) * u * el.scale}px">&nbsp;</span>`;
       return `<div style="text-align:${align};direction:${p.rtl || /[֐-׿]/.test(text) ? "rtl" : "ltr"};line-height:${p.ln && p.ln !== 1 ? p.ln * 1.15 : "normal"};margin-top:${(p.bef || 0) * u}px">${inner}</div>`;
     }).join("");
-    html += `<div class="tpl-el tpl-text" style="${px(el.box)};${pad};justify-content:${just}">${body}</div>`;
+    const fitIt = ["verse", "parasha_refs", "reading_body", "prayers", "parasha_name", "reading_ref"].includes(el.role);
+    html += `<div class="tpl-el tpl-text"${fitIt ? " data-fit" : ""} style="${px(el.box)};${pad};justify-content:${just}">${body}</div>`;
   }
   return `<div class="tpl" style="width:${W}px;height:${H}px">${html}</div>`;
+}
+
+// text that doesn't fit its box shrinks (6% a step) until it does — PowerPoint's "shrink text on overflow"
+function fitTpl() {
+  for (const box of document.querySelectorAll(".tpl-text[data-fit]")) {
+    for (let k = 0; k < 30 && box.scrollHeight > box.clientHeight + 1; k++) {
+      box.querySelectorAll("span").forEach((sp) => { sp.style.fontSize = parseFloat(sp.style.fontSize) * 0.94 + "px"; });
+    }
+  }
 }
 
 // the changing text of the last two slides, like the PowerPoint export
@@ -155,7 +241,7 @@ function show() {
     const cur = entry?.song;
     if (cur) { const k = S.songs.findIndex((x) => x.id === cur.id); if (k >= 0) S.idx = k; }
     el.classList.add("out");
-    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
+    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
     renderOps();
     return;
   }
@@ -229,7 +315,7 @@ function setSize(d) { S.size = Math.min(1.6, Math.max(0.6, +(S.size + d).toFixed
 function fullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen?.().catch(() => {}); }
 
 document.addEventListener("keydown", (e) => {
-  if (e.target.closest?.("select")) return;
+  if (e.target.closest?.("select, input, textarea, dialog")) return;
   const k = e.key;
   if (["PageDown", "ArrowDown", "ArrowRight", " ", "Enter"].includes(k)) { e.preventDefault(); next(); }
   else if (["PageUp", "ArrowUp", "ArrowLeft", "Backspace"].includes(k)) { e.preventDefault(); prev(); }
@@ -335,6 +421,7 @@ function renderOps() {
     </span>
     <span class="grp"><button data-op="smaller" title="−">א−</button><button data-op="bigger" title="+">א+</button></span>
     <span class="sep"></span>
+    <button data-op="week" title="פסוק, פרשה, בקשות תפילה">✏️ שקופיות השבוע</button>
     <button data-op="sermon" title="PDF">📄 ${S.sermon.length ? `דרשה (${S.sermon.length})` : "טעינת דרשה (PDF)"}</button>
     ${S.sermon.length ? `<button data-op="nosermon" title="הסרת הדרשה">✕</button>` : ""}
     <button data-op="fs" title="F">⛶ מסך מלא</button>`;
@@ -350,6 +437,7 @@ document.getElementById("ops").addEventListener("click", (e) => {
   else if (op === "smaller") setSize(-0.08); else if (op === "bigger") setSize(0.08);
   else if (op === "fs") fullscreen();
   else if (op === "sermon") pickSermon();
+  else if (op === "week") weekEditor();
   else if (op === "nosermon") { if (confirm("להסיר את הדרשה מהמסך?")) clearSermon(); }
 });
 document.getElementById("ops").addEventListener("change", (e) => {
@@ -420,6 +508,6 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
 (async () => {
   try { S.deck = await fetch("deck/template.json", { cache: "no-cache" }).then((r) => r.json()); } catch { S.deck = null; }
   buildDeck(); show();
-  if (await pickMeeting()) { join(); preload(); restoreSermon(); loadTail().then(() => tplMode() && show()); }
+  if (await pickMeeting()) { loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon(); loadTail().then(() => tplMode() && show()); }
   wakeOn(); show(); wakeOps();
 })();

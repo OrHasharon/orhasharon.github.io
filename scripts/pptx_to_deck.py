@@ -18,8 +18,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "WorshipAndSound", "template.pptx")
 OUT = os.path.join(ROOT, "WorshipAndSound", "deck")
 # the slide names, in template.pptx order (made by scripts/build_template.py — the same list as its KEEP)
-ORDER = ["welcome", "verse", "blank", "song", "communion", "communion_verse", "blessing", "sermon_title",
-         "testimonies", "groups", "meetings", "tithes", "closing"]
+ORDER = ["welcome", "verse", "blank", "song", "communion", "communion_verse", "parasha", "reading", "blessing",
+         "sermon_title", "testimonies", "prayers", "groups", "meetings", "tithes", "closing"]
+# text boxes (in drawing order) that the screen fills: the set's song, the week's words, the site's lists.
+# None = a box that keeps the template's own words. Boxes listed here never store the template's text.
+ROLES = {
+    "song": ["title", "lyrics"],
+    "verse": ["verse"],
+    "parasha": ["parasha_name", "parasha_refs"],
+    "reading": ["reading_ref", "reading_body"],
+    "prayers": [None, "prayers"],
+    "groups": [None, "groups"],
+    "meetings": [None, "meetings"],
+}
+WEEKLY = {"song", "verse", "parasha", "reading"}  # every word of these slides is filled in (prayers: the body only)
 
 z = zipfile.ZipFile(SRC)
 read = lambda p: z.read(p).decode("utf-8")
@@ -123,13 +135,33 @@ def text_el(sp, keep_text=True):
     return {"t": "text", "box": frac_box(sp), "ins": [round(ins[0] / W, 5), round(ins[1] / H, 5), round(ins[2] / W, 5), round(ins[3] / H, 5)],
             "anchor": anchor, "scale": int(scale.group(1)) / 1e5 if scale else 1, "paras": paras}
 
+def inherited_box(body, path):
+    """a placeholder with no <a:xfrm> sits where its layout (or master) puts the same placeholder"""
+    ph = re.search(r"<p:ph([^>]*)/?>", body)
+    if not ph: return None
+    typ = (re.search(r'type="(\w+)"', ph.group(1)) or [0, "body"])[1]
+    idx = (re.search(r'idx="(\d+)"', ph.group(1)) or [0, None])[1]
+    rels = read(path.replace("slides/", "slides/_rels/") + ".rels")
+    layout = "ppt/slideLayouts/" + re.search(r'Target="\.\./slideLayouts/([^"]+)"', rels).group(1)
+    lrels = read(layout.replace("slideLayouts/", "slideLayouts/_rels/") + ".rels")
+    master = "ppt/slideMasters/" + re.search(r'slideMasters/([^"]+)"', lrels).group(1)
+    for part in (layout, master):
+        for sp in re.findall(r"<p:sp>.*?</p:sp>", read(part), re.S):
+            m = re.search(r"<p:ph([^>]*)/?>", sp)
+            if not m: continue
+            t2 = (re.search(r'type="(\w+)"', m.group(1)) or [0, "body"])[1]
+            i2 = (re.search(r'idx="(\d+)"', m.group(1)) or [0, None])[1]
+            same = (t2 == typ) or (t2 in ("title", "ctrTitle") and typ in ("title", "ctrTitle")) or (idx and i2 == idx)
+            if same and frac_box(sp): return frac_box(sp)
+    return None
+
 def slide(path, key):
     xml = read(path)
     rels = read(path.replace("slides/", "slides/_rels/") + ".rels")
     els = []
     for m in re.finditer(r"<p:(sp|pic)>(.*?)</p:\1>", xml, re.S):
         kind, body = m.groups()
-        box = frac_box(body)
+        box = frac_box(body) or (inherited_box(body, path) if kind == "sp" else None)
         if kind == "pic":
             rid = re.search(r'r:embed="(rId\d+)"', body).group(1)
             src = save_media("ppt/" + target(rid, rels).replace("../", ""))
@@ -146,18 +178,17 @@ def slide(path, key):
         fill = None if "<a:noFill/>" in sppr.split("<a:ln")[0] else color((re.search(r"<a:solidFill>(.*?)</a:solidFill>", sppr.split("<a:ln")[0], re.S) or [None, ""])[1]) if "<a:solidFill>" in sppr.split("<a:ln")[0] else None
         has_text = bool(re.search(r"<a:t>[^<]", body))
         if fill and box: els.append({"t": "rect", "box": box, "fill": fill})
-        if "<p:txBody>" in body and box and (has_text or key == "song"):
-            el = text_el(body, keep_text=(key != "song"))
+        if "<p:txBody>" in body and box and (has_text or key in ROLES):
+            n_text = sum(1 for e in els if e["t"] == "text" and e.get("_has"))
+            role = (ROLES.get(key) or [])[n_text] if n_text < len(ROLES.get(key) or []) else None
+            filled = key in WEEKLY or role in ("prayers",)
+            el = text_el(body, keep_text=not filled)
+            el["box"] = box  # incl. a position inherited from the layout
+            el["_has"] = has_text
+            if role: el["role"] = role
             els.append(el)
-    out = {"els": els}
-    if key == "song":  # the title box and the lyrics box (in drawing order: title first), words removed
-        texts = [e for e in els if e["t"] == "text"]
-        if len(texts) >= 2:
-            texts[-2]["role"], texts[-1]["role"] = "title", "lyrics"
-    if key in ("groups", "meetings"):
-        texts = [e for e in els if e["t"] == "text"]
-        if len(texts) >= 2: texts[1]["role"] = key  # same shape the PowerPoint export refills (setlist.js)
-    return out
+    for e in els: e.pop("_has", None)
+    return {"els": els}
 
 os.makedirs(OUT, exist_ok=True)
 for f in os.listdir(OUT):

@@ -4,8 +4,10 @@
 // loadMeetings() on the screen).
 
 // The service order (from the 31.10.2026 presentation): welcome, opening verse, the songs (each followed by a blank),
-// the Lord's Supper + its verse, the song(s) after it, the children's blessing, the sermon, testimonies, home groups,
-// next meetings, tithes and offerings, closing. The set decides which songs go before / after the Supper: a
+// the Lord's Supper + its verse, the song(s) after it, the weekly reading, the children's blessing, the sermon,
+// testimonies, prayer requests, home groups, next meetings, tithes and offerings, closing.
+// {weekly: …} = the week's own words (opening verse, parasha + reading, prayer requests), typed on the projection
+// computer (screen.js "שקופיות השבוע"); slides with nothing typed are skipped. The PowerPoint download skips them. The set decides which songs go before / after the Supper: a
 // {screen: quiet} item (סעודת האדון, added from the session dialog) marks the spot; without one, the last song comes
 // after it. {sermon: true} is where the preacher's PDF goes on the projection screen (screen.js); the PowerPoint
 // download has only the "דרשה" slide there.
@@ -14,13 +16,14 @@ function deckPlan(items, contentOf) {
   const q = items.findIndex(quiet);
   const before = q >= 0 ? items.slice(0, q) : items.slice(0, Math.max(0, items.length - 1));
   const after = q >= 0 ? items.slice(q + 1) : items.slice(-1);
-  const plan = [{ tpl: "welcome" }, { tpl: "verse" }, { tpl: "blank" }];
+  const plan = [{ tpl: "welcome" }, { weekly: "verse" }, { tpl: "blank" }];
   const songs = (list) => list.forEach((it) => plan.push({ song: it }, { tpl: "blank" }));
   songs(before);
   plan.push({ tpl: "communion", item: q >= 0 ? items[q] : undefined }, { tpl: "blank" }, { tpl: "communion_verse" }, { tpl: "blank" });
   songs(after);
-  plan.push({ tpl: "blessing" }, { tpl: "blank" }, { tpl: "sermon_title" }, { sermon: true }, { tpl: "blank" },
-    { tpl: "testimonies" }, { tpl: "groups" }, { tpl: "meetings" }, { tpl: "tithes" }, { tpl: "closing" });
+  plan.push({ weekly: "parasha" }, { weekly: "reading" }, { tpl: "blessing" }, { tpl: "blank" }, { tpl: "sermon_title" },
+    { sermon: true }, { tpl: "blank" }, { tpl: "testimonies" }, { weekly: "prayers" }, { tpl: "groups" }, { tpl: "meetings" },
+    { tpl: "tithes" }, { tpl: "closing" });
   return plan;
 }
 

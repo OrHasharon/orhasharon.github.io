@@ -80,6 +80,18 @@
     .tpl-text > div { white-space: pre-wrap; }
     .stage.tplmode.nobg .tpl-bg { display: none; }
     .pdf-page { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    /* "שקופיות השבוע" — the week's words, typed on this computer */
+    .week-dialog { border: 0; border-radius: 14px; padding: 0; background: #1b1c22; color: #fff; width: min(720px, 94vw); max-height: 92vh; }
+    .week-dialog::backdrop { background: rgba(0,0,0,.6); }
+    .week-form { display: grid; gap: 10px; padding: 18px 20px; direction: rtl; cursor: auto; }
+    .week-form * { cursor: auto; }
+    .week-form h2 { margin: 0; font: 500 22px "Google Sans", "Noto Sans Hebrew", sans-serif; }
+    .week-form .note { margin: 0; opacity: .75; font-size: 14px; }
+    .week-form label { display: grid; gap: 4px; font-size: 14px; opacity: .95; }
+    .week-form input, .week-form textarea { font: 16px/1.5 "Noto Sans Hebrew", sans-serif; color: #fff; background: #0f1015; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 8px 10px; direction: rtl; }
+    .week-actions { display: flex; gap: 8px; justify-content: flex-start; }
+    .week-actions button { font: inherit; min-height: 42px; padding: 6px 18px; border-radius: 9px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+    .week-actions .primary { background: #c8963a; border-color: #c8963a; color: #1b1408; font-weight: 600; }
     /* short messages for the operator (sermon loaded, …) */
     .flash { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(18,18,22,.92); color: #fff;
       padding: 10px 18px; border-radius: 10px; font-size: 16px; opacity: 0; pointer-events: none; transition: opacity .2s; }
@@ -117,7 +129,7 @@
   </script>
   <script src="../schedule.js?v=37"></script>
   <script src="chords.js?v=3"></script>
-  <script src="deck.js?v=2"></script>
-  <script src="screen.js?v=7"></script>
+  <script src="deck.js?v=3"></script>
+  <script src="screen.js?v=8"></script>
 </body>
 </html>

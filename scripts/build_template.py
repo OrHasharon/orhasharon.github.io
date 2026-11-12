@@ -9,16 +9,20 @@ The site never publishes the source file: it may hold lyrics and sermon notes.
 Then run scripts/pptx_to_deck.py so the projection screen follows.
 
 KEEP lists the source slide numbers (1-based) and the name each gets. The names are what setlist.js (TPL) and
-deck.js (deckPlan) use. NOT kept on purpose: the standing prayer-requests slide — it lists people with health and
-family details, and this repository is public.
+deck.js (deckPlan) use. The weekly slides (opening verse, parasha, reading, prayer requests) keep their design
+only: their words are removed — the prayer requests name people with health and family details, and this
+repository is public.
 """
 import io, re, sys, zipfile, posixpath
 
 KEEP = [  # (source slide number, name)
     (1, "welcome"), (2, "verse"), (3, "blank"), (4, "song"), (23, "communion"), (25, "communion_verse"),
-    (34, "blessing"), (36, "sermon_title"), (54, "testimonies"), (56, "groups"), (57, "meetings"),
-    (58, "tithes"), (59, "closing"),
+    (32, "parasha"), (33, "reading"), (34, "blessing"), (36, "sermon_title"), (54, "testimonies"),
+    (55, "prayers"), (56, "groups"), (57, "meetings"), (58, "tithes"), (59, "closing"),
 ]
+# slides whose words change every week: only their design is kept — every word of the listed text boxes (by order
+# on the slide, None = all) becomes a placeholder, filled on the projection screen ("שקופיות השבוע")
+SCRUB = {"song": None, "verse": None, "parasha": None, "reading": None, "prayers": [1]}
 SRC = sys.argv[1]
 DST = "WorshipAndSound/template.pptx"
 
@@ -61,17 +65,23 @@ for p in keep_paths:
         files[r] = re.sub(r'<Relationship [^>]*?Target="\.\./notesSlides/[^"]+"[^>]*?/>', "", txt(r)).encode("utf-8")
 for p in drop_slides: remove(p)
 
-# the song prototype: words → placeholders (the site writes the real title and lines)
-song = keep_paths[[k for _, k in KEEP].index("song")]
-sx = txt(song)
-shapes = [s for s in re.findall(r"<p:sp>.*?</p:sp>", sx, re.S) if re.search(r"<a:t>[^<]", s)]
-for i, sp in enumerate(shapes):
-    first = [True]
-    def blank(m):
-        if first[0]: first[0] = False; return "<a:t>%s</a:t>" % ("שם השיר" if i == 0 else "שורה")
-        return "<a:t></a:t>"
-    sx = sx.replace(sp, re.sub(r"<a:t>[^<]*</a:t>", blank, sp))
-files[song] = sx.encode("utf-8")
+# weekly / song slides: words → placeholders, one per paragraph (the screen and the site write the real text)
+names = [k for _, k in KEEP]
+for key, which in SCRUB.items():
+    path = keep_paths[names.index(key)]
+    sx = txt(path)
+    shapes = [sp for sp in re.findall(r"<p:sp>.*?</p:sp>", sx, re.S) if re.search(r"<a:t>[^<]", sp)]
+    for i, sp in enumerate(shapes):
+        if which is not None and i not in which: continue
+        new = sp
+        for p in re.findall(r"<a:p>.*?</a:p>", sp, re.S):
+            first = [True]
+            def blank(m):
+                if first[0]: first[0] = False; return "<a:t>טקסט</a:t>"
+                return "<a:t></a:t>"
+            new = new.replace(p, re.sub(r"<a:t>[^<]*</a:t>", blank, p), 1)
+        sx = sx.replace(sp, new)
+    files[path] = sx.encode("utf-8")
 
 # pictures nothing points at any more
 used = set()
