@@ -526,3 +526,8 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 }
 .nc-c3 { padding-inline-end: 0; }
 @media (max-width: 860px) { .nc-col.nc-c1 { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; } }
+/* the WhatsApp mark (WA_ICON) instead of 💬 */
+.wa-icon { display: inline-block; vertical-align: -.15em; flex: none; }
+.person [data-notify] { color: #25d366; font-size: 1rem; }
+.person [data-notify]:hover { color: #1ebe5a; }
+.btn.wa { display: inline-flex; align-items: center; gap: 6px; }

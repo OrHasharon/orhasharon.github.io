@@ -237,7 +237,7 @@ async function showTeamLinkDialog(date) {
     const text = s.role === "leader" && typeof leadText === "function" ? leadText(date, first) : teamText(date, url, first);
     const wa = `https://wa.me/${c.phone ? waNumber(c.phone) : ""}?text=${encodeURIComponent(text)}`;
     return `<li class="team-row"><span><b>${esc(m.name)}</b> <small>${esc(role)}${s.instrument ? " · " + esc(s.instrument) : ""}</small></span>
-      ${isMe(s.member_id) ? `<small>(את/ה)</small>` : `<a class="btn wa" href="${wa}" target="_blank" rel="noopener" data-team-sent>💬 ${c.phone ? "שליחה" : "בחירת נמען/ת"}</a>`}</li>`;
+      ${isMe(s.member_id) ? `<small>(את/ה)</small>` : `<a class="btn wa" href="${wa}" target="_blank" rel="noopener" data-team-sent>${WA_ICON} ${c.phone ? "שליחה" : "בחירת נמען/ת"}</a>`}</li>`;
   }).join("");
   const group = teamText(date, url);
   let d = document.getElementById("team-dialog");
@@ -247,7 +247,7 @@ async function showTeamLinkDialog(date) {
     <h2>📣 לינק לסט החי לצוות</h2>
     <p class="hint">לינק אחד לכל המפגש, בלי התחברות. הוא מראה את השיר כשמישהו מוביל את הסט (פותח/ת "מצב הלל"). אפשר לשלוח כבר עכשיו.</p>
     <div class="sl-actions">
-      <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(group)}" target="_blank" rel="noopener">💬 לקבוצת הוואטסאפ</a>
+      <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(group)}" target="_blank" rel="noopener">${WA_ICON} לקבוצת הוואטסאפ</a>
       <button class="btn ghost" type="button" data-team-copy>📋 העתקת ההודעה</button>
     </div>
     ${rows ? `<p class="hint">או לכל אחד/ת בנפרד:</p><ul class="team-list">${rows}</ul>` : `<p class="status">אין עדיין משובצים להלל במפגש הזה.</p>`}
