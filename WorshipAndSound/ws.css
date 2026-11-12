@@ -545,3 +545,9 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
   .next-card:not(.open) .nc-c2, .next-card:not(.open) .nc-c3 { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .nc-chev { transition: none; } }
+/* the check-mark icon (CHECK_ICON) instead of ✅: a green disc with a white tick; on buttons an outline in the text colour */
+.ok-icon { display: inline-block; vertical-align: -.15em; color: #2e9e5b; flex: none; }
+.person .ok { display: inline-flex; align-items: center; }
+.btn .ok-icon { color: currentColor; }
+.btn .ok-icon circle { fill: none; stroke: currentColor; stroke-width: 2; }
+.btn .ok-icon path { stroke: currentColor; }
