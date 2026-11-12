@@ -129,39 +129,7 @@ function setParagraphs(spXml, lines, pickSample) {
 const shapes = (xml) => xml.match(/<p:sp>[\s\S]*?<\/p:sp>/g) || [];
 const firstText = (sp) => (sp.match(/<a:t>([^<]*)<\/a:t>/) || [, ""])[1];
 
-// home groups straight from the community site's front page
-async function homeGroupLines() {
-  const html = await fetch("../index.html", { cache: "no-cache" }).then((r) => r.text());
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const out = [];
-  doc.querySelectorAll(".groups .group").forEach((g, n) => {
-    const city = g.querySelector("strong")?.textContent.trim() || "";
-    const small = g.querySelector("small")?.textContent.replace(/^[\s·]+/, "").trim() || "";
-    let when = g.textContent.replace(city, "").replace(g.querySelector("small")?.textContent || "", "").replace(/[·]/g, " ").replace(/\s+/g, " ").trim();
-    when = when.replace(/(\d{1,2}:\d{2})/, "ב $1");
-    if (n) out.push("");
-    out.push(city, `${when}${small ? `. ${small}` : ""}`);
-  });
-  return out;
-}
-
-// next meetings after this session: this month and the next, like the template
-function meetingLines(iso) {
-  const after = state.meetings.filter((m) => m.iso > iso);
-  if (!after.length) return [];
-  const first = after[0].date, months = new Set([first.getMonth(), (first.getMonth() + 1) % 12]);
-  const list = after.filter((m) => months.has(m.date.getMonth()) && (m.date - first) < 70 * 864e5);
-  const out = [];
-  let month = null;
-  for (const m of list) {
-    const name = m.date.toLocaleDateString("he-IL", { month: "long" });
-    if (name !== month) { if (month) out.push(""); out.push(`${name}:`); month = name; }
-    const kind = meetingKind(m);
-    const extra = kind !== "אסיפה" && !kind.startsWith("יום ") ? kind : /בפטיסט/.test(m.place) ? "צ'אפל" : (m.notes || "");
-    out.push(`\t${m.dateText.slice(0, 5)} ${m.place}${extra ? ` | ${extra}` : ""}`);
-  }
-  return out;
-}
+// homeGroupLines / meetingLines / deckPlan (the presentation's order) live in deck.js, shared with the projection screen
 
 async function buildPptx(iso) {
   if (!window.JSZip) { toast("ספריית המצגות לא נטענה, נסו לרענן"); return; }
@@ -206,14 +174,6 @@ async function buildPptx(iso) {
     return out;
   };
 
-  // slide order: welcome, blank, all songs but the last (each followed by a blank), communion, last song, then the fixed tail
-  const before = items.slice(0, Math.max(0, items.length - 1)), last = items.slice(-1);
-  const order = [tplSlides[TPL.welcome], tplSlides[TPL.blank]];
-  for (const it of before) { order.push(...(await songSlides(it))); order.push(await clone(TPL.blank)); }
-  order.push(tplSlides[TPL.communion]);
-  for (const it of last) order.push(...(await songSlides(it)));
-  order.push(tplSlides[TPL.blessing], tplSlides[TPL.testimonies]);
-
   // home groups + meetings: same slide, fresh text
   const groups = await homeGroupLines().catch(() => null);
   const gx = await read(tplSlides[TPL.groups]);
@@ -227,7 +187,15 @@ async function buildPptx(iso) {
     const sp = shapes(mx).filter((s) => /<a:t>/.test(s))[1];
     zip.file(tplSlides[TPL.meetings], mx.replace(sp, setParagraphs(sp, meetings, (ps, t) => ps.find((p) => /<a:t>/.test(p) && (t.startsWith("\t") ? firstText(p).startsWith("\t") : /:$/.test(firstText(p)))) || ps[0])));
   }
-  order.push(tplSlides[TPL.groups], tplSlides[TPL.meetings]);
+
+  // slide order from deckPlan (deck.js): welcome, blank, songs (a blank between), communion, …, then the fixed tail
+  const order = [];
+  let blanks = 0;
+  for (const e of deckPlan(items, (it) => it.songs.content)) {
+    if (e.song) order.push(...(await songSlides(e.song)));
+    else if (e.tpl === "blank") order.push(blanks++ ? await clone(TPL.blank) : tplSlides[TPL.blank]); // each slide once in a .pptx
+    else order.push(tplSlides[TPL[e.tpl]]);
+  }
 
   // the song prototype itself is not used: remove it (and its notes)
   const proto = tplSlides[TPL.song];

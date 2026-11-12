@@ -7,7 +7,8 @@
 
 // must stay the same as guestCodeFor() in live-sync.js (the team link's channel name)
 const LIVE_SALT = "orhasharon-ws-live:";
-const BGS = [["night", "שמי לילה"], ["glow", "אור רך"], ["deep", "כחול עמוק"], ["quiet", "שחור שקט"]];
+// "tpl" = the community's presentation (template.pptx via deck/template.json); the others are lyrics on a moving background
+const BGS = [["tpl", "מצגת"], ["night", "שמי לילה"], ["glow", "אור רך"], ["deep", "כחול עמוק"], ["quiet", "שחור שקט"]];
 
 const sb = window.supabase.createClient(SB, KEY, { db: { schema: "or_hasharon_worship" } });
 const $ = (id) => document.getElementById(id);
@@ -16,9 +17,10 @@ const S = {
   songs: [], idx: 0, slides: [], slide: 0,
   itemId: null, leader: null, leaderHere: false, seq: -1,
   mode: "lyrics", // lyrics | blank | logo | nobg
-  bg: "night", size: 1, wake: null, opsTimer: null, ended: false,
+  bg: "tpl", size: 1, wake: null, opsTimer: null, ended: false,
+  deck: null, deckSlides: [], pos: 0, meetings: [], groupLines: null, meetLines: [],
 };
-try { S.bg = localStorage.getItem("ws-screen-bg") || "night"; S.size = Number(localStorage.getItem("ws-screen-size")) || 1; } catch {}
+try { S.bg = localStorage.getItem("ws-screen-bg") || "tpl"; S.size = Number(localStorage.getItem("ws-screen-size")) || 1; } catch {}
 
 // ---------- which meeting ----------
 async function pickMeeting() {
@@ -26,6 +28,7 @@ async function pickMeeting() {
   if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) { S.date = q; }
   try {
     const meetings = await loadMeetings();
+    S.meetings = meetings;
     S.meeting = (S.date ? meetings.find((m) => m.iso === S.date) : upcomingMeetings(meetings)[0]) || null;
     if (!S.date && S.meeting) S.date = S.meeting.iso;
   } catch {}
@@ -50,6 +53,86 @@ function build() {
   S.slide = Math.max(0, Math.min(S.slide, S.slides.length - 1));
 }
 
+// ---------- the presentation (template mode) ----------
+// Same running order as the PowerPoint download (deckPlan, deck.js); every slide drawn from deck/template.json.
+const tplMode = () => S.bg === "tpl" && !!S.deck;
+function buildDeck() {
+  const keep = S.deckSlides[S.pos];
+  S.deckSlides = [];
+  for (const e of deckPlan(S.songs, (x) => x.content)) {
+    if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
+    const parts = lyricStanzas(e.song.content || "").flatMap((st) => chunks(st.lines, 4));
+    (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
+  }
+  // stay on the same slide when the set is refreshed
+  const k = keep ? S.deckSlides.findIndex((d) => d.key === keep.key && d.song?.id === keep.song?.id && (d.lines || []).join() === (keep.lines || []).join()) : -1;
+  S.pos = k >= 0 ? k : Math.max(0, Math.min(S.pos, S.deckSlides.length - 1));
+}
+const deckIndexOf = (id) => S.deckSlides.findIndex((d) => d.song && d.song.id === id);
+
+// fonts the template names → what the browser has (David is on Windows; David Libre is loaded as its stand-in)
+const FONT = (f) => /david/i.test(f) ? '"David", "David Libre", serif' : /times/i.test(f) ? '"Times New Roman", "David Libre", serif' : 'Arial, "Noto Sans Hebrew", sans-serif';
+
+function tplParas(el, entry) {
+  if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: entry.song.title }] }];
+  if (el.role === "lyrics" && entry.song) {
+    // David 54 like the template; long lines shrink so each stays on one line (the same rule as the PowerPoint export)
+    const longest = Math.max(1, ...entry.lines.map((l) => l.replace(/[֑-ׇ]/g, "").length));
+    const size = Math.max(30, Math.min(54, Math.floor(876 / (0.5 * longest))));
+    return entry.lines.map((t) => ({ ...el.paras[0], runs: [{ ...el.paras[0].style, sz: size, t }] }));
+  }
+  if ((el.role === "groups" && S.groupLines?.length) || (el.role === "meetings" && S.meetLines.length)) {
+    const lines = el.role === "groups" ? S.groupLines : S.meetLines;
+    const first = (p) => (p.runs.find((r) => r.t) || {}).t || "";
+    const pick = (t) => el.paras.find((p) => first(p) && (el.role === "groups"
+      ? (t && !/[:.]/.test(t) ? !/ימי/.test(first(p)) : /ימי/.test(first(p)))
+      : (t.startsWith("\t") ? first(p).startsWith("\t") : /:$/.test(first(p))))) || el.paras[0];
+    return lines.map((t) => { const p = pick(t); return { ...p, runs: t ? [{ ...p.style, t }] : [] }; });
+  }
+  return el.paras;
+}
+
+function tplHtml(entry) {
+  const d = S.deck, slide = d.slides[entry.key];
+  const W = Math.min(innerWidth, innerHeight * 16 / 9), H = W * 9 / 16, u = H / 540; // px per pt (a slide is 540pt high)
+  const px = (b) => `left:${b[0] * W}px;top:${b[1] * H}px;width:${b[2] * W}px;height:${b[3] * H}px`;
+  let html = "";
+  if (d.bg) {
+    const f = d.bg.fill || {}, l = f.l || 0, t = f.t || 0, r = f.r || 0, b = f.b || 0;
+    html += `<img class="tpl-bg" alt="" src="${d.bg.src}" style="left:${l * W}px;top:${t * H}px;width:${(1 - l - r) * W}px;height:${(1 - t - b) * H}px">`;
+  }
+  for (const el of slide.els) {
+    if (!el.box) continue;
+    if (el.t === "rect") { html += `<div class="tpl-el" style="${px(el.box)};background:${el.fill.c};opacity:${el.fill.a}"></div>`; continue; }
+    if (el.t === "img") {
+      const [cl, ct, cr, cb] = el.crop, iw = el.box[2] * W / (1 - cl - cr), ih = el.box[3] * H / (1 - ct - cb);
+      html += `<div class="tpl-el tpl-pic" style="${px(el.box)};opacity:${el.op}"><img alt="" src="${el.src}" style="width:${iw}px;height:${ih}px;left:${-cl * iw}px;top:${-ct * ih}px"></div>`;
+      continue;
+    }
+    const paras = tplParas(el, entry);
+    if (!el.role && !paras.some((p) => p.runs.some((r) => r.t && r.t.trim()))) continue;
+    const pad = `padding:${el.ins[1] * H}px ${el.ins[2] * W}px ${el.ins[3] * H}px ${el.ins[0] * W}px`;
+    const just = el.anchor === "ctr" ? "center" : el.anchor === "b" ? "flex-end" : "flex-start";
+    const body = paras.map((p) => {
+      const runs = p.runs.filter((r) => !r.br);
+      const text = runs.map((r) => r.t || "").join("");
+      const align = { l: "left", r: "right", ctr: "center", just: "justify", dist: "justify" }[p.algn] || (p.rtl ? "right" : "left");
+      const inner = runs.length
+        ? runs.map((r) => `<span style="font-size:${(r.sz || 18) * u * el.scale}px;${r.c ? `color:${r.c};` : ""}${r.b ? "font-weight:700;" : ""}${r.i ? "font-style:italic;" : ""}font-family:${FONT(r.f || "")}">${esc(r.t || "")}</span>`).join("")
+        : `<span style="font-size:${(p.endSz || 18) * u * el.scale}px">&nbsp;</span>`;
+      return `<div style="text-align:${align};direction:${p.rtl || /[֐-׿]/.test(text) ? "rtl" : "ltr"};line-height:${p.ln && p.ln !== 1 ? p.ln * 1.15 : "normal"};margin-top:${(p.bef || 0) * u}px">${inner}</div>`;
+    }).join("");
+    html += `<div class="tpl-el tpl-text" style="${px(el.box)};${pad};justify-content:${just}">${body}</div>`;
+  }
+  return `<div class="tpl" style="width:${W}px;height:${H}px">${html}</div>`;
+}
+
+// the changing text of the last two slides, like the PowerPoint export
+async function loadTail() {
+  try { S.meetLines = meetingLines(S.date, S.meetings); } catch { S.meetLines = []; }
+  try { S.groupLines = await homeGroupLines(); } catch { S.groupLines = null; }
+}
+
 // ---------- drawing ----------
 const day = () => (S.date ? S.date.split("-").reverse().slice(0, 2).join("/") : "");
 function logoHtml(sub) {
@@ -58,6 +141,17 @@ function logoHtml(sub) {
 
 function show() {
   const stage = $("stage"), el = $("slide"), corner = $("corner");
+  if (tplMode() && S.mode !== "logo") {
+    stage.className = `stage tplmode${S.mode === "blank" ? " blank" : ""}${S.mode === "nobg" ? " nobg" : ""}`;
+    corner.textContent = "";
+    const entry = S.deckSlides[S.pos];
+    const cur = entry?.song;
+    if (cur) { const k = S.songs.findIndex((x) => x.id === cur.id); if (k >= 0) S.idx = k; }
+    el.classList.add("out");
+    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
+    renderOps();
+    return;
+  }
   const song = S.songs[S.idx], sl = S.slides[S.slide];
   const quiet = S.mode === "lyrics" && sl?.quiet;
   stage.className = `stage bg-${quiet ? "quiet" : S.bg}${S.mode === "blank" ? " blank" : ""}${S.mode === "nobg" ? " nobg" : ""}`;
@@ -103,6 +197,7 @@ function fit() {
 // ---------- clicker ----------
 function next() {
   if (S.mode !== "lyrics") { S.mode = "lyrics"; return show(); }
+  if (tplMode()) { if (S.pos < S.deckSlides.length - 1) { S.pos++; show(); } return; } // the presentation: free, like PowerPoint
   if (S.slide < S.slides.length - 1) S.slide++;
   else if (!S.leaderHere && S.idx < S.songs.length - 1) { S.idx++; S.slide = 0; build(); }
   else return; // the leader changes songs
@@ -110,13 +205,19 @@ function next() {
 }
 function prev() {
   if (S.mode !== "lyrics") { S.mode = "lyrics"; return show(); }
+  if (tplMode()) { if (S.pos > 0) { S.pos--; show(); } return; }
   if (S.slide > 0) S.slide--;
   else if (!S.leaderHere && S.idx > 0) { S.idx--; build(); S.slide = S.slides.length - 1; }
   else return;
   show();
 }
 function setMode(m) { S.mode = S.mode === m ? "lyrics" : m; show(); }
-function setBg(b) { S.bg = b; try { localStorage.setItem("ws-screen-bg", b); } catch {} show(); }
+function setBg(b) {
+  const wasTpl = tplMode();
+  S.bg = b; try { localStorage.setItem("ws-screen-bg", b); } catch {}
+  if (tplMode() && !wasTpl) { buildDeck(); const k = deckIndexOf(S.songs[S.idx]?.id); if (k >= 0) S.pos = k; }
+  show();
+}
 function setSize(d) { S.size = Math.min(1.6, Math.max(0.6, +(S.size + d).toFixed(2))); try { localStorage.setItem("ws-screen-size", S.size); } catch {} fit(); renderOps(); }
 function fullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen?.().catch(() => {}); }
 
@@ -188,7 +289,9 @@ function onSongs(list) {
   S.songs = list || [];
   const k = S.songs.findIndex((s) => s.id === (S.itemId ?? curId));
   if (k >= 0) S.idx = k;
-  build(); show();
+  build(); buildDeck();
+  if (S.itemId != null && tplMode() && S.pos === 0) { const j = deckIndexOf(S.itemId); if (j >= 0) S.pos = j; }
+  show();
 }
 function onState(p) {
   if (!p?.leader) return;
@@ -199,6 +302,8 @@ function onState(p) {
     S.itemId = p.itemId;
     const k = S.songs.findIndex((s) => s.id === p.itemId);
     if (k >= 0) { S.idx = k; S.slide = 0; S.mode = S.mode === "logo" ? "lyrics" : S.mode; build(); }
+    const j = deckIndexOf(p.itemId); // the presentation: jump to that song's first slide
+    if (j >= 0) S.pos = j;
     show();
   } else renderOps();
 }
@@ -227,10 +332,11 @@ async function preload() {
 async function wakeOn() { try { if ("wakeLock" in navigator && !S.wake) { S.wake = await navigator.wakeLock.request("screen"); S.wake.addEventListener("release", () => { S.wake = null; }); } } catch {} }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { wakeOn(); hello(); } });
 window.addEventListener("online", hello);
-window.addEventListener("resize", fit);
+window.addEventListener("resize", () => (tplMode() ? show() : fit()));
 
 (async () => {
-  show();
-  if (await pickMeeting()) { join(); preload(); }
+  try { S.deck = await fetch("deck/template.json", { cache: "no-cache" }).then((r) => r.json()); } catch { S.deck = null; }
+  buildDeck(); show();
+  if (await pickMeeting()) { join(); preload(); loadTail().then(() => tplMode() && show()); }
   wakeOn(); show(); wakeOps();
 })();

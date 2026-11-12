@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&family=David+Libre:wght@400;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <script src="../icons.js?v=2"></script>
   <style>
@@ -68,6 +68,18 @@
     .stage.blank .slide, .stage.blank .corner, .stage.blank .bg, .stage.blank .shade { opacity: 0; }
     .stage.nobg .bg, .stage.nobg .shade { display: none; }
 
+    /* ---- the presentation (template.pptx drawn from deck/template.json) ---- */
+    .stage.tplmode .bg, .stage.tplmode .shade { display: none; }
+    .stage.tplmode .slide { inset: 0; gap: 0; font-size: initial; line-height: normal; text-shadow: none; }
+    .tpl { position: relative; overflow: hidden; direction: ltr; white-space: normal; background: #000; }
+    .tpl-bg, .tpl-el { position: absolute; }
+    .tpl-bg { max-width: none; }
+    .tpl-pic { overflow: hidden; }
+    .tpl-pic img { position: absolute; max-width: none; }
+    .tpl-text { display: flex; flex-direction: column; box-sizing: border-box; white-space: pre-wrap; tab-size: 4; font-weight: 400; }
+    .tpl-text > div { white-space: pre-wrap; }
+    .stage.tplmode.nobg .tpl-bg { display: none; }
+
     /* ---- operator bar (only on mouse / touch, never on its own) ---- */
     .ops { position: fixed; inset-inline: 0; bottom: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px;
       background: rgba(18, 18, 22, .9); backdrop-filter: blur(6px); font-size: 15px; transition: opacity .2s; }
@@ -100,6 +112,7 @@
   </script>
   <script src="../schedule.js?v=37"></script>
   <script src="chords.js?v=3"></script>
-  <script src="screen.js?v=3"></script>
+  <script src="deck.js?v=1"></script>
+  <script src="screen.js?v=5"></script>
 </body>
 </html>
