@@ -4,14 +4,14 @@
 // Loaded before ws.js (so it sees ?livesync=1 before the address bar is cleaned). At run time it uses
 // sb / user / isAdmin / toast / esc / myName from ws.js and live / renderLive / itemsFor / canEditSetlist /
 // loadSetlist / setlist from setlist.js.
-// Off unless switched on: ?livesync=1 (remembered on this device), ?livesync=0 turns it off.
+// On for everyone (from 12.11.2026). ?livesync=0 turns it off on this device (an escape hatch), ?livesync=1 back on.
 
 const LIVE_SYNC_ON = (() => {
   try {
     const q = new URLSearchParams(location.search).get("livesync");
     if (q === "1" || q === "0") localStorage.setItem("ws-live-sync", q);
-    return localStorage.getItem("ws-live-sync") === "1";
-  } catch { return false; }
+    return localStorage.getItem("ws-live-sync") !== "0";
+  } catch { return true; }
 })();
 
 // ?lead=YYYY-MM-DD: the worship leader's own link (lead.js). Kept in sessionStorage through the Google sign-in round trip.
@@ -61,10 +61,10 @@ function syncStart(date) {
       sync.online = status === "SUBSCRIBED";
       if (sync.online) {
         ch.track({ name: myName(), lead: sync.iLead });
-        send("hello", {});
-        // the session's leader takes the lead on joining, unless someone (an admin) is already leading
-        clearTimeout(sync.leadTimer);
-        sync.leadTimer = setTimeout(() => { if (!sync.leader && canEditSetlist(date)) claimLead(); }, 1500);
+        // the session's leader leads the moment they open the live view: the songs go out to everyone right away
+        if (sync.iLead) broadcastState();          // back after a dropped connection
+        else if (canEditSetlist(date)) claimLead();
+        else send("hello", {});                    // a member: ask whoever leads for where we are
       }
       renderLive();
     });

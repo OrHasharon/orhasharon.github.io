@@ -7,9 +7,9 @@
 
 const lead = { date: null, query: "", shown: false };
 
-// the link a leader gets (while live sync is still behind its flag, the link switches it on)
+// the link a leader gets
 function leadLink(date) {
-  return location.origin + location.pathname.replace(/[^/]*$/, "") + "?lead=" + date + "&livesync=1";
+  return location.origin + location.pathname.replace(/[^/]*$/, "") + "?lead=" + date;
 }
 
 function leadText(date, firstName = "") {
