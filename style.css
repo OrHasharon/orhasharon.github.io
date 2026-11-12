@@ -333,3 +333,9 @@ html.locked body > *:not(#gate) { display: none !important; }
 .gate-box input { font: inherit; font-size: 1.4rem; text-align: center; letter-spacing: .3em; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 .gate-box button { font: inherit; font-weight: 700; padding: 10px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
 .gate-err { color: #e57373; margin: 0; }
+/* icons that replace emoji (icons.js): inline, in the text colour; a few keep a meaning colour */
+.ic { display: inline-block; vertical-align: -.18em; flex: none; }
+.ic-crown { color: var(--accent-ink); }
+.ic-circle-check { color: #2e9e5b; }
+.ic-hourglass { color: var(--muted); }
+.ic-octagon-x { color: #d9534f; }

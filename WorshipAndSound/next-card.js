@@ -116,9 +116,9 @@ document.addEventListener("click", async (e) => {
   if (act === "team") { showTeamLinkDialog(iso); return; }
   if (act === "pdf") { printSongs(iso); return; }
   if (act === "pptx") {
-    const label = b.textContent; b.disabled = true; b.textContent = "יוצר מצגת…";
+    const label = b.innerHTML; b.disabled = true; b.textContent = "יוצר מצגת…";
     try { await buildPptx(iso); } catch (err) { console.error(err); toast("יצירת המצגת נכשלה"); }
-    b.disabled = false; b.textContent = label; return;
+    b.disabled = false; b.innerHTML = label; return;
   }
   if (act === "live") {
     Object.assign(live, { on: true, idx: 0 });
