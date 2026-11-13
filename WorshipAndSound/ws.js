@@ -19,7 +19,7 @@ const PAGE = 6;
 // Google Apps Script web app that emails invitations (see email/Code.gs). Empty = invitations off.
 const INVITE_HOOK = "";
 
-const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PAGE, editing: null, picking: null, openCards: new Set() }; // openCards = dates of opened phone cards; picking = {date, member} while choosing an instrument
+const state = { members: [], signups: [], meetings: [], tab: "next", shown: PAGE, editing: null, picking: null, openCards: new Set() }; // openCards = dates of opened phone cards; picking = {date, member} while choosing an instrument
 const $ = (id) => document.getElementById(id);
 // the WhatsApp mark (Simple Icons, CC0) on every "send by WhatsApp" button
 // a check-mark icon (instead of the ✅ emoji) for "confirmed"
@@ -477,10 +477,10 @@ document.addEventListener("change", async (e) => {
 // ---------- shell ----------
 function render() {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
-  for (const id of ["signup", "team", "songs", "deck", "users"]) $(id).hidden = state.tab !== id;
+  for (const id of ["next", "signup", "team", "songs", "deck", "users"]) $(id).hidden = state.tab !== id;
   $("more").hidden = true;
-  if (typeof renderHero === "function") renderHero(); // the upcoming assembly, above the tabs (next-card.js)
-  if (state.tab === "signup") renderSignup();
+  if (state.tab === "next") { if (typeof renderNextTab === "function") renderNextTab(); } // next-card.js
+  else if (state.tab === "signup") renderSignup();
   else if (state.tab === "team") renderTeam();
   else if (state.tab === "songs") renderSongs();
   else if (state.tab === "deck" && typeof renderPresTab === "function") renderPresTab();
@@ -509,7 +509,7 @@ let user = null;
 function showLogin() {
   $("login").hidden = false;
   document.querySelector(".tabs").hidden = true;
-  $("signup").hidden = $("team").hidden = $("more").hidden = true;
+  $("next").hidden = $("signup").hidden = $("team").hidden = $("more").hidden = true;
   if ($("deck")) $("deck").hidden = true;
   $("status").textContent = "";
   $("who").innerHTML = "";

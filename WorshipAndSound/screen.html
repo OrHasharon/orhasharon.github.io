@@ -80,6 +80,9 @@
     .tpl-text > div { white-space: pre-wrap; }
     .stage.tplmode.nobg .tpl-bg { display: none; }
     .pdf-page { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .pptx-slot { position: absolute; inset: 0; overflow: hidden; direction: ltr; }
+    .pptx-slot .pptx-preview-wrapper { overflow: hidden !important; background: #000 !important; }
+    .pptx-slot [class*="pptx-preview-wrapper-next"], .pptx-slot [class*="pptx-preview-wrapper-pre"], .pptx-slot [class*="pagination"] { display: none !important; }
     /* "שקופיות השבוע" — the week's words, typed on this computer */
     .week-dialog { border: 0; border-radius: 14px; padding: 0; background: #1b1c22; color: #fff; width: min(720px, 94vw); max-height: 92vh; }
     .week-dialog::backdrop { background: rgba(0,0,0,.6); }
@@ -131,6 +134,6 @@
   <script src="../schedule.js?v=37"></script>
   <script src="chords.js?v=3"></script>
   <script src="deck.js?v=4"></script>
-  <script src="screen.js?v=14"></script>
+  <script src="screen.js?v=15"></script>
 </body>
 </html>

@@ -78,7 +78,7 @@ function buildDeck() {
   const keep = S.deckSlides[S.pos];
   S.deckSlides = [];
   for (const e of deckPlan(S.songs, (x) => x.content)) {
-    if (e.sermon) { S.sermon.forEach((src, page) => S.deckSlides.push({ key: "pdf", src, page })); continue; }
+    if (e.sermon) { S.sermon.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page })); continue; }
     if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = lyricStanzas(e.song.content || "").flatMap((st) => chunks(st.lines, 4));
@@ -129,7 +129,8 @@ function weeklySlides(kind) {
   if (kind === "parasha") return wk("parasha") || wk("parashaRefs") ? [{ key: "parasha" }] : [];
   if (kind === "reading") return splitReading(wk("reading")).map((lines) => ({ key: "reading", lines }));
   if (kind === "prayers") {
-    const lines = linesOf(wk("prayers")), out = [];
+    // the site's prayer requests when this computer is signed in to the team site; otherwise the ones typed here
+    const lines = S.dbPrayers?.length ? S.dbPrayers : linesOf(wk("prayers")), out = [];
     for (let i = 0; i < lines.length; i += 9) out.push({ key: "prayers", lines: lines.slice(i, i + 9) });
     return out;
   }
@@ -195,6 +196,7 @@ function tplHtml(entry) {
   const d = S.deck, slide = d.slides[entry.key];
   const W = Math.min(innerWidth, innerHeight * 16 / 9), H = W * 9 / 16, u = H / 540; // px per pt (a slide is 540pt high)
   if (entry.key === "pdf") return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="${entry.src}"></div>`;
+  if (entry.key === "pptx") return `<div class="tpl" style="width:${W}px;height:${H}px"><div class="pptx-slot" style="width:${W}px;height:${H}px"></div></div>`;
   if (!slide) return `<div class="tpl" style="width:${W}px;height:${H}px"></div>`;
   const px = (b) => `left:${b[0] * W}px;top:${b[1] * H}px;width:${b[2] * W}px;height:${b[3] * H}px`;
   let html = "";
@@ -263,6 +265,16 @@ function fitTpl() {
 }
 
 // the changing text of the last two slides, like the PowerPoint export
+// prayer requests from the site ("האסיפה הקרובה" tab): readable only when this browser is signed in to the team site
+async function loadDbPrayers() {
+  try {
+    const { data, error } = await sb.from("prayer_requests").select("meeting_date, body").lte("meeting_date", S.date).order("meeting_date", { ascending: false }).limit(1);
+    if (error || !data?.length) return;
+    S.dbPrayers = linesOf(data[0].body || "");
+    buildDeck(); show();
+  } catch {}
+}
+
 async function loadTail() {
   try { S.meetLines = meetingLines(S.date, S.meetings); } catch { S.meetLines = []; }
   try { S.groupLines = await serviceGroupLines(); } catch { S.groupLines = null; }
@@ -284,7 +296,7 @@ function show() {
     const cur = entry?.song;
     if (cur) { const k = S.songs.findIndex((x) => x.id === cur.id); if (k >= 0) S.idx = k; }
     el.classList.add("out");
-    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
+    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); if (entry?.key === "pptx") renderPptxSlide(entry.page); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
     renderOps();
     return;
   }
@@ -414,12 +426,48 @@ async function pdfToPages(buf) {
   }
   return pages;
 }
+// a PowerPoint sermon: drawn slide by slide by pptx-preview (no animations here; the downloaded deck has them).
+// S.sermon gets one "pptx" mark per slide; tplHtml leaves a slot that renderPptxSlide fills.
+const PPTX_JS = "https://cdn.jsdelivr.net/npm/pptx-preview@1.0.7/dist/pptx-preview.umd.js";
+const isPptxName = (n) => /\.pptx$/i.test(n || "");
+function loadPptxJs() {
+  if (window.pptxPreview) return Promise.resolve();
+  return new Promise((ok, bad) => { const sc = document.createElement("script"); sc.src = PPTX_JS; sc.onload = ok; sc.onerror = bad; document.head.append(sc); });
+}
+const PPT = { buf: null, pv: null, host: null, w: 0, h: 0 };
+async function pptxPreviewer(W, H) {
+  await loadPptxJs();
+  if (PPT.pv && PPT.w === Math.round(W) && PPT.h === Math.round(H)) return PPT.pv;
+  try { PPT.pv?.destroy(); } catch {}
+  PPT.host = document.createElement("div"); PPT.host.className = "pptx-host";
+  PPT.w = Math.round(W); PPT.h = Math.round(H);
+  PPT.pv = pptxPreview.init(PPT.host, { width: PPT.w, height: PPT.h, mode: "slide" });
+  await PPT.pv.load(PPT.buf.slice(0));
+  return PPT.pv;
+}
+async function pptxToPages(buf) {
+  PPT.buf = buf.slice(0); PPT.pv = null;
+  const pv = await pptxPreviewer(1280, 720);
+  return Array.from({ length: pv.slideCount }, () => "pptx");
+}
+async function renderPptxSlide(page) {
+  const slot = document.querySelector("#slide .pptx-slot");
+  if (!slot || !PPT.buf) return;
+  try {
+    const pv = await pptxPreviewer(slot.clientWidth, slot.clientHeight);
+    if (!slot.isConnected) return;
+    slot.append(PPT.host);
+    pv.renderSingleSlide(page);
+  } catch (err) { console.error(err); slot.textContent = "לא הצלחתי להציג את השקופית"; }
+}
+const sermonPages = (buf, name) => isPptxName(name) ? pptxToPages(buf) : pdfToPages(buf);
+
 async function setSermon(file) {
-  if (!file || !/pdf$/i.test(file.type || file.name)) { flash("צריך קובץ PDF (ב-PowerPoint: שמירה בשם ← PDF)"); return; }
+  if (!file || !(isPptxName(file.name) || /pdf$/i.test(file.type || file.name))) { flash("צריך קובץ PowerPoint (‎.pptx) או PDF"); return; }
   flash("טוען את הדרשה…");
   try {
     const buf = await file.arrayBuffer();
-    S.sermon = await pdfToPages(buf.slice(0));
+    S.sermon = await sermonPages(buf.slice(0), file.name);
     try { await idbDo("readwrite", (st) => st.put({ name: file.name, buf, src: "local", at: new Date().toISOString() }, sermonKey())); } catch {}
     S.sermonSrc = "local";
     const before = S.deckSlides[S.pos];
@@ -432,7 +480,7 @@ async function setSermon(file) {
 async function restoreSermon() {
   try {
     const rec = await idbDo("readonly", (st) => st.get(sermonKey()));
-    if (rec?.buf) { S.sermon = await pdfToPages(rec.buf); S.sermonName = rec.name; S.sermonSrc = rec.src || "local"; buildDeck(); show(); }
+    if (rec?.buf) { S.sermon = await sermonPages(rec.buf, rec.name); S.sermonName = rec.name; S.sermonSrc = rec.src || "local"; buildDeck(); show(); }
   } catch {}
 }
 async function clearSermon() {
@@ -459,7 +507,7 @@ async function remoteSermon() {
     const res = await fetch(url);
     if (!res.ok) return;
     const buf = await res.arrayBuffer();
-    const pages = await pdfToPages(buf.slice(0));
+    const pages = await sermonPages(buf.slice(0), r.path);
     S.sermon = pages; S.sermonName = r.file_name; S.sermonSrc = "remote";
     try { await idbDo("readwrite", (st) => st.put({ name: r.file_name, buf, src: "remote", uploaded_at: r.uploaded_at }, sermonKey())); } catch {}
     const before = S.deckSlides[S.pos];
@@ -472,7 +520,7 @@ async function remoteSermon() {
 }
 setInterval(remoteSermon, 120000);
 function pickSermon() {
-  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,.pdf";
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,.pdf,.pptx";
   inp.onchange = () => setSermon(inp.files[0]); inp.click();
 }
 // drag a PDF onto the screen
@@ -510,7 +558,7 @@ function renderOps() {
     <span class="grp"><button data-op="smaller" title="−">א−</button><button data-op="bigger" title="+">א+</button></span>
     <span class="sep"></span>
     <button data-op="week" title="פסוק, פרשה, בקשות תפילה">✏️ שקופיות השבוע</button>
-    <button data-op="sermon" title="PDF">📄 ${S.sermon.length ? `דרשה (${S.sermon.length})${S.sermonSrc === "remote" ? " · מהדובר/ת" : ""}` : "טעינת דרשה (PDF)"}</button>
+    <button data-op="sermon" title="PowerPoint או PDF">📽️ ${S.sermon.length ? `דרשה (${S.sermon.length})${S.sermonSrc === "remote" ? " · מהדובר/ת" : ""}` : "טעינת דרשה"}</button>
     ${S.sermon.length ? `<button data-op="nosermon" title="הסרת הדרשה">✕</button>` : ""}
     <button data-op="fs" title="F">⛶ מסך מלא</button>`;
 }
@@ -635,6 +683,6 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
   buildDeck(); show();
   if (await pickMeeting()) {
     try { const v = sessionStorage.getItem("ws-screen-pos-" + S.date); if (v !== null) S.wantPos = Number(v); } catch {}
-    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); }
+    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); loadDbPrayers(); }
   wakeOn(); show(); wakeOps();
 })();

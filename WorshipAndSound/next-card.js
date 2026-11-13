@@ -1,4 +1,4 @@
-// "The upcoming assembly" hero, above the tabs (on every tab): who leads, who plays what, sound and set-up,
+// "The upcoming assembly" card, in its own tab ("האסיפה הקרובה", the first one): who leads, who plays what, sound and set-up,
 // the songs, and big buttons — live, session, and one "projection & print" menu (screen, PowerPoint, PDF). Three columns on a wide screen, stacked on a phone.
 // renderHero() is called from render() (ws.js). Uses state/esc/byId/takenIn/icon/instLabel/meetingKind/SLOTS from ws.js,
 // setlist/itemsFor/openSetlist/buildPptx/printSongs/live/renderLive from setlist.js, syncStart/LIVE_SYNC_ON from live-sync.js.
@@ -6,6 +6,16 @@
 // on a phone the card shows only the top (buttons + leader / sound / set-up); "more" opens the band and the songs
 let heroOpen = false;
 try { heroOpen = localStorage.getItem("ws-hero-open") === "1"; } catch {}
+
+// the "האסיפה הקרובה" tab: this card, then the meeting's presentation — sermon upload + prayer requests (presentation.js)
+function renderNextTab() {
+  renderHero();
+  const el = document.getElementById("next-pres"), mt = upcomingMeetings(state.meetings)[0];
+  if (!el) return;
+  if (!mt || typeof ptCard !== "function") { el.innerHTML = ""; return; }
+  if (!PT.loaded) { el.innerHTML = `<p class="status">טוען…</p>`; ptLoad().then(() => state.tab === "next" && renderNextTab()); return; }
+  el.innerHTML = ptWarnings() + ptCard(mt, { next: true });
+}
 
 function renderHero() {
   const el = document.getElementById("hero");

@@ -606,6 +606,10 @@ main > .tabs {
   background: rgba(10, 15, 28, .9); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
 [data-theme="light"] main > .tabs { background: rgba(238, 241, 244, .92); }
+/* five tabs on a phone: one line, scrolls sideways inside the bar if it still doesn't fit */
+main > .tabs { overflow-x: auto; scrollbar-width: none; }
+main > .tabs button { white-space: nowrap; flex: none; }
+@media (max-width: 520px) { main > .tabs { gap: 0; } main > .tabs button { padding: 10px 9px; font-size: .98rem; } }
 /* "מוביל/ת הלל 1/1" on one line */
 .slot-name small { display: inline; margin-inline-start: 6px; }
 /* an upcoming phone card: closed to one status line, a tap opens the sign-up */
@@ -645,4 +649,14 @@ main > .tabs {
 .pt-actions .btn { min-height: 40px; }
 .pt-upload { cursor: pointer; display: inline-flex; align-items: center; }
 .pt-danger, .pt-danger:hover { background: #b3261e !important; border-color: #b3261e !important; color: #fff !important; }
+.pt-section { display: grid; gap: 6px; }
+.pt-label { font-size: .85rem; color: var(--muted); }
+.pt-pray { border-top: 1px dashed var(--line); padding-top: 10px; }
+.pt-pray > summary { cursor: pointer; font-size: 1rem; color: inherit; font-weight: 600; list-style-position: inside; }
+.pt-pray > summary small { font-weight: 400; color: var(--muted); }
+.pt-pray-text { width: 100%; box-sizing: border-box; font: inherit; line-height: 1.6; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card, transparent); color: inherit; resize: vertical; }
+.pt-pray-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.pt-pray-list { margin: 0; padding-inline-start: 1.2em; }
+#next-pres { margin-top: 14px; }
+.pt-next { max-width: none; }
 .pt-url { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; word-break: break-all; font-size: .9rem; }

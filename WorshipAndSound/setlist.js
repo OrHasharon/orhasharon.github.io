@@ -178,7 +178,8 @@ async function buildPptx(iso) {
     let xml = await read(src);
     if (edit) xml = edit(xml);
     const rels = (await read(relsPath(src))).replace(/<Relationship [^>]*?notesSlide[^>]*?\/>/g, "");
-    const name = `ppt/slides/slide${next++}.xml`;
+    let name; // a new name: never one of the template's own slides (slide100 is the song prototype)
+    do name = `ppt/slides/slide${next++}.xml`; while (zip.file(name));
     zip.file(name, xml); zip.file(relsPath(name), rels);
     newParts.push(name);
     return name;
@@ -226,9 +227,30 @@ async function buildPptx(iso) {
 
   // slide order from deckPlan (deck.js): welcome, blank, songs (a blank between), communion, …, then the fixed tail
   const order = [];
-  let blanks = 0;
+  let blanks = 0, masters = [];
   for (const e of deckPlan(items, (it) => it.songs.content)) {
-    if (e.sermon || e.weekly) continue; // the sermon PDF and the week's words live on the projection computer
+    // prayer requests (typed in the site, presentation.js): the template's slide, 9 requests a slide
+    if (e.weekly === "prayers" && typeof prayerLinesFor === "function") {
+      const lines = await prayerLinesFor(iso).catch(() => []);
+      for (let i = 0; i < lines.length; i += 9) {
+        order.push(await clone(TPL.prayers, (xml) => {
+          const body = shapes(xml).filter((sp) => /<p:txBody>/.test(sp))[1];
+          const x = body ? xml.replace(body, setParagraphs(body, lines.slice(i, i + 9), (ps) => ps[0])) : xml;
+          return x.replace(/<a:schemeClr val="tx1"\/>/g, '<a:srgbClr val="FFFFFF"/>'); // the theme's text colour is dark on this dark slide
+
+        }));
+      }
+      continue;
+    }
+    // the speaker's PowerPoint, as it is (animations too), right after the "דרשה" slide
+    if (e.sermon && typeof sermonPptxFor === "function") {
+      try {
+        const s = await sermonPptxFor(iso);
+        if (s) { const r = await importPptxSlides(zip, s.buf); order.push(...r.slides); masters = masters.concat(r.masters); }
+      } catch (err) { console.error(err); toast("לא הצלחתי להכניס את מצגת הדרשה", { error: true }); }
+      continue;
+    }
+    if (e.sermon || e.weekly) continue; // a PDF sermon and the verse / parasha live on the projection computer
     if (e.song) order.push(...(await songSlides(e.song)));
     else if (e.tpl === "blank") order.push(blanks++ ? await clone(TPL.blank) : tplSlides[TPL.blank]); // each slide once in a .pptx
     else order.push(tplSlides[TPL[e.tpl]]);
@@ -249,7 +271,9 @@ async function buildPptx(iso) {
     rels = rels.replace("</Relationships>", `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="${p.replace("ppt/", "")}"/></Relationships>`);
     return `<p:sldId id="${300 + n}" r:id="${rid}"/>`;
   }).join("");
-  zip.file("ppt/presentation.xml", presXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, `<p:sldIdLst>${ids}</p:sldIdLst>`));
+  let pres = presXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, `<p:sldIdLst>${ids}</p:sldIdLst>`);
+  if (masters.length) ({ presXml: pres, presRels: rels } = await registerMasters(zip, pres, rels, masters));
+  zip.file("ppt/presentation.xml", pres);
   zip.file("ppt/_rels/presentation.xml.rels", rels);
   let ct = await read("[Content_Types].xml");
   for (const p of unused) ct = ct.replace(new RegExp(`<Override PartName="/${p}"[^>]*/>`), "");

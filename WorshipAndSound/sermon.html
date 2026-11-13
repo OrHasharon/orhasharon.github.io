@@ -6,7 +6,7 @@
   <title>העלאת המסר · אור השרון</title>
   <meta name="robots" content="noindex">
   <meta property="og:title" content="העלאת המסר · קהילת אור השרון">
-  <meta property="og:description" content="מעלים את מצגת המסר (PDF), והיא מופיעה לבד על מסך ההקרנה">
+  <meta property="og:description" content="מעלים את מצגת הדרשה (PowerPoint או PDF), והיא נכנסת לבד למצגת האסיפה">
   <meta property="og:image" content="https://orhasharon.github.io/logo.png">
   <script src="../theme.js?v=1"></script>
   <script src="../icons.js?v=2"></script>
@@ -40,18 +40,18 @@
 </head>
 <body>
   <main class="up">
-    <h1>העלאת המסר</h1>
+    <h1>העלאת מצגת הדרשה</h1>
     <p class="when" id="when">טוען…</p>
     <div class="up-card" id="card" hidden>
       <p class="up-now" id="now"></p>
       <label class="up-drop" id="drop">
-        <span class="big">בחירת קובץ PDF</span>
+        <span class="big">בחירת מצגת הדרשה</span>
         <small>או גרירה של הקובץ לכאן</small>
-        <span class="up-pick" aria-hidden="true">📄 בחירת קובץ</span>
-        <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+        <span class="up-pick" aria-hidden="true">📽️ בחירת קובץ</span>
+        <input type="file" id="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/pdf,.pdf" hidden>
       </label>
       <p class="up-msg" id="msg" role="status" aria-live="polite"></p>
-      <p class="up-help">מ-PowerPoint או Keynote: <b>שמירה בשם / ייצוא ← PDF</b>. עד 40MB. הקובץ מופיע לבד על מסך ההקרנה, אחרי שקופית "דרשה". אפשר להעלות שוב כדי להחליף.</p>
+      <p class="up-help">מעלים את קובץ ה-<b>PowerPoint</b> (‎.pptx) כמו שהוא: הוא נכנס למצגת האסיפה אחרי שקופית "דרשה", עם העיצוב והאנימציות שלו. אפשר גם PDF. עד 50MB. אפשר להעלות שוב כדי להחליף.</p>
     </div>
   </main>
 
@@ -62,7 +62,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const t = new URLSearchParams(location.search).get("t") || "";
-    const MAX = 40 * 1024 * 1024;
+    const MAX = 50 * 1024 * 1024;
     let busy = false;
 
     const say = (html, cls = "") => { $("msg").className = "up-msg" + (cls ? " " + cls : ""); $("msg").innerHTML = html; };
@@ -70,7 +70,7 @@
     function showNow(name, at) {
       $("now").className = "up-now" + (name ? " ok" : "");
       $("now").textContent = name ? `✓ כבר הועלה: ${name} · ${when(at)}` : "עוד לא הועלה קובץ למפגש הזה.";
-      $("drop").querySelector(".big").textContent = name ? "החלפת הקובץ" : "בחירת קובץ PDF";
+      $("drop").querySelector(".big").textContent = name ? "החלפת הקובץ" : "בחירת מצגת הדרשה";
     }
 
     async function start() {
@@ -88,18 +88,19 @@
 
     async function upload(file) {
       if (busy || !file) return;
-      if (!/pdf$/i.test(file.type || file.name)) { say("צריך קובץ PDF. ב-PowerPoint: שמירה בשם ← PDF.", "err"); return; }
-      if (file.size > MAX) { say(`הקובץ גדול מדי (${Math.round(file.size / 1048576)}MB). עד 40MB — אפשר לשמור PDF באיכות נמוכה יותר.`, "err"); return; }
+      const kind = /\.pptx$/i.test(file.name) ? "pptx" : /pdf$/i.test(file.type || file.name) ? "pdf" : "";
+      if (!kind) { say("צריך קובץ PowerPoint (‎.pptx) או PDF.", "err"); return; }
+      if (file.size > MAX) { say(`הקובץ גדול מדי (${Math.round(file.size / 1048576)}MB). עד 50MB. ב-PowerPoint: קובץ ← דחיסת תמונות, ואז לנסות שוב.`, "err"); return; }
       busy = true;
       say(`<span class="spin"></span> מעלה את ${esc(file.name)}…${file.size > 10 * 1048576 ? " (קובץ גדול, זה יכול לקחת דקה)" : ""}`);
       try {
-        const path = `${t}/${Date.now()}-sermon.pdf`;
-        const up = await sb.storage.from("sermons").upload(path, file, { contentType: "application/pdf", upsert: false });
+        const path = `${t}/${Date.now()}-sermon.${kind}`;
+        const up = await sb.storage.from("sermons").upload(path, file, { contentType: kind === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf", upsert: false });
         if (up.error) throw up.error;
         const at = await sb.rpc("sermon_attach", { t, path, fname: file.name });
         if (at.error) throw at.error;
         showNow(file.name, new Date().toISOString());
-        say("המסר הועלה ✓ · הוא יופיע לבד על מסך ההקרנה. תודה!", "done");
+        say("מצגת הדרשה הועלתה ✓ · היא נכנסת לבד למצגת האסיפה. תודה!", "done");
       } catch (err) {
         console.error(err);
         const denied = /row-level|policy|403|42501|expired|Unauthorized/i.test(String(err?.message || err?.statusCode || ""));
