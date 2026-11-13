@@ -598,3 +598,34 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
   .sl-tools [data-sl-remove] { margin-inline-start: 12px; }
 }
 .live-end.on { background: #b3261e; border-color: #b3261e; color: #fff; }
+
+/* ---------- UX pass (13.11): a shorter phone page ---------- */
+/* the tabs come first and stay on screen while scrolling */
+main > .tabs {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; margin: 6px 0 16px;
+  background: rgba(10, 15, 28, .9); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+[data-theme="light"] main > .tabs { background: rgba(238, 241, 244, .92); }
+/* "מוביל/ת הלל 1/1" on one line */
+.slot-name small { display: inline; margin-inline-start: 6px; }
+/* an upcoming phone card: closed to one status line, a tap opens the sign-up */
+.mc-fold > summary {
+  list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 44px; padding: 8px 0 0; border-top: 1px solid var(--line); cursor: pointer;
+}
+.mc-fold > summary::-webkit-details-marker { display: none; }
+.mc-holes { color: var(--accent-ink); font-size: .92rem; }
+.mc-full { color: var(--muted); font-size: .92rem; display: inline-flex; align-items: center; gap: 6px; }
+.mc-toggle { flex: none; border: 1px solid var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 6px 14px; font-size: .88rem; font-weight: 600; }
+.mc-toggle::after { content: " ▾"; }
+.mc-fold[open] .mc-toggle::after { content: " ▴"; }
+.mc-fold[open] > summary { margin-bottom: 6px; }
+.meeting-card .meeting-head { margin-bottom: 8px; }
+/* the hero: live + session, and one menu for screen / PowerPoint / PDF */
+.nc-menu > summary { list-style: none; cursor: pointer; }
+.nc-menu > summary::-webkit-details-marker { display: none; }
+.nc-menu .nc-chev { transition: transform .15s ease; }
+.nc-menu[open] .nc-chev { transform: rotate(180deg); }
+.nc-menu-items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.nc-menu-items .btn { font-size: .92rem; padding-inline: 4px; gap: 4px; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .nc-menu .nc-chev { transition: none; } }

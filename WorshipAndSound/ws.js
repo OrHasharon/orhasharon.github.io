@@ -19,7 +19,7 @@ const PAGE = 6;
 // Google Apps Script web app that emails invitations (see email/Code.gs). Empty = invitations off.
 const INVITE_HOOK = "";
 
-const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PAGE, editing: null, picking: null }; // picking = {date, member} while choosing an instrument
+const state = { members: [], signups: [], meetings: [], tab: "signup", shown: PAGE, editing: null, picking: null, openCards: new Set() }; // openCards = dates of opened phone cards; picking = {date, member} while choosing an instrument
 const $ = (id) => document.getElementById(id);
 // the WhatsApp mark (Simple Icons, CC0) on every "send by WhatsApp" button
 // a check-mark icon (instead of the ✅ emoji) for "confirmed"
@@ -176,11 +176,26 @@ function meetingCard(mt, isNext) {
   };
   const group = (roles) => `<div class="slot-group">${SLOTS.filter((s) => roles.includes(s.role)).map(slotHtml).join("")}</div>`;
   const rows = `<div class="slot-groups">${group(["leader", "musician"])}${group(["sound", "setup"])}</div>`;
-  return `<article class="meeting-card${isNext ? " next" : ""}">
-    <div class="meeting-head">${isNext ? `<span class="tag">המפגש הבא</span>` : ""}
-      <h3>${meetingKind(mt)} · יום ${esc(mt.day)} ${mt.dateText.slice(0, 5)}</h3><span>${esc(mt.place)}</span>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</div>
-    ${rows}</article>`;
+  const head = `<div class="meeting-head">${isNext ? `<span class="tag">המפגש הבא</span>` : ""}
+      <h3>${meetingKind(mt)} · יום ${esc(mt.day)} ${mt.dateText.slice(0, 5)}</h3><span>${esc(mt.place)}</span>${typeof setlistButton === "function" ? setlistButton(mt.iso) : ""}</div>`;
+  if (state.history) return `<article class="meeting-card">${head}${rows}</article>`;
+  // upcoming (phone cards only; the desktop shows the table): closed to one status line, opened by a tap.
+  // The next one is already spelled out in the hero above, so closed it doesn't repeat it.
+  const holes = SLOTS.filter((s) => s.role !== "musician" && !takenIn(mt.iso, s.role).length).map((s) => s.label);
+  const status = holes.length
+    ? `<span class="mc-holes">חסרים: ${holes.join(", ")}</span>`
+    : `<span class="mc-full">${CHECK_ICON} כל התפקידים מאוישים</span>`;
+  return `<article class="meeting-card${isNext ? " next" : ""}">${head}
+    <details class="mc-fold" data-fold="${mt.iso}"${state.openCards.has(mt.iso) ? " open" : ""}>
+      <summary class="mc-summary">${status}<span class="mc-toggle">שיבוץ</span></summary>
+      ${rows}</details></article>`;
 }
+// remember which phone cards are open: every change re-renders the list
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (!d.matches || !d.matches("details[data-fold]")) return;
+  if (d.open) state.openCards.add(d.dataset.fold); else state.openCards.delete(d.dataset.fold);
+}, true);
 
 async function assign(role, date, memberId, instrument = null) {
   const m = byId(memberId);

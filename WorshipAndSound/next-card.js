@@ -1,5 +1,5 @@
 // "The upcoming assembly" hero, above the tabs (on every tab): who leads, who plays what, sound and set-up,
-// the songs, and big buttons — live, session, PowerPoint, PDF. Three columns on a wide screen, stacked on a phone.
+// the songs, and big buttons — live, session, and one "projection & print" menu (screen, PowerPoint, PDF). Three columns on a wide screen, stacked on a phone.
 // renderHero() is called from render() (ws.js). Uses state/esc/byId/takenIn/icon/instLabel/meetingKind/SLOTS from ws.js,
 // setlist/itemsFor/openSetlist/buildPptx/printSongs/live/renderLive from setlist.js, syncStart/LIVE_SYNC_ON from live-sync.js.
 
@@ -74,9 +74,14 @@ function nextMeetingCard(mt) {
     <div class="nc-actions">
       <button class="btn nc-live" data-nc="live" data-date="${iso}">▶ לייב</button>
       <button class="btn ghost" data-nc="session" data-date="${iso}">🎵 סשן הלל</button>
-      <button class="btn ghost" data-nc="pptx" data-date="${iso}">📽️ מצגת</button>
-      <button class="btn ghost" data-nc="screen" data-date="${iso}">🖥️ מסך הקרנה</button>
-      <button class="btn ghost" data-nc="pdf" data-date="${iso}">📄 PDF</button>
+      <details class="nc-menu nc-wide">
+        <summary class="btn ghost">🖥️ להקרנה ולהדפסה <span class="nc-chev" aria-hidden="true">▾</span></summary>
+        <div class="nc-menu-items">
+          <button class="btn ghost" data-nc="screen" data-date="${iso}">🖥️ מסך הקרנה</button>
+          <button class="btn ghost" data-nc="pptx" data-date="${iso}">📽️ מצגת</button>
+          <button class="btn ghost" data-nc="pdf" data-date="${iso}">📄 PDF</button>
+        </div>
+      </details>
       ${typeof LIVE_SYNC_ON !== "undefined" && LIVE_SYNC_ON && (isAdmin || mine)
         ? `<button class="btn ghost nc-wide" data-nc="team" data-date="${iso}">📣 לינק לסט החי לצוות</button>` : ""}
     </div>`;
@@ -112,6 +117,8 @@ document.addEventListener("click", async (e) => {
     try { localStorage.setItem("ws-hero-open", heroOpen ? "1" : "0"); } catch {}
     renderHero(); return;
   }
+  // an item picked from the "projection" menu closes it (the pptx one once the file is ready)
+  if (act !== "pptx") b.closest(".nc-menu")?.removeAttribute("open");
   if (act === "session") { openSetlist(iso); return; }
   if (act === "lead") { if (typeof showLeadScreen === "function") showLeadScreen(iso); else openSetlist(iso); return; }
   if (act === "team") { showTeamLinkDialog(iso); return; }
@@ -120,7 +127,7 @@ document.addEventListener("click", async (e) => {
   if (act === "pptx") {
     const label = b.innerHTML; b.disabled = true; b.textContent = "יוצר מצגת…";
     try { await buildPptx(iso); } catch (err) { console.error(err); toast("יצירת המצגת נכשלה"); }
-    b.disabled = false; b.innerHTML = label; return;
+    b.disabled = false; b.innerHTML = label; b.closest(".nc-menu")?.removeAttribute("open"); return;
   }
   if (act === "live") {
     startLive(iso);
