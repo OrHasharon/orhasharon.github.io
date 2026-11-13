@@ -363,7 +363,9 @@ $("stage").addEventListener("click", (e) => { if (e.clientX < innerWidth / 2) ne
 
 // ---------- the sermon: the preacher's PDF, shown right after the "דרשה" slide ----------
 // Saved as PDF from PowerPoint ("שמירה בשם → PDF"). Each page becomes a picture once; the file is kept in this
-// computer's IndexedDB for this meeting, so a refresh doesn't lose it. Nothing is uploaded anywhere.
+// computer's IndexedDB for this meeting, so a refresh doesn't lose it. Two ways in: the speaker uploads it with their
+// personal link (sermon.html → Storage, sermon.sql) and this screen pulls it by itself (remoteSermon, every 2 minutes),
+// or the operator drops / picks a file here. The newest wins; a file loaded here is never uploaded.
 const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
 function loadPdfJs() {
   if (window.pdfjsLib) return Promise.resolve();
@@ -397,7 +399,8 @@ async function setSermon(file) {
   try {
     const buf = await file.arrayBuffer();
     S.sermon = await pdfToPages(buf.slice(0));
-    try { await idbDo("readwrite", (st) => st.put({ name: file.name, buf }, sermonKey())); } catch {}
+    try { await idbDo("readwrite", (st) => st.put({ name: file.name, buf, src: "local", at: new Date().toISOString() }, sermonKey())); } catch {}
+    S.sermonSrc = "local";
     const before = S.deckSlides[S.pos];
     buildDeck();
     flash(`הדרשה נטענה · ${S.sermon.length} שקופיות`);
@@ -408,14 +411,45 @@ async function setSermon(file) {
 async function restoreSermon() {
   try {
     const rec = await idbDo("readonly", (st) => st.get(sermonKey()));
-    if (rec?.buf) { S.sermon = await pdfToPages(rec.buf); S.sermonName = rec.name; buildDeck(); show(); }
+    if (rec?.buf) { S.sermon = await pdfToPages(rec.buf); S.sermonName = rec.name; S.sermonSrc = rec.src || "local"; buildDeck(); show(); }
   } catch {}
 }
 async function clearSermon() {
-  S.sermon = []; S.sermonName = "";
-  try { await idbDo("readwrite", (st) => st.delete(sermonKey())); } catch {}
+  S.sermon = []; S.sermonName = ""; S.sermonSrc = "";
+  // remember which upload was taken off, so the same file isn't pulled back in 2 minutes (a newer upload still is)
+  try { await idbDo("readwrite", (st) => st.put({ cleared: true, uploaded_at: S.sermonRemoteAt || null }, sermonKey())); } catch {}
   buildDeck(); show();
 }
+
+// the speaker's upload (sermon.html): ask the server for this meeting's file; take it if it is newer than what's here
+async function remoteSermon() {
+  if (!S.code || remoteSermon.busy) return;
+  remoteSermon.busy = true;
+  try {
+    const { data, error } = await sb.rpc("sermon_for", { c: S.code });
+    const r = !error && data?.[0];
+    if (!r?.path) return; // nothing uploaded (or sermon.sql hasn't run yet)
+    S.sermonRemoteAt = r.uploaded_at;
+    let rec = null;
+    try { rec = await idbDo("readonly", (st) => st.get(sermonKey())); } catch {}
+    if (rec?.uploaded_at === r.uploaded_at && (rec.src === "remote" || rec.cleared)) return; // already have it / taken off
+    if (rec?.src === "local" && rec.at && new Date(rec.at) >= new Date(r.uploaded_at)) return; // a newer file loaded here
+    const url = sb.storage.from("sermons").getPublicUrl(r.path).data.publicUrl;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const buf = await res.arrayBuffer();
+    const pages = await pdfToPages(buf.slice(0));
+    S.sermon = pages; S.sermonName = r.file_name; S.sermonSrc = "remote";
+    try { await idbDo("readwrite", (st) => st.put({ name: r.file_name, buf, src: "remote", uploaded_at: r.uploaded_at }, sermonKey())); } catch {}
+    const before = S.deckSlides[S.pos];
+    buildDeck();
+    if (!before) S.pos = 0;
+    show();
+    flash(`המסר מהדובר/ת נטען · ${pages.length} שקופיות`);
+  } catch (err) { console.error(err); }
+  finally { remoteSermon.busy = false; }
+}
+setInterval(remoteSermon, 120000);
 function pickSermon() {
   const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,.pdf";
   inp.onchange = () => setSermon(inp.files[0]); inp.click();
@@ -455,7 +489,7 @@ function renderOps() {
     <span class="grp"><button data-op="smaller" title="−">א−</button><button data-op="bigger" title="+">א+</button></span>
     <span class="sep"></span>
     <button data-op="week" title="פסוק, פרשה, בקשות תפילה">✏️ שקופיות השבוע</button>
-    <button data-op="sermon" title="PDF">📄 ${S.sermon.length ? `דרשה (${S.sermon.length})` : "טעינת דרשה (PDF)"}</button>
+    <button data-op="sermon" title="PDF">📄 ${S.sermon.length ? `דרשה (${S.sermon.length})${S.sermonSrc === "remote" ? " · מהדובר/ת" : ""}` : "טעינת דרשה (PDF)"}</button>
     ${S.sermon.length ? `<button data-op="nosermon" title="הסרת הדרשה">✕</button>` : ""}
     <button data-op="fs" title="F">⛶ מסך מלא</button>`;
 }
@@ -580,6 +614,6 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
   buildDeck(); show();
   if (await pickMeeting()) {
     try { const v = sessionStorage.getItem("ws-screen-pos-" + S.date); if (v !== null) S.wantPos = Number(v); } catch {}
-    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon(); loadTail().then(() => tplMode() && show()); }
+    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); }
   wakeOn(); show(); wakeOps();
 })();
