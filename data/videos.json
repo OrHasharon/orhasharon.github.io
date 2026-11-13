@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-31T14:43:23+00:00",
+ "updated": "2026-11-13T23:16:42+00:00",
  "source": "yt-dlp",
  "videos": [
   {
@@ -2527,6 +2527,76 @@
  ],
  "playlists": [
   {
+   "id": "PLOlYhdzLQsJ8",
+   "title": "זכריה",
+   "videoIds": [
+    "j2d1ZdGyv68",
+    "adPu7Fs3zqk",
+    "fRpS-0PXhBs",
+    "fRpS-0PXhBs",
+    "Iyo03Rxswng",
+    "Iyo03Rxswng",
+    "Idb_2V5cF-w",
+    "Idb_2V5cF-w",
+    "l_gn7jaj_wk",
+    "l_gn7jaj_wk",
+    "VL6iuAd2NK0",
+    "VL6iuAd2NK0",
+    "nauIxTvsmjo",
+    "nauIxTvsmjo",
+    "ufTzykVMMzg",
+    "2yCbz3xEYeY",
+    "8-l1lLKk2tQ",
+    "zfxgRvcxOIE",
+    "wweQU_mVELQ"
+   ]
+  },
+  {
+   "id": "PLWoimKSv2tzs",
+   "title": "איוב",
+   "videoIds": [
+    "bqRf1mb486M",
+    "6Bvgzh7pP40",
+    "QCfI2MqDg48",
+    "ODrOIQRSscA",
+    "Tp742HYgET8",
+    "GXGLB48gJKY",
+    "f50JIMLNl88",
+    "mHVEi1hkmQc"
+   ]
+  },
+  {
+   "id": "PLIayhJQbUu-0",
+   "title": "אגרת אל העברים",
+   "videoIds": [
+    "eDODJ6cOKs4",
+    "zgC3vVlYsAk",
+    "7w6rAqmvUsE",
+    "rUQ2YSXXQv0",
+    "6fsgI9Vdg3c",
+    "FxvkOAA-vhk",
+    "EenFCP2gguI",
+    "u2QAAZQ8rc4",
+    "MGQMk57PdDg",
+    "Ha3lBm1Qc8I",
+    "PoupSGyEw2U",
+    "zZareyaGEkQ",
+    "kBncyYd5Y-8",
+    "2fOf4C3QflU",
+    "puhx9qX8OYA",
+    "-sdMHX0Ih5M",
+    "hDwOnj6UcDM",
+    "6QwKAqhRQFk",
+    "o-J77o8ScCI",
+    "PvyA60Ozr_U",
+    "0EVxsuxA2OU",
+    "SQ6CyJxGwao",
+    "dOpfhczUZD0",
+    "4BE3bfwYUgM",
+    "l7QVDUl6QD4"
+   ]
+  },
+  {
    "id": "PLm1hv2LV9Zip1wQE4MYeqgDVvWfXNhymZ",
    "title": "אחרית הימים",
    "videoIds": [
@@ -2655,76 +2725,6 @@
    "title": "ארבע אימהות",
    "videoIds": [
     "gjQkPGou61U"
-   ]
-  },
-  {
-   "id": "PLOlYhdzLQsJ8",
-   "title": "זכריה",
-   "videoIds": [
-    "j2d1ZdGyv68",
-    "adPu7Fs3zqk",
-    "fRpS-0PXhBs",
-    "fRpS-0PXhBs",
-    "Iyo03Rxswng",
-    "Iyo03Rxswng",
-    "Idb_2V5cF-w",
-    "Idb_2V5cF-w",
-    "l_gn7jaj_wk",
-    "l_gn7jaj_wk",
-    "VL6iuAd2NK0",
-    "VL6iuAd2NK0",
-    "nauIxTvsmjo",
-    "nauIxTvsmjo",
-    "ufTzykVMMzg",
-    "2yCbz3xEYeY",
-    "8-l1lLKk2tQ",
-    "zfxgRvcxOIE",
-    "wweQU_mVELQ"
-   ]
-  },
-  {
-   "id": "PLWoimKSv2tzs",
-   "title": "איוב",
-   "videoIds": [
-    "bqRf1mb486M",
-    "6Bvgzh7pP40",
-    "QCfI2MqDg48",
-    "ODrOIQRSscA",
-    "Tp742HYgET8",
-    "GXGLB48gJKY",
-    "f50JIMLNl88",
-    "mHVEi1hkmQc"
-   ]
-  },
-  {
-   "id": "PLIayhJQbUu-0",
-   "title": "אגרת אל העברים",
-   "videoIds": [
-    "eDODJ6cOKs4",
-    "zgC3vVlYsAk",
-    "7w6rAqmvUsE",
-    "rUQ2YSXXQv0",
-    "6fsgI9Vdg3c",
-    "FxvkOAA-vhk",
-    "EenFCP2gguI",
-    "u2QAAZQ8rc4",
-    "MGQMk57PdDg",
-    "Ha3lBm1Qc8I",
-    "PoupSGyEw2U",
-    "zZareyaGEkQ",
-    "kBncyYd5Y-8",
-    "2fOf4C3QflU",
-    "puhx9qX8OYA",
-    "-sdMHX0Ih5M",
-    "hDwOnj6UcDM",
-    "6QwKAqhRQFk",
-    "o-J77o8ScCI",
-    "PvyA60Ozr_U",
-    "0EVxsuxA2OU",
-    "SQ6CyJxGwao",
-    "dOpfhczUZD0",
-    "4BE3bfwYUgM",
-    "l7QVDUl6QD4"
    ]
   }
  ]
