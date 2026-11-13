@@ -277,15 +277,28 @@ function teamText(date, url, firstName = "") {
 async function showTeamLinkDialog(date) {
   const url = await guestLink(date);
   const team = teamFor(date);
-  const rows = team.map((s) => {
-    const m = byId(s.member_id); if (!m) return "";
-    const c = contactOf(s.member_id) || {};
-    const role = SLOTS.find((x) => x.role === s.role)?.label || "";
+  // one row per person: "גיטרה ושירה", the leader keeps the leader's message
+  const people = new Map();
+  for (const s of team) {
+    if (!people.has(s.member_id)) people.set(s.member_id, []);
+    people.get(s.member_id).push(s);
+  }
+  const rows = [...people.entries()].map(([id, list]) => {
+    const m = byId(id); if (!m) return "";
+    const c = contactOf(id) || {};
+    const isLeader = list.some((s) => s.role === "leader");
+    const parts = [];
+    for (const s of list) {
+      const p = s.instrument ? s.instrument.trim() : SLOTS.find((x) => x.role === s.role)?.label || "";
+      if (p && !parts.includes(p)) parts.push(p);
+    }
+    parts.sort((a, b) => (a === "שירה") - (b === "שירה")); // singing last
+    const role = parts.length > 1 ? parts.slice(0, -1).join(", ") + " ו" + parts[parts.length - 1] : parts[0] || "";
     const first = m.name.split(" ")[0];
-    const text = s.role === "leader" && typeof leadText === "function" ? leadText(date, first) : teamText(date, url, first);
+    const text = isLeader && typeof leadText === "function" ? leadText(date, first) : teamText(date, url, first);
     const wa = `https://wa.me/${c.phone ? waNumber(c.phone) : ""}?text=${encodeURIComponent(text)}`;
-    return `<li class="team-row"><span><b>${esc(m.name)}</b> <small>${esc(role)}${s.instrument ? " · " + esc(s.instrument) : ""}</small></span>
-      ${isMe(s.member_id) ? `<small>(את/ה)</small>` : `<a class="btn wa" href="${wa}" target="_blank" rel="noopener" data-team-sent>${WA_ICON} ${c.phone ? "שליחה" : "בחירת נמען/ת"}</a>`}</li>`;
+    return `<li class="team-row"><span><b>${esc(m.name)}</b> <small>${esc(role)}</small></span>
+      ${isMe(id) ? `<small>(את/ה)</small>` : `<a class="btn wa" href="${wa}" target="_blank" rel="noopener" data-team-sent>${WA_ICON} ${c.phone ? "שליחה" : "בחירת נמען/ת"}</a>`}</li>`;
   }).join("");
   const group = teamText(date, url);
   let d = document.getElementById("team-dialog");
