@@ -660,5 +660,15 @@ main > .tabs button { white-space: nowrap; flex: none; }
 .pt-pray-list .sub { margin-inline-start: 1.4em; list-style: circle; }
 .pt-pray-list b { color: #e8915f; }
 #next-pres { margin-top: 14px; }
+.pt-ai { border-top: 1px dashed var(--line); padding-top: 10px; }
+.pt-ai-title { font-size: 1rem; font-weight: 600; color: var(--accent-ink); }
+.pt-ai-out:empty { display: none; }
+.pt-ai-out { display: grid; gap: 10px; }
+.pt-ai-reply { margin: 0; padding: 10px 12px; border-radius: 10px; background: rgba(200, 150, 58, .12); }
+.pt-ai-err { margin: 0; color: #e5736b; }
+.pt-ai-wait { margin: 0; color: var(--muted); }
+.pt-ai-song small { color: var(--muted); }
+.pt-ai-slides { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.pt-ai-slide { flex: 1 1 200px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: .9rem; line-height: 1.5; background: rgba(0, 0, 0, .18); }
 .pt-next { max-width: none; }
 .pt-url { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; word-break: break-all; font-size: .9rem; }
