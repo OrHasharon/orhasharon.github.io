@@ -74,8 +74,9 @@
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
   background: #111827; border: 1px solid var(--line); color: var(--ink);
-  padding: 10px 18px; border-radius: 10px; box-shadow: var(--shadow); z-index: 10;
+  padding: 10px 18px; border-radius: 10px; box-shadow: var(--shadow); z-index: 1000; /* above the live view (60) */
 }
+.toast-action { margin-inline-start: 10px; background: none; border: 0; padding: 4px 6px; font: inherit; font-weight: 700; color: var(--accent-ink, #c8963a); text-decoration: underline; cursor: pointer; }
 
 .tabs { margin-top: 22px; }
 .assign { padding: 3px 10px; border-radius: 999px; border: 1px dashed var(--accent); color: var(--accent-ink); cursor: pointer; font-size: .88rem; }
@@ -334,7 +335,7 @@
 .live-nav .tool:disabled { opacity: .3; }
 
 [data-theme="light"] .summary .duty-table, [data-theme="light"] .matrix-wrap, [data-theme="light"] .meeting-card, [data-theme="light"] .song-view, [data-theme="light"] .login { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-[data-theme="light"] .matrix .name { background: rgba(255, 255, 255, .55); }
+[data-theme="light"] .matrix .name { background: #fbfaf6; } /* the sticky column must hide what scrolls under it */
 
 /* live mode: a long song continues in a second column instead of scrolling */
 .live-body { overflow: hidden; }
@@ -394,8 +395,8 @@
 .live-people { padding: 6px 16px; border-bottom: 1px solid var(--line); font-size: .95rem; }
 .live-people ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .live-people p { margin: 4px 0 0; color: var(--muted); }
-.live-away { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 16px; background: var(--hallel); color: #fff; font-size: .95rem; }
-.live-away .tool { background: #fff; color: var(--hallel); border-color: #fff; }
+.live-away { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 16px; background: #1f5f50; color: #fff; font-size: .95rem; } /* a fixed dark teal: white text reads in both themes (~7:1) */
+.live-away .tool { background: #fff; color: #1f5f50; border-color: #fff; }
 @media (max-width: 760px) { .live-people, .live-away { padding: 5px 10px; font-size: .82rem; } }
 /* "📣 live-set link to the team" dialog */
 .team-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -589,3 +590,11 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .sl-hits { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
 .sl-hits .link-btn { text-align: start; padding: 8px 2px; min-height: 40px; }
 .sl-hits small { color: var(--muted); }
+
+/* the session list on a phone: arrows and ✕ big enough for a finger, ✕ kept apart from the arrows (removal has an undo toast) */
+@media (pointer: coarse) {
+  .sl-tools { gap: 8px; }
+  .sl-tools button { min-width: 40px; min-height: 40px; padding: 4px 10px; }
+  .sl-tools [data-sl-remove] { margin-inline-start: 12px; }
+}
+.live-end.on { background: #b3261e; border-color: #b3261e; color: #fff; }

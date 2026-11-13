@@ -31,13 +31,29 @@ async function pickMeeting() {
   try {
     const meetings = await loadMeetings();
     S.meetings = meetings;
-    S.meeting = (S.date ? meetings.find((m) => m.iso === S.date) : upcomingMeetings(meetings)[0]) || null;
+    const today = isoToday();
+    if (!S.date) {
+      try { const c = JSON.parse(localStorage.getItem("ws-screen-date") || "null"); if (c?.on === today && meetings.some((m) => m.iso === c.date)) S.date = c.date; } catch {}
+    }
+    S.meeting = (S.date ? meetings.find((m) => m.iso === S.date) : meetings.find((m) => m.iso === today) || upcomingMeetings(meetings)[0]) || null;
     if (!S.date && S.meeting) S.date = S.meeting.iso;
   } catch {}
   if (!S.date) return false;
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(LIVE_SALT + S.date));
   S.code = [...new Uint8Array(buf)].slice(0, 10).map((b) => b.toString(16).padStart(2, "0")).join("");
   return true;
+}
+
+function isoToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+// the operator picks another meeting (kept for today on this computer) → reload on that date
+function chooseMeeting(iso) {
+  try { localStorage.setItem("ws-screen-date", JSON.stringify({ date: iso, on: isoToday() })); } catch {}
+  const u = new URL(location.href); u.searchParams.delete("d"); location.href = u.toString();
+}
+function meetingOptions() {
+  const list = upcomingMeetings(S.meetings).slice(0, 6);
+  if (S.meeting && !list.some((m) => m.iso === S.meeting.iso)) list.unshift(S.meeting);
+  return list;
 }
 
 // ---------- slides ----------
@@ -69,7 +85,11 @@ function buildDeck() {
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
   }
   // stay on the same slide when the set is refreshed
-  const k = keep ? S.deckSlides.findIndex((d) => d.key === keep.key && d.song?.id === keep.song?.id && (d.lines || []).join() === (keep.lines || []).join()) : -1;
+  let k = -1;
+  if (keep) {
+    const same = (d) => d.key === keep.key && d.song?.id === keep.song?.id && d.page === keep.page && (d.lines || []).join() === (keep.lines || []).join();
+    S.deckSlides.forEach((d, i) => { if (same(d) && (k < 0 || Math.abs(i - S.pos) < Math.abs(k - S.pos))) k = i; });
+  }
   S.pos = k >= 0 ? k : Math.max(0, Math.min(S.pos, S.deckSlides.length - 1));
 }
 const deckIndexOf = (id) => S.deckSlides.findIndex((d) => d.song && d.song.id === id);
@@ -138,6 +158,7 @@ function weekEditor() {
     for (const k of WEEK_FIELDS) S.week[k] = f.elements[k].value;
     saveWeek(); buildDeck(); show(); flash("שקופיות השבוע נשמרו");
   };
+  d.returnValue = "";
   d.showModal();
 }
 
@@ -234,6 +255,7 @@ function logoHtml(sub) {
 
 function show() {
   const stage = $("stage"), el = $("slide"), corner = $("corner");
+  if (S.date && S.wantPos == null) try { sessionStorage.setItem("ws-screen-pos-" + S.date, S.pos); } catch {}
   if (tplMode() && S.mode !== "logo") {
     stage.className = `stage tplmode${S.mode === "blank" ? " blank" : ""}${S.mode === "nobg" ? " nobg" : ""}`;
     corner.textContent = "";
@@ -308,7 +330,14 @@ function setMode(m) { S.mode = S.mode === m ? "lyrics" : m; show(); }
 function setBg(b) {
   const wasTpl = tplMode();
   S.bg = b; try { localStorage.setItem("ws-screen-bg", b); } catch {}
-  if (tplMode() && !wasTpl) { buildDeck(); const k = deckIndexOf(S.songs[S.idx]?.id); if (k >= 0) S.pos = k; }
+  if (tplMode() && !wasTpl) { buildDeck(); const k = deckIndexOf(S.songs[S.idx]?.id); if (k >= 0) S.pos = Math.min(k + S.slide, S.deckSlides.length - 1); }
+  if (wasTpl && !tplMode()) {
+    const e = S.deckSlides[S.pos];
+    const k = e?.song ? S.songs.findIndex((x) => x.id === e.song.id) : -1;
+    if (k >= 0) { S.idx = k; S.slide = S.deckSlides.slice(0, S.pos).filter((d) => d.key === "song" && d.song?.id === e.song.id).length; }
+    else S.slide = 0;
+    build();
+  }
   show();
 }
 function setSize(d) { S.size = Math.min(1.6, Math.max(0.6, +(S.size + d).toFixed(2))); try { localStorage.setItem("ws-screen-size", S.size); } catch {} fit(); renderOps(); }
@@ -317,6 +346,7 @@ function fullscreen() { if (document.fullscreenElement) document.exitFullscreen(
 document.addEventListener("keydown", (e) => {
   if (e.target.closest?.("select, input, textarea, dialog")) return;
   const k = e.key;
+  if (k === "F5") { e.preventDefault(); S.mode = "lyrics"; show(); return; }
   if (["PageDown", "ArrowDown", "ArrowRight", " ", "Enter"].includes(k)) { e.preventDefault(); next(); }
   else if (["PageUp", "ArrowUp", "ArrowLeft", "Backspace"].includes(k)) { e.preventDefault(); prev(); }
   else if (k === "b" || k === "B" || k === "." || k === "נ") setMode("blank");
@@ -409,7 +439,8 @@ function renderOps() {
   const src = S.leaderHere ? "" : S.setSource === "db" ? ` · ${S.songs.length} שירים מהסשן` : S.songs.length ? "" :
     ` · <a class="ops-link" href="./" target="_blank">כדי לראות את השירים לפני הלייב — להתחבר לאתר פעם אחת במחשב הזה</a>`;
   ops.innerHTML = `
-    <span class="status"><span class="dot${S.online ? " on" : ""}"></span>${who}${S.date ? ` · ${day()}` : ""}${src}</span>
+    <span class="status"><span class="dot${S.online ? " on" : ""}"></span>${who}${src}</span>
+    ${S.meetings.length ? `<select data-op="meeting" aria-label="המפגש">${S.meeting ? "" : `<option value="${S.date}" selected>${day()}</option>`}${meetingOptions().map((m) => `<option value="${m.iso}"${m.iso === S.date ? " selected" : ""}>${esc(meetingKind(m))} ${m.iso.split("-").reverse().slice(0, 2).join("/")}</option>`).join("")}</select>` : S.date ? ` · ${day()}` : ""}
     <span class="sep"></span>
     <span class="grp"><button data-op="prev" title="הקודם (PageUp)">→</button><button data-op="next" title="הבא (PageDown)">←</button></span>
     ${S.songs.length ? `<select data-op="jump" aria-label="קפיצה לשיר">${S.songs.map((s, i) => `<option value="${i}"${i === S.idx ? " selected" : ""}>${i + 1}. ${esc(s.title)}</option>`).join("")}</select>` : ""}
@@ -443,8 +474,11 @@ document.getElementById("ops").addEventListener("click", (e) => {
   else if (op === "nosermon") { if (confirm("להסיר את הדרשה מהמסך?")) clearSermon(); }
 });
 document.getElementById("ops").addEventListener("change", (e) => {
+  if (e.target.dataset.op === "meeting") { chooseMeeting(e.target.value); return; }
   if (e.target.dataset.op !== "jump") return;
-  S.idx = Number(e.target.value); S.slide = 0; S.mode = "lyrics"; build(); show(); e.target.blur();
+  S.idx = Number(e.target.value); S.slide = 0; S.mode = "lyrics"; build();
+  if (tplMode()) { const j = deckIndexOf(S.songs[S.idx]?.id); if (j >= 0) S.pos = j; }
+  show(); e.target.blur();
 });
 function wakeOps() {
   $("ops").hidden = false; document.body.classList.remove("idle");
@@ -458,6 +492,9 @@ document.addEventListener("touchstart", wakeOps, { passive: true });
 const hello = () => S.ch?.send({ type: "broadcast", event: "hello", payload: {} });
 
 function onSongs(list) {
+  const sig = (list || []).map((x) => x.id + ":" + (x.content || "").length + ":" + x.title).join("|");
+  if (sig === S.songsSig && S.songs.length) return renderOps();
+  S.songsSig = sig;
   const curId = S.songs[S.idx]?.id;
   S.songs = list || [];
   const k = S.songs.findIndex((s) => s.id === (S.itemId ?? curId));
@@ -467,8 +504,9 @@ function onSongs(list) {
   show();
 }
 function onState(p) {
-  if (!p?.leader) return;
-  if (S.leader && (p.leader.email !== S.leader.email || p.leader.ts !== S.leader.ts)) { if (p.leader.ts < S.leader.ts) return; S.seq = -1; }
+  if (!p?.leader || !(p.leader.ts > 0) || p.leader.ts > Date.now() + 60000) return;
+  const lk = (l) => l.id || l.email;
+  if (S.leader && (lk(p.leader) !== lk(S.leader) || p.leader.ts !== S.leader.ts)) { if (p.leader.ts < S.leader.ts) return; S.seq = -1; }
   if (p.seq <= S.seq) return;
   S.leader = p.leader; S.seq = p.seq; S.ended = false;
   if (p.itemId !== S.itemId) {
@@ -486,7 +524,10 @@ function join() {
   S.ch.on("presence", { event: "sync" }, () => { S.leaderHere = "leader" in S.ch.presenceState(); renderOps(); })
     .on("broadcast", { event: "songs" }, ({ payload }) => onSongs(payload?.songs))
     .on("broadcast", { event: "state" }, ({ payload }) => onState(payload))
-    .on("broadcast", { event: "end" }, () => { S.ended = true; S.mode = "logo"; show(); })
+    .on("broadcast", { event: "end" }, ({ payload: p }) => {
+      if (!S.leader || (p?.id && p.id !== (S.leader.id || S.leader.email))) return;
+      S.ended = true; S.mode = "logo"; show();
+    })
     .subscribe((status) => {
       S.online = status === "SUBSCRIBED";
       if (S.online) { S.ch.track({ screen: true }); hello(); }
@@ -508,20 +549,23 @@ async function preload() {
     S.signedIn = !!ses?.session;
     if (S.signedIn) {
       const { data, error } = await sb.from("setlist_items").select("*, songs(*)").eq("meeting_date", S.date).order("position").order("id");
-      if (!error && data) rows = data.filter((i) => i.songs).map((i) => ({ id: i.id, title: i.songs.title, key: i.songs.song_key || "", content: i.songs.content || "", notes: i.notes || "" }));
+      if (!error && data?.length) rows = data.filter((i) => i.songs).map((i) => ({ id: i.id, title: i.songs.title, key: i.songs.song_key || "", content: i.songs.content || "", notes: i.notes || "" }));
     }
   } catch {}
-  if (!rows) {
+  let fromDb = !!rows?.length;
+  if (!rows?.length) {
     try {
       const { data, error } = await sb.rpc("live_set", { c: S.code });
       if (!error && data) rows = data.map((r) => ({ id: r.id, title: r.title, key: r.song_key || "", content: r.content || "", notes: r.notes || "" }));
     } catch {}
   }
-  S.setSource = rows ? (S.signedIn ? "db" : "rpc") : null;
+  S.setSource = rows?.length ? (fromDb ? "db" : "rpc") : null;
   if (rows && !S.leaderHere) {
     const sig = rows.map((r) => r.id + ":" + r.title).join("|");
     if (sig !== S.setSig) { S.setSig = sig; onSongs(rows); }
   }
+  // #11 back after a reload: the slide we were on (kept per meeting for this browser tab)
+  if (S.wantPos != null) { S.pos = Math.max(0, Math.min(S.wantPos, S.deckSlides.length - 1)); S.wantPos = null; show(); }
   renderOps();
 }
 setInterval(() => { if (S.code && !S.leaderHere) preload(); }, 120000);
@@ -534,6 +578,8 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
 (async () => {
   try { S.deck = await fetch("deck/template.json", { cache: "no-cache" }).then((r) => r.json()); } catch { S.deck = null; }
   buildDeck(); show();
-  if (await pickMeeting()) { loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon(); loadTail().then(() => tplMode() && show()); }
+  if (await pickMeeting()) {
+    try { const v = sessionStorage.getItem("ws-screen-pos-" + S.date); if (v !== null) S.wantPos = Number(v); } catch {}
+    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon(); loadTail().then(() => tplMode() && show()); }
   wakeOn(); show(); wakeOps();
 })();

@@ -23,14 +23,23 @@ const LEAD_DATE = (() => {
   } catch { return null; }
 })();
 
+// Who is who on the channel = this browser tab, not the account: the same person on a phone and a tablet is two
+// devices (one leads, the other follows), and no e-mail address ever goes out on the public channels.
+const SYNC_DEV = (() => { try { return crypto.randomUUID().slice(0, 13); } catch { return Math.random().toString(36).slice(2, 15); } })();
+const leaderKey = (l) => (l ? l.id || l.email || "" : "");
+// a claim / state stamped more than a minute in the future is a wrong clock or someone playing: ignore it
+// (otherwise it would win every "latest claim wins" comparison and nobody could take the lead back)
+const syncFuture = (ts) => !(ts > 0) || ts > Date.now() + 60000;
+const LIVE_POS = (date) => "ws-live-pos-" + date;
+
 const sync = {
-  ch: null, date: null, online: false,
+  ch: null, date: null, online: false, joined: false,
   seq: 0, lastSeq: -1,          // my broadcasts / the last one I applied
-  leader: null, iLead: false,   // leader = { email, name, ts }
+  leader: null, iLead: false,   // leader = { id (device), name, ts }
   follow: true, remote: null,   // remote = the last state the leader sent
   people: {}, showPeople: false,
   guestCode: null, guestCh: null, guestCount: 0, guestSongsSig: "",
-  wake: null, leadTimer: null,
+  wake: null, leadTimer: null, endArm: 0,
 };
 
 const syncActive = () => !!sync.ch;
@@ -50,21 +59,31 @@ function wakeOff() { try { sync.wake?.release(); } catch {} sync.wake = null; }
 function syncStart(date) {
   wakeOn();
   if (!LIVE_SYNC_ON || typeof user === "undefined" || !user || sync.ch) return;
-  Object.assign(sync, { date, seq: 0, lastSeq: -1, leader: null, iLead: false, follow: true, remote: null, people: {}, online: false });
-  const ch = sb.channel("ws-live-" + date, { config: { broadcast: { self: false }, presence: { key: syncEmail() } } });
+  Object.assign(sync, { date, seq: 0, lastSeq: -1, leader: null, iLead: false, follow: true, remote: null, people: {}, online: false, joined: false, endArm: 0 });
+  const ch = sb.channel("ws-live-" + date, { config: { broadcast: { self: false }, presence: { key: SYNC_DEV } } });
   ch.on("broadcast", { event: "state" }, ({ payload }) => onState(payload))
     .on("broadcast", { event: "lead" }, ({ payload }) => onLead(payload))
     .on("broadcast", { event: "hello" }, () => { if (sync.iLead) broadcastState(); })
-    .on("broadcast", { event: "end" }, () => onEnd())
+    .on("broadcast", { event: "end" }, ({ payload }) => onEnd(payload))
     .on("presence", { event: "sync" }, () => { sync.people = ch.presenceState(); renderLive(); })
     .subscribe((status) => {
       sync.online = status === "SUBSCRIBED";
       if (sync.online) {
         ch.track({ name: myName(), lead: sync.iLead });
-        // the session's leader leads the moment they open the live view: the songs go out to everyone right away
         if (sync.iLead) broadcastState();          // back after a dropped connection
-        else if (canEditSetlist(date)) claimLead();
-        else send("hello", {});                    // a member: ask whoever leads for where we are
+        else {
+          send("hello", {});                       // ask whoever leads for where we are
+          // the session's leader leads the moment they open the live view — only on the first connect, and only if
+          // nobody answers within a moment (an admin who took over, or the leader's other device, keeps leading;
+          // a reconnect never takes the lead back)
+          if (!sync.joined && canEditSetlist(date)) {
+            clearTimeout(sync.leadTimer);
+            sync.leadTimer = setTimeout(() => {
+              if (sync.ch === ch && !sync.iLead && !(sync.remote && sync.people[leaderKey(sync.leader)])) claimLead();
+            }, 1500);
+          }
+        }
+        sync.joined = true;
       }
       renderLive();
     });
@@ -77,9 +96,11 @@ function send(event, payload, channel = sync.ch) {
 }
 
 function claimLead() {
+  // taking over from a leader I was following: start from where they were, not from the song I happened to browse
+  if (!sync.iLead && sync.follow && sync.remote) adoptRemote(sync.remote);
   sync.iLead = true;
   sync.follow = true;
-  sync.leader = { email: syncEmail(), name: myName(), ts: Date.now() };
+  sync.leader = { id: SYNC_DEV, name: myName(), ts: Date.now() };
   send("lead", sync.leader);
   sync.ch?.track({ name: myName(), lead: true });
   guestServe(); // the team's link (guest view) follows whoever leads
@@ -88,10 +109,10 @@ function claimLead() {
 }
 
 function onLead(p) {
-  if (!p?.email) return;
+  if (!leaderKey(p) || syncFuture(p.ts)) return;
   const cur = sync.leader;
-  if (cur && (p.ts < cur.ts || (p.ts === cur.ts && p.email < cur.email))) return; // the latest claim wins
-  const lost = sync.iLead && p.email !== syncEmail();
+  if (cur && (p.ts < cur.ts || (p.ts === cur.ts && leaderKey(p) < leaderKey(cur)))) return; // the latest claim wins
+  const lost = sync.iLead && leaderKey(p) !== SYNC_DEV;
   sync.leader = p; sync.lastSeq = -1;
   if (lost) { sync.iLead = false; sync.ch?.track({ name: myName(), lead: false }); guestUnserve(); toast(`ההובלה עברה ל${p.name ? "-" + p.name : "מישהו אחר"}`); }
   renderLive();
@@ -105,47 +126,74 @@ function buildState() {
 function broadcastState() {
   if (!sync.iLead) return;
   const st = buildState();
+  saveLivePos(st);
   send("state", st);
   if (sync.guestCh) { sendGuestSongs(); send("state", st, sync.guestCh); }
 }
 
 async function onState(p) {
-  if (!p?.leader) return;
+  if (!p?.leader || syncFuture(p.leader.ts)) return;
   if (!sync.leader || p.leader.ts > sync.leader.ts) onLead(p.leader);
-  if (p.leader.email !== sync.leader?.email || p.seq <= sync.lastSeq) return; // old leader or stale message
+  if (leaderKey(p.leader) !== leaderKey(sync.leader) || p.seq <= sync.lastSeq) return; // old leader or stale message
   sync.lastSeq = p.seq;
   sync.remote = p;
-  if (sync.follow && !sync.iLead) await applyRemote(p);
+  if (sync.follow && !sync.iLead) { saveLivePos(p); await applyRemote(p); }
   else renderLive(); // the "leader is on song X" bar
 }
 
-async function applyRemote(p) {
+// where the leader is → my view (no network)
+function adoptRemote(p) {
   live.shift = { ...(p.shifts || {}) };
-  let k = liveItems().findIndex((i) => i.id === p.itemId);
-  if (k < 0 && p.itemId != null) { await loadSetlist(); k = liveItems().findIndex((i) => i.id === p.itemId); } // added mid-set
+  const k = liveItems().findIndex((i) => i.id === p.itemId);
   if (k >= 0) live.idx = k;
+  return k >= 0;
+}
+async function applyRemote(p) {
+  if (!adoptRemote(p) && p.itemId != null) {
+    await loadSetlist(); // a song added mid-set
+    if (sync.remote !== p) return; // a newer state arrived while loading: that one wins
+    adoptRemote(p);
+  }
   renderLive();
 }
 
-function onEnd() {
+// the last position per meeting date, so leaving and re-opening the live view continues from there (not song 1)
+function saveLivePos(p) {
+  try { if (sync.date && p?.itemId != null) localStorage.setItem(LIVE_POS(sync.date), JSON.stringify({ itemId: p.itemId, shifts: p.shifts || {}, at: Date.now() })); } catch {}
+}
+function restoreLivePos(date) {
+  try {
+    const p = JSON.parse(localStorage.getItem(LIVE_POS(date)) || "null");
+    if (!p || Date.now() - p.at > 12 * 3600e3) return; // a new day = a new set
+    const k = itemsFor(date).filter((i) => i.songs).findIndex((i) => i.id === p.itemId);
+    if (k >= 0) { live.idx = k; live.shift = { ...p.shifts }; }
+  } catch {}
+}
+
+// the leader ended the set: stay on the channel (a new start is followed), just without a leader
+function onEnd(p) {
+  if (!sync.leader || (p?.id && p.id !== leaderKey(sync.leader))) return; // only the current leader ends it
   toast("המוביל/ה סיים/ה את הסט");
-  syncStop();
+  Object.assign(sync, { leader: null, remote: null, lastSeq: -1, follow: true });
+  try { localStorage.removeItem(LIVE_POS(sync.date)); } catch {}
   renderLive();
 }
 
 // leave the channel (a follower closing the view, or after the set ended)
 function syncStop() {
-  clearTimeout(sync.leadTimer);
+  clearTimeout(sync.leadTimer); clearTimeout(sync.endArm);
   if (sync.ch) sb.removeChannel(sync.ch);
   if (sync.guestCh) sb.removeChannel(sync.guestCh);
-  Object.assign(sync, { ch: null, guestCh: null, guestCode: null, guestCount: 0, guestSongsSig: "", online: false, iLead: false, leader: null, remote: null, people: {}, showPeople: false });
+  Object.assign(sync, { ch: null, guestCh: null, guestCode: null, guestCount: 0, guestSongsSig: "", online: false, iLead: false, leader: null, remote: null, people: {}, showPeople: false, joined: false, endArm: 0 });
   wakeOff();
 }
 
 // the leader ends the set for everyone (guests too)
 function syncEnd() {
-  send("end", {});
-  if (sync.guestCh) send("end", {}, sync.guestCh);
+  const p = { id: SYNC_DEV, ts: sync.leader?.ts || 0 };
+  send("end", p);
+  if (sync.guestCh) send("end", p, sync.guestCh);
+  try { localStorage.removeItem(LIVE_POS(sync.date)); } catch {}
   setTimeout(syncStop, 300); // let the messages leave first
 }
 
@@ -288,22 +336,22 @@ function syncPanelHtml() {
   if (!syncActive()) return "";
   let html = `<button class="tool${live.myCapo ? " on" : ""}" data-live="capo-me" title="קאפו אישי, רק אצלך">${live.myCapo ? "קאפו שלי: " + live.myCapo : "קאפו שלי"}</button>`;
   if (!sync.iLead && mayLead(sync.date)) html += `<button class="tool" data-live="lead">👑 לקחת הובלה</button>`;
-  if (sync.iLead) html += `<button class="tool live-end" data-live="end">⏹ סיום הסט לכולם</button>`;
+  if (sync.iLead) html += `<button class="tool live-end${sync.endArm ? " on" : ""}" data-live="end">${sync.endArm ? "⏹ לחיצה נוספת = סיום לכולם" : "⏹ סיום הסט לכולם"}</button>`;
   return html;
 }
 
 function syncPeopleHtml() {
   if (!syncActive() || !sync.showPeople) return "";
-  const rows = Object.entries(sync.people).map(([email, metas]) => {
+  const rows = Object.entries(sync.people).map(([, metas]) => {
     const m = metas[0] || {};
-    return `<li>${m.lead ? "👑 " : ""}${esc(m.name || email)}</li>`;
+    return `<li>${m.lead ? "👑 " : ""}${esc(m.name || "?")}</li>`;
   }).join("");
   return `<div class="live-people"><ul>${rows || "<li>אף אחד עדיין</li>"}</ul>${sync.guestCount ? `<p>+ ${sync.guestCount} אורחים בלינק</p>` : ""}</div>`;
 }
 
 function syncAwayHtml() {
   if (!syncActive() || sync.iLead) return "";
-  if (sync.leader && !sync.people[sync.leader.email]) return `<div class="live-away">המוביל/ה התנתק/ה · ממשיכים מאיפה שהיינו</div>`;
+  if (sync.leader && !sync.people[leaderKey(sync.leader)]) return `<div class="live-away">המוביל/ה התנתק/ה · ממשיכים מאיפה שהיינו</div>`;
   if (sync.follow || !sync.remote) return "";
   const it = liveItems().find((i) => i.id === sync.remote.itemId);
   return `<div class="live-away">המוביל/ה בשיר: <b>${esc(it?.songs.title || "")}</b> <button class="tool" data-live="back">חזרה למעקב</button></div>`;
@@ -316,7 +364,12 @@ function syncAction(a) {
   if (a === "back") { sync.follow = true; if (sync.remote) applyRemote(sync.remote); return true; }
   if (a === "lead") { claimLead(); return true; }
   if (a === "guest") { guestShare(); return true; }
-  if (a === "end") { if (confirm("לסיים את הסט לכולם?")) { syncEnd(); live.on = false; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } return true; }
+  if (a === "end") {
+    if (!sync.endArm) { sync.endArm = setTimeout(() => { sync.endArm = 0; renderLive(); }, 4000); return true; }
+    clearTimeout(sync.endArm); sync.endArm = 0;
+    syncEnd(); live.on = false; if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    return true;
+  }
   if (a === "capo-me") { live.myCapo = ((live.myCapo || 0) + 1) % 8; try { localStorage.setItem("ws-live-capo", live.myCapo); } catch {} return true; }
   return false;
 }

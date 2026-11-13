@@ -185,7 +185,15 @@ async function buildPptx(iso) {
   }
   const songSlides = async (it) => {
     const out = [];
-    for (const st of lyricStanzas(it.songs.content)) {
+    const stanzas = lyricStanzas(it.songs.content);
+    if (!stanzas.length) {
+      out.push(await clone(TPL.song, (xml) => {
+        const [titleSp, lyricSp] = shapes(xml).filter((sp) => /<a:t>/.test(sp));
+        const x = xml.replace(titleSp, setParagraphs(titleSp, [it.songs.title], (ps) => ps[0]));
+        return lyricSp ? x.replace(lyricSp, setParagraphs(lyricSp, [""], (ps) => ps[0])) : x;
+      }));
+    }
+    for (const st of stanzas) {
       const long = st.lines.some((l) => l.length > 34);
       for (const part of chunks(st.lines, 4)) {
         out.push(await clone(TPL.song, (xml) => {
@@ -272,8 +280,10 @@ document.addEventListener("click", async (e) => {
   if (quick) {
     const iso = setlist.openDate;
     if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
+    if (quick.disabled) return;
     quick.disabled = true;
     await loadSetlist();
+    if (itemsFor(iso).some((i) => i.song_id === Number(quick.dataset.slQuickadd))) { toast("השיר כבר בסט"); quick.disabled = false; return; }
     const pos = Math.max(0, ...itemsFor(iso).map((i) => i.position)) + 1;
     const { error } = await sb.from("setlist_items").insert({ meeting_date: iso, song_id: Number(quick.dataset.slQuickadd), position: pos, notes: null });
     if (error) { error.code === "42501" ? leaderOnly(iso) : toast("ההוספה נכשלה"); quick.disabled = false; return; }
@@ -287,22 +297,13 @@ document.addEventListener("click", async (e) => {
   // the projection screen: one fixed link for the HDMI computer (screen.html picks the upcoming meeting by itself)
   if (t.closest("[data-sl-screen]")) { window.open("screen.html", "_blank"); return; }
   // "סעודת האדון": a special song ({screen: quiet} → title alone on the screen), created once, added at the end
-  if (t.closest("[data-sl-supper]")) {
+  const supper = t.closest("[data-sl-supper]");
+  if (supper) {
     const iso = setlist.openDate;
     if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
-    if (!songsState.loaded) await loadSongs();
-    let s = songsState.list.find((x) => x.title.trim() === "סעודת האדון");
-    if (!s) {
-      const { data, error } = await sb.from("songs").insert({ title: "סעודת האדון", content: "{screen: quiet}", song_key: null }).select().single();
-      if (error || !data) { toast("לא הצלחתי ליצור את הפריט", { error: true }); return; }
-      s = data; songsState.list.push(data);
-    }
-    await loadSetlist();
-    const pos = Math.max(0, ...itemsFor(iso).map((i) => i.position)) + 1;
-    const { error } = await sb.from("setlist_items").insert({ meeting_date: iso, song_id: s.id, position: pos, notes: null });
-    if (error) { error.code === "42501" ? leaderOnly(iso) : toast("ההוספה נכשלה"); return; }
-    await loadSetlist(); renderSetlistDialog();
-    toast("סעודת האדון נוספה — אפשר להוסיף שיר אחריה");
+    if (setlist.busy) return;
+    setlist.busy = true; supper.disabled = true;
+    try { await addSupper(iso); } finally { setlist.busy = false; supper.disabled = false; }
     return;
   }
   const add = t.closest("[data-sl-add]");
@@ -310,32 +311,31 @@ document.addEventListener("click", async (e) => {
     const iso = document.getElementById("sl-date").value;
     const notes = document.getElementById("sl-new-note").value.trim() || null;
     if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
+    if (add.disabled) return;
+    add.disabled = true;
     await loadSetlist();
+    if (itemsFor(iso).some((i) => i.song_id === Number(add.dataset.slAdd))) { toast("השיר כבר בסשן הזה"); add.disabled = false; return; }
     const pos = Math.max(0, ...itemsFor(iso).map((i) => i.position)) + 1;
     const { error } = await sb.from("setlist_items").insert({ meeting_date: iso, song_id: Number(add.dataset.slAdd), position: pos, notes });
+    add.disabled = false;
     if (error) { error.code === "42501" ? leaderOnly(iso) : toast("ההוספה נכשלה"); return; }
     await loadSetlist(); dialogEl().close(); toast("השיר נוסף לסשן"); return;
   }
   const mv = t.closest("[data-sl-move]");
   if (mv) {
     if (!canEditSetlist(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
-    const items = itemsFor(setlist.openDate);
-    const k = items.findIndex((i) => i.id === Number(mv.dataset.slMove));
-    const j = k + Number(mv.dataset.dir);
-    if (j < 0 || j >= items.length) return;
-    const order = items.map((i) => i.id);
-    [order[k], order[j]] = [order[j], order[k]];
-    const res = await Promise.all(order.map((id, n) => sb.from("setlist_items").update({ position: n + 1 }).eq("id", id).select("id")));
-    if (res.some((r) => r.error || !r.data?.length)) leaderOnly(setlist.openDate);
-    await loadSetlist(); renderSetlistDialog(); return;
+    if (setlist.busy) return;
+    setlist.busy = true;
+    try { await moveItem(Number(mv.dataset.slMove), Number(mv.dataset.dir)); } finally { setlist.busy = false; }
+    return;
   }
   const rm = t.closest("[data-sl-remove]");
   if (rm) {
     if (!canEditSetlist(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
-    const { data, error } = await sb.from("setlist_items").delete().eq("id", Number(rm.dataset.slRemove)).select("id");
-    if (error) { toast("ההסרה נכשלה"); return; }
-    if (!data?.length) { leaderOnly(setlist.openDate); return; } // blocked by the DB (nothing deleted)
-    await loadSetlist(); renderSetlistDialog(); return;
+    if (setlist.busy) return;
+    setlist.busy = true; rm.disabled = true;
+    try { await removeItem(Number(rm.dataset.slRemove)); } finally { setlist.busy = false; }
+    return;
   }
   const song = t.closest("[data-open-song]");
   if (song) {
@@ -351,6 +351,56 @@ document.addEventListener("click", async (e) => {
     b.disabled = false; b.textContent = "📽️ הורדת מצגת PowerPoint";
   }
 });
+
+// "סעודת האדון": a special song ({screen: quiet} → title alone on the screen), created once, added at the end
+async function addSupper(iso) {
+  if (!songsState.loaded) await loadSongs();
+  let s = songsState.list.find((x) => x.title.trim() === "סעודת האדון");
+  if (!s) {
+    const { data, error } = await sb.from("songs").insert({ title: "סעודת האדון", content: "{screen: quiet}", song_key: null }).select().single();
+    if (error || !data) { toast("לא הצלחתי ליצור את הפריט", { error: true }); return; }
+    s = data; songsState.list.push(data);
+  }
+  await loadSetlist();
+  if (itemsFor(iso).some((i) => i.song_id === s.id)) { toast("סעודת האדון כבר בסט"); return; }
+  const pos = Math.max(0, ...itemsFor(iso).map((i) => i.position)) + 1;
+  const { error } = await sb.from("setlist_items").insert({ meeting_date: iso, song_id: s.id, position: pos, notes: null });
+  if (error) { error.code === "42501" ? leaderOnly(iso) : toast("ההוספה נכשלה"); return; }
+  await loadSetlist(); renderSetlistDialog();
+  toast("סעודת האדון נוספה — אפשר להוסיף שיר אחריה");
+}
+
+async function moveItem(id, dir) {
+  const items = itemsFor(setlist.openDate);
+  const k = items.findIndex((i) => i.id === id), j = k + dir;
+  if (k < 0 || j < 0 || j >= items.length) return;
+  const order = items.map((i) => i.id);
+  [order[k], order[j]] = [order[j], order[k]];
+  const res = await Promise.all(order.map((x, n) => sb.from("setlist_items").update({ position: n + 1 }).eq("id", x).select("id")));
+  if (res.some((r) => r.error || !r.data?.length)) leaderOnly(setlist.openDate);
+  await loadSetlist(); renderSetlistDialog();
+}
+
+// removing: an undo toast instead of a question (one slip on a small ✕ shouldn't lose a song + its note)
+async function removeItem(id) {
+  const it = setlist.items.find((i) => i.id === id);
+  const { data, error } = await sb.from("setlist_items").delete().eq("id", id).select("id");
+  if (error) { toast("ההסרה נכשלה"); renderSetlistDialog(); return; }
+  if (!data?.length) { // nothing deleted: already gone (a double tap) or blocked by the DB
+    await loadSetlist(); renderSetlistDialog();
+    if (setlist.items.some((i) => i.id === id)) leaderOnly(setlist.openDate);
+    return;
+  }
+  await loadSetlist(); renderSetlistDialog();
+  if (it) {
+    const u = { meeting_date: it.meeting_date, song_id: it.song_id, position: it.position, notes: it.notes };
+    toast(`"${it.songs?.title || "השיר"}" הוסר`, { action: { label: "ביטול", fn: async () => {
+      const { error } = await sb.from("setlist_items").insert(u);
+      if (error) { toast("ההחזרה נכשלה"); return; }
+      await loadSetlist(); renderSetlistDialog(); toast("השיר חזר לסט");
+    } } });
+  }
+}
 
 // ---------- PDF of the songs themselves (chords + lyrics), one song per page, via the browser's "Save as PDF" ----------
 function printSongs(iso) {
@@ -401,6 +451,16 @@ const live = { on: false, idx: 0, shift: {}, noCapo: {}, chords: true, zoom: 1, 
 try { live.zoom = Number(localStorage.getItem("ws-live-zoom")) || 1; } catch {}
 try { live.myCapo = Number(localStorage.getItem("ws-live-capo")) || 0; } catch {} // personal capo, only with live sync (live-sync.js)
 
+// open the live view for a date: from the last position on this device (live-sync.js keeps it per date)
+function startLive(date) {
+  setlist.openDate = date;
+  Object.assign(live, { on: true, idx: 0, shift: {} });
+  if (typeof restoreLivePos === "function") restoreLivePos(date);
+  document.documentElement.requestFullscreen?.().catch(() => {});
+  renderLive();
+  if (typeof syncStart === "function") syncStart(date);
+}
+
 function liveEl() {
   let el = document.getElementById("live-view");
   if (!el) { el = document.createElement("div"); el.id = "live-view"; el.className = "live-view"; el.hidden = true; document.body.append(el); }
@@ -410,7 +470,7 @@ function liveEl() {
 function renderLive() {
   const items = itemsFor(setlist.openDate).filter((i) => i.songs);
   const el = liveEl();
-  if (!live.on || !items.length) { el.hidden = true; return; }
+  if (!live.on || !items.length) { el.hidden = true; el._sig = ""; return; }
   live.idx = Math.max(0, Math.min(live.idx, items.length - 1));
   const it = items[live.idx], song = it.songs, meta = songMeta(song.content);
   const capo = Number(meta.capo) || 0;
@@ -420,6 +480,10 @@ function renderLive() {
   const key = base ? transposeChord(base, shift + myCapo, prefersFlats(base, shift + myCapo)) : "";          // the key everyone plays in
   const shapes = base && myCapo ? transposeChord(base, shift, prefersFlats(base, shift)) : "";       // what my fingers play with my capo
   const next = items[live.idx + 1];
+  const sig = [it.id, shift, live.chords, live.zoom, song.content.length].join("|");
+  const old = el.querySelector(".live-body");
+  const keep = el._sig === sig && old ? { l: old.scrollLeft, t: old.scrollTop } : null;
+  el._sig = sig;
   el.hidden = false;
   el.style.setProperty("--live-zoom", live.zoom);
   el.innerHTML = `
@@ -452,6 +516,7 @@ function renderLive() {
       <button class="tool" data-live="next" ${next ? "" : "disabled"}>הבא ←</button>
     </div>`;
   fitLive(el);
+  if (keep) { const b = el.querySelector(".live-body"); b.scrollLeft = keep.l; b.scrollTop = keep.t; }
 }
 
 // Columns of a fixed width: one per screen on a phone, two side by side on a wide screen.
@@ -508,9 +573,7 @@ function liveAction(a) {
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-sl-live]")) {
     dialogEl().close();
-    Object.assign(live, { on: true, idx: 0 });
-    document.documentElement.requestFullscreen?.().catch(() => {});
-    renderLive(); syncStart(setlist.openDate); return;
+    startLive(setlist.openDate); return;
   }
   const b = e.target.closest("[data-live]");
   if (b) liveAction(b.dataset.live);

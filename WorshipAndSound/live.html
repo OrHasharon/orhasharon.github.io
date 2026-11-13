@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="stylesheet" href="../style.css?v=49">
-  <link rel="stylesheet" href="ws.css?v=81">
+  <link rel="stylesheet" href="ws.css?v=82">
   <style>
     .guest-msg { margin: auto; max-width: 420px; text-align: center; padding: 24px; }
     .guest-msg h2 { font-family: "Google Sans", "Noto Sans Hebrew", sans-serif; font-weight: 500; color: var(--accent-ink); margin: 0 0 8px; }
@@ -59,6 +59,10 @@
       const shapes = base && g.myCapo ? transposeChord(base, shift, prefersFlats(base, shift)) : "";
       const next = g.songs[g.idx + 1];
       const leadSong = g.songs.find((x) => x.id === g.itemId);
+      // keep the reading position when only the bar changes (someone joined, a hello)
+      const sig = [s.id, shift, g.chords, g.zoom].join("|"), old = el.querySelector(".live-body");
+      const keep = g.sig === sig && old ? old.scrollTop : null;
+      g.sig = sig;
       el.style.setProperty("--live-zoom", g.zoom);
       el.innerHTML = `
         <div class="live-bar">
@@ -89,6 +93,7 @@
           <span class="live-next">${next ? `הבא: ${esc(next.title)}` : "שיר אחרון"}</span>
           <button class="tool" data-g="next" ${next ? "" : "disabled"}>הבא ←</button>
         </div>`;
+      if (keep) el.querySelector(".live-body").scrollTop = keep;
     }
 
     function act(a) {
@@ -125,13 +130,19 @@
       g.ch.on("presence", { event: "sync" }, () => { g.leaderHere = "leader" in g.ch.presenceState(); render(); });
       g.ch.on("broadcast", { event: "songs" }, ({ payload }) => { g.songs = payload.songs || []; render(); })
         .on("broadcast", { event: "state" }, ({ payload: p }) => {
-          if (!p?.leader) return;
-          if (g.leader && (p.leader.email !== g.leader.email || p.leader.ts !== g.leader.ts)) { if (p.leader.ts < g.leader.ts) return; g.seq = -1; }
+          if (!p?.leader || !(p.leader.ts > 0) || p.leader.ts > Date.now() + 60000) return; // a clock from the future
+          const lk = (l) => l.id || l.email;
+          if (g.ended && p.leader.ts <= g.endedTs) return;   // the set that ended
+          if (g.leader && (lk(p.leader) !== lk(g.leader) || p.leader.ts !== g.leader.ts)) { if (p.leader.ts < g.leader.ts) return; g.seq = -1; }
           if (p.seq <= g.seq) return;
+          g.ended = false; // a new start after "end" is followed again
           g.leader = p.leader; g.seq = p.seq; g.itemId = p.itemId; g.shifts = p.shifts || {};
           render();
         })
-        .on("broadcast", { event: "end" }, () => { g.ended = true; render(); sb.removeChannel(g.ch); })
+        .on("broadcast", { event: "end" }, ({ payload: p }) => {
+          if (!g.leader || (p?.id && p.id !== (g.leader.id || g.leader.email))) return; // only the current leader ends it
+          g.ended = true; g.endedTs = g.leader.ts; g.leader = null; g.seq = -1; render(); // the channel stays: a new start is followed
+        })
         .subscribe((status) => {
           g.online = status === "SUBSCRIBED";
           if (g.online) { g.ch.track({ guest: true }); hello(); }

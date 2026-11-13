@@ -48,13 +48,19 @@ const instKind = (inst) => /שירה/.test(inst) ? "vocal" : /קליד|פסנת�
 const instHtml = (inst) => inst ? ` <small class="inst inst-${instKind(inst)}">(${[icon(inst), esc(instLabel(inst))].filter(Boolean).join(" ")})</small>` : "";
 const instrumentsOf = (m) => (m.instruments || "").split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
-function toast(text, { error = false } = {}) {
+function toast(text, { error = false, action = null } = {}) {
   document.querySelector(".toast")?.remove();
   const t = document.createElement("div");
   t.className = "toast" + (error ? " toast-error" : ""); t.textContent = (error ? "⛔ " : "") + text;
+  if (action) { // e.g. "ביטול" after removing a song
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-action"; b.textContent = action.label;
+    b.addEventListener("click", () => { t.remove(); action.fn(); }, { once: true });
+    t.append(" ", b);
+  }
   // an open modal dialog sits in the top layer above <body>, so the toast goes inside it to be seen
   ([...document.querySelectorAll("dialog[open]")].pop() || document.body).append(t);
-  setTimeout(() => t.remove(), error ? 6000 : 3500);
+  setTimeout(() => t.remove(), error || action ? 6000 : 3500);
 }
 
 // ---------- data ----------

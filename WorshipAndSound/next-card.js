@@ -123,9 +123,6 @@ document.addEventListener("click", async (e) => {
     b.disabled = false; b.innerHTML = label; return;
   }
   if (act === "live") {
-    Object.assign(live, { on: true, idx: 0 });
-    document.documentElement.requestFullscreen?.().catch(() => {});
-    renderLive();
-    if (typeof syncStart === "function") syncStart(iso);
+    startLive(iso);
   }
 });

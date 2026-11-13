@@ -111,8 +111,10 @@ document.addEventListener("click", async (e) => {
   if (add) {
     const date = lead.date;
     if (!canEditSetlist(date)) { leaderOnly(date); return; }
+    if (add.disabled) return;
     add.disabled = true;
     await loadSetlist();
+    if (itemsFor(date).some((i) => i.song_id === Number(add.dataset.leadAdd))) { toast("השיר כבר בסט"); add.disabled = false; return; }
     const pos = Math.max(0, ...itemsFor(date).map((i) => i.position)) + 1;
     const { error } = await sb.from("setlist_items").insert({ meeting_date: date, song_id: Number(add.dataset.leadAdd), position: pos, notes: null });
     if (error) { error.code === "42501" ? leaderOnly(date) : toast("ההוספה נכשלה"); add.disabled = false; return; }
@@ -128,9 +130,13 @@ document.addEventListener("click", async (e) => {
   if (t.closest("[data-lead-edit]")) { leadDialog().close(); openSetlist(lead.date); return; }
   if (t.closest("[data-lead-start]")) {
     leadDialog().close();
-    setlist.openDate = lead.date;
-    Object.assign(live, { on: true, idx: 0 });
-    document.documentElement.requestFullscreen?.().catch(() => {});
-    renderLive(); syncStart(lead.date);
+    startLive(lead.date);
+    // an admin who opened the leader screen means to lead: take it once the channel is up
+    if (isAdmin && !canEditSetlist(lead.date)) {
+      const t0 = Date.now(), iv = setInterval(() => {
+        if (sync.online && !sync.iLead) { clearInterval(iv); claimLead(); }
+        else if (sync.iLead || Date.now() - t0 > 8000 || !live.on) clearInterval(iv);
+      }, 300);
+    }
   }
 });
