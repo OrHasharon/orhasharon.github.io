@@ -68,7 +68,7 @@ function renderSetlistDialog() {
       <button class="btn ghost" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
       ${canEditSetlist(iso) ? `<button class="btn ghost" data-sl-supper>🍞 + סעודת האדון</button>` : ""}
       <button class="btn ghost" data-sl-screen ${items.length ? "" : "disabled"} title="פותחים פעם אחת במחשב ההקרנה ושומרים כסימנייה">🖥️ מסך הקרנה</button>
-      <button class="btn ghost" data-sl-pdf ${items.length ? "" : "disabled"}>📄 הורדת השירים כ-PDF</button>
+      <button class="btn ghost" data-sl-pdf ${items.length ? "" : "disabled"}>📄 הורדת PDF</button>
       <a id="sl-download" class="link-btn" hidden></a>
     </div>
   </div>`;

@@ -53,7 +53,7 @@ function ptCard(m) {
     ${sermon}
     <div class="pt-actions">
       ${manage}
-      <button class="btn ghost" data-pt="pptx" data-iso="${iso}" ${items.length ? "" : "disabled"}>📽️ PowerPoint</button>
+      <button class="btn ghost" data-pt="pptx" data-iso="${iso}" ${items.length ? "" : "disabled"}>📽️ הורדת מצגת</button>
       <button class="btn ghost" data-pt="screen" data-iso="${iso}">🖥️ מסך הקרנה</button>
     </div>
   </article>`;

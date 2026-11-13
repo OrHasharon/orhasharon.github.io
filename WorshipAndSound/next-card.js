@@ -78,8 +78,8 @@ function nextMeetingCard(mt) {
         <summary class="btn ghost">🖥️ להקרנה ולהדפסה <span class="nc-chev" aria-hidden="true">▾</span></summary>
         <div class="nc-menu-items">
           <button class="btn ghost" data-nc="screen" data-date="${iso}">🖥️ מסך הקרנה</button>
-          <button class="btn ghost" data-nc="pptx" data-date="${iso}">📽️ מצגת</button>
-          <button class="btn ghost" data-nc="pdf" data-date="${iso}">📄 PDF</button>
+          <button class="btn ghost" data-nc="pptx" data-date="${iso}">📽️ הורדת מצגת</button>
+          <button class="btn ghost" data-nc="pdf" data-date="${iso}">📄 הורדת PDF</button>
         </div>
       </details>
       ${typeof LIVE_SYNC_ON !== "undefined" && LIVE_SYNC_ON && (isAdmin || mine)
