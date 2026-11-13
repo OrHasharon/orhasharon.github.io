@@ -279,7 +279,7 @@ async function buildPptx(iso) {
       const fill = (xml, title, lines) => { const [t, bd] = two(xml); let x = t ? xml.replace(t, setParagraphs(t, [title], (ps) => ps[0])) : xml; return bd ? x.replace(bd, setParagraphs(bd, lines, (ps) => ps[0])) : x; };
       if (e.weekly === "parasha" && (texts.parasha || texts.parasha_refs))
         order.push(await clone(TPL.parasha, (xml) => fill(xml, texts.parasha, texts.parasha_refs.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))));
-      if (e.weekly === "reading") for (const page of readingPages(texts.reading)) order.push(await clone(TPL.reading, (xml) => fill(xml, texts.reading_ref, page)));
+      if (e.weekly === "reading") for (const ps of texts.passages || []) for (const page of (ps.text ? readingPages(ps.text) : [[]])) order.push(await clone(TPL.reading, (xml) => fill(xml, ps.ref, page)));
       continue;
     }
     // the Lord's Supper verse typed in the site replaces the template's

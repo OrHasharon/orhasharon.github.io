@@ -664,5 +664,11 @@ main > .tabs button { white-space: nowrap; flex: none; }
 .pt-form label { display: grid; gap: 4px; font-size: .9rem; color: var(--muted); }
 .pt-form input, .pt-form textarea { font: inherit; color: var(--ink, inherit); line-height: 1.6; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card, transparent); width: 100%; box-sizing: border-box; }
 .pt-form .hint { margin: 0; }
+.pt-form label small { color: var(--muted); font-weight: 400; }
+.pt-passages { display: grid; gap: 10px; }
+.pt-passage { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.pt-passage-head { display: flex; gap: 8px; align-items: center; }
+.pt-passage-head .link-btn { flex: none; font-size: 1.1rem; }
+.pt-add { justify-self: start; }
 .pt-next { max-width: none; }
 .pt-url { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; word-break: break-all; font-size: .9rem; }

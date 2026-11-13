@@ -27,6 +27,23 @@ function deckPlan(items, contentOf) {
   return plan;
 }
 
+// The week's parasha as the site stores it (meeting_texts): parasha_refs = "תורה: …" / "הפטרה: …" / "ברית חדשה: …"
+// lines; the verses to show = reading, a JSON list of passages [{ref, text}] (older rows: reading_ref + plain text).
+const REF_LABELS = { torah: "תורה", haftara: "הפטרה", brit: "ברית חדשה" };
+function parashaRefs(row) {
+  const out = { torah: "", haftara: "", brit: "" };
+  for (const line of (row?.parasha_refs || "").split(/\r?\n/)) {
+    const k = Object.keys(REF_LABELS).find((x) => line.startsWith(REF_LABELS[x] + ":"));
+    if (k) out[k] = line.slice(REF_LABELS[k].length + 1).trim(); else if (line.trim() && !out.torah) out.torah = line.trim();
+  }
+  return out;
+}
+function passagesOf(row) {
+  const r = (row?.reading || "").trim();
+  if (r.startsWith("[")) { try { return JSON.parse(r).filter((p) => (p.text || "").trim() || (p.ref || "").trim()); } catch {} }
+  return r || (row?.reading_ref || "").trim() ? [{ ref: row.reading_ref || "", text: r }] : [];
+}
+
 // a long reading → slides of about 420 letters, cut between lines, or between sentences inside a long line
 // (the PowerPoint download; screen.js has the same rule)
 function readingPages(text, max = 420) {

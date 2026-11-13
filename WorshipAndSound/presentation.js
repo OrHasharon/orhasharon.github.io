@@ -117,7 +117,7 @@ const communionRow = (iso) => [...PT.texts].reverse().find((r) => r.meeting_date
 async function meetingTextsFor(iso) {
   if (!PT.loaded) await ptLoad().catch(() => {});
   const r = textsRow(iso) || {}, c = communionRow(iso) || {};
-  return { parasha: r.parasha || "", parasha_refs: r.parasha_refs || "", reading_ref: r.reading_ref || "", reading: r.reading || "",
+  return { parasha: r.parasha || "", parasha_refs: r.parasha_refs || "", passages: passagesOf(r),
     communion_verse: c.communion_verse || "", communion_ref: c.communion_ref || "" };
 }
 
@@ -125,6 +125,7 @@ function ptTextsHtml(iso, can, open) {
   if (PT.textsMissing) return "";
   const r = textsRow(iso) || {}, c = communionRow(iso);
   const v = (f) => esc(f.startsWith("communion") ? (c?.[f] || "") : (r[f] || ""));
+  const refs = parashaRefs(r), passages = passagesOf(r);
   const hasParasha = !!(r.parasha || r.reading || r.parasha_refs);
   const from = c && c.meeting_date !== iso ? ` <small>· ממשיך מ-${ptDay(c.meeting_date)}</small>` : "";
   const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
@@ -135,11 +136,14 @@ function ptTextsHtml(iso, can, open) {
   }
   return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
     <div class="pt-form" data-pt-texts="${iso}">
-      <p class="hint">פרשת השבוע מופיעה אחרי השיר האחרון ולפני ברכת הילדים. שדות ריקים = אין שקופית.</p>
-      <label>שם הפרשה<input name="parasha" value="${v("parasha")}" placeholder="למשל: פרשת וירא"></label>
-      <label>קריאות (שורה לכל אחת)<textarea name="parasha_refs" rows="3" placeholder="תורה: בראשית י״ח 1 – כ״ב 24&#10;הפטרה: …&#10;ברית חדשה: …">${v("parasha_refs")}</textarea></label>
-      <label>מקור קטע הקריאה<input name="reading_ref" value="${v("reading_ref")}" placeholder="למשל: בראשית כ״ב 1-3"></label>
-      <label>קטע הקריאה (טקסט ארוך מתחלק לבד לכמה שקופיות)<textarea name="reading" rows="6">${v("reading")}</textarea></label>
+      <p class="hint">מופיע אחרי השיר האחרון ולפני ברכת הילדים. בלי שם פרשה ובלי פסוקים = אין שקופיות.</p>
+      <label>שם הפרשה<input name="parasha" value="${esc(r.parasha || "")}" placeholder="למשל: פרשת חיי שרה"></label>
+      <label>קטע מהתורה<input name="torah" value="${esc(refs.torah)}" placeholder="למשל: בראשית כ״ג 1 – כ״ה 18"></label>
+      <label><span>הפטרה <small>(לא חובה)</small></span><input name="haftara" value="${esc(refs.haftara)}" placeholder="למשל: מלכים א׳ א׳ 1-31"></label>
+      <label><span>קטע מהברית החדשה <small>(לא חובה)</small></span><input name="brit" value="${esc(refs.brit)}" placeholder="למשל: מתי ב׳ 1-23"></label>
+      <div class="pt-label">פסוקים להצגה</div>
+      <div class="pt-passages">${(passages.length ? passages : [{ ref: "", text: "" }]).map(passageHtml).join("")}</div>
+      <button class="btn ghost pt-add" type="button" data-pt="passage-add">➕ קטע</button>
       <div class="pt-label">🍞 סעודת האדון${from}</div>
       <label>הפסוק<textarea name="communion_verse" rows="4" placeholder="ריק = הפסוק הקבוע של המצגת">${v("communion_verse")}</textarea></label>
       <label>מקור<input name="communion_ref" value="${v("communion_ref")}" placeholder="למשל: (קור״א י״א 26)"></label>
@@ -147,11 +151,26 @@ function ptTextsHtml(iso, can, open) {
     </div></details>`;
 }
 
+// one passage to show: where it's from + the verses (a long one splits into several slides)
+function passageHtml(p, n) {
+  return `<div class="pt-passage">
+    <div class="pt-passage-head"><input name="p_ref" value="${esc(p.ref || "")}" placeholder="מאיפה? למשל: בראשית כ״ג 1-4">
+      ${n ? `<button class="link-btn" type="button" data-pt="passage-del" title="הסרת הקטע">✕</button>` : ""}</div>
+    <textarea name="p_text" rows="5" placeholder="הפסוקים (ארוך מתחלק לבד לכמה שקופיות)">${esc(p.text || "")}</textarea>
+  </div>`;
+}
+
 async function ptSaveTexts(iso, btn) {
   const f = document.querySelector(`[data-pt-texts="${iso}"]`);
   if (!f) return;
+  const val = (n) => f.querySelector(`[name="${n}"]`).value.trim();
   const row = { meeting_date: iso, updated_at: new Date().toISOString(), updated_by: (typeof user !== "undefined" && user?.email) || null };
-  for (const k of TEXT_FIELDS) row[k] = f.querySelector(`[name="${k}"]`).value.trim();
+  row.parasha = val("parasha");
+  row.parasha_refs = Object.keys(REF_LABELS).filter((k) => val(k)).map((k) => `${REF_LABELS[k]}: ${val(k)}`).join("\n");
+  const passages = [...f.querySelectorAll(".pt-passage")].map((d) => ({ ref: d.querySelector('[name="p_ref"]').value.trim(), text: d.querySelector('[name="p_text"]').value.trim() })).filter((p) => p.ref || p.text);
+  row.reading = passages.length ? JSON.stringify(passages) : "";
+  row.reading_ref = passages[0]?.ref || "";
+  row.communion_verse = val("communion_verse"); row.communion_ref = val("communion_ref");
   btn.disabled = true;
   const { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
   btn.disabled = false;
@@ -358,6 +377,8 @@ document.addEventListener("click", async (e) => {
   if (a === "clear") { ptClear(iso); return; }
   if (a === "pray-save") { ptSavePrayers(iso, b); return; }
   if (a === "texts-save") { ptSaveTexts(iso, b); return; }
+  if (a === "passage-add") { const list = b.parentElement.querySelector(".pt-passages"); list.insertAdjacentHTML("beforeend", passageHtml({}, list.children.length)); list.lastElementChild.querySelector("input").focus(); return; }
+  if (a === "passage-del") { b.closest(".pt-passage").remove(); return; }
   if (a === "pptx") {
     const label = b.textContent; b.disabled = true; b.textContent = "יוצר מצגת…";
     try { await buildPptx(iso); } catch (err) { console.error(err); toast("יצירת המצגת נכשלה"); }

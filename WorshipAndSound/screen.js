@@ -127,7 +127,11 @@ function splitReading(text, max = 420) {
 function weeklySlides(kind) {
   if (kind === "verse") return wk("verse") ? [{ key: "verse" }] : [];
   if (kind === "parasha") return wk("parasha") || wk("parashaRefs") ? [{ key: "parasha" }] : [];
-  if (kind === "reading") return splitReading(wk("reading")).map((lines) => ({ key: "reading", lines }));
+  if (kind === "reading") {
+    // the site's passages (each with its own source), otherwise the one typed on this computer
+    if (S.dbPassages) return S.dbPassages.flatMap((p) => (p.text ? splitReading(p.text) : [[]]).map((lines) => ({ key: "reading", lines, ref: p.ref })));
+    return splitReading(wk("reading")).map((lines) => ({ key: "reading", lines }));
+  }
   if (kind === "prayers") {
     // the site's prayer requests when this computer is signed in to the team site; otherwise the ones typed here
     const lines = S.dbPrayers?.length ? S.dbPrayers : linesOf(wk("prayers")), out = [];
@@ -175,7 +179,7 @@ function tplParas(el, entry) {
   if (el.role === "verse") return [...linesOf(wk("verse")).map((t) => like(0, t)), ...(wk("verseRef") ? [like(1, wk("verseRef"))] : [])];
   if (el.role === "parasha_name") return [like(0, wk("parasha"))];
   if (el.role === "parasha_refs") return linesOf(wk("parashaRefs")).map((t) => like(0, t));
-  if (el.role === "reading_ref") return [like(0, wk("readingRef"))];
+  if (el.role === "reading_ref") return [like(0, entry.ref ?? wk("readingRef"))];
   if (el.role === "reading_body") return (entry.lines || []).map((t) => like(0, t));
   if (el.role === "prayers") return (entry.lines || []).map((t) => { const p = el.paras[0]; return { ...p, runs: prayerRuns(t, { ...p.style, c: "#F5F7FA" }) }; });
   if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: entry.song.title }] }];
@@ -307,8 +311,10 @@ async function loadDbTexts() {
     if (error || !data?.length) return;
     const own = data.find((r) => r.meeting_date === S.date);
     if (own) {
-      const map = { parasha: "parasha", parasha_refs: "parashaRefs", reading_ref: "readingRef", reading: "reading" };
-      for (const [k, f] of Object.entries(map)) if ((own[k] || "").trim()) S.week[f] = own[k];
+      if ((own.parasha || "").trim()) S.week.parasha = own.parasha;
+      if ((own.parasha_refs || "").trim()) S.week.parashaRefs = own.parasha_refs;
+      const ps = passagesOf(own);
+      S.dbPassages = ps.length ? ps : null;
     }
     const c = data.find((r) => (r.communion_verse || "").trim());
     S.dbCommunion = c ? { verse: c.communion_verse, ref: c.communion_ref || "" } : null;
