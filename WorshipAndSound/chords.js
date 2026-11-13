@@ -162,6 +162,18 @@ function lyricStanzas(content) {
   return stanzas.filter((s) => s.lines.length);
 }
 
+// sections for the slides: one-line sections in a row are one chorus written with a blank line between its lines
+// ("אהלל אותך לנצח" / "אהלל ואשבח") — join them (up to 4 lines) so the chorus isn't split into one-line slides
+function slideStanzas(content) {
+  const out = [];
+  for (const st of lyricStanzas(content)) {
+    const last = out[out.length - 1];
+    if (last && st.lines.length === 1 && !st.label && last.single && last.lines.length < 4) { last.lines.push(st.lines[0]); continue; }
+    out.push({ ...st, lines: [...st.lines], single: st.lines.length === 1 });
+  }
+  return out;
+}
+
 // split a stanza into slides of at most 4 lines, as evenly as possible (5 -> 3+2, not 4+1)
 function chunks(lines, max = 4) {
   const n = Math.ceil(lines.length / max), size = Math.ceil(lines.length / n), out = [];

@@ -62,7 +62,7 @@ function slidesFor(song) {
   const meta = songMeta(song.content || "");
   if ((meta.screen || "").toLowerCase() === "quiet") return [{ title: song.title, quiet: true }];
   const out = [];
-  for (const st of lyricStanzas(song.content || "")) for (const lines of chunks(st.lines, 4)) out.push({ lines });
+  for (const st of slideStanzas(song.content || "")) for (const lines of chunks(st.lines, 4)) out.push({ lines });
   return out.length ? out : [{ title: song.title }];
 }
 function build() {
@@ -81,7 +81,7 @@ function buildDeck() {
     if (e.sermon) { S.sermon.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page })); continue; }
     if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
-    const parts = lyricStanzas(e.song.content || "").flatMap((st) => chunks(st.lines, 4));
+    const parts = slideStanzas(e.song.content || "").flatMap((st) => chunks(st.lines, 4));
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
   }
   // stay on the same slide when the set is refreshed

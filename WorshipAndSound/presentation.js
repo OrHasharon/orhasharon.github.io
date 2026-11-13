@@ -88,82 +88,7 @@ function ptCard(m, { next = false } = {}) {
       <button class="btn ghost" data-pt="screen" data-iso="${iso}">🖥️ מסך הקרנה</button>
     </div>
     ${ptPrayersHtml(iso, can, next)}
-    ${next && can ? ptAiHtml(iso) : ""}
   </article>`;
-}
-
-// ---------- "עוזר מצגת ב-AI": ask in words, see the change, then save it ----------
-// The Supabase Edge Function presentation-ai (supabase/functions/presentation-ai) calls Claude and only proposes;
-// saving happens here, with the user's own sign-in, after "אישור".
-PT.ai = { iso: null, busy: false, result: null, text: "" };
-const slidesOf = (content) => lyricStanzas(content || "").flatMap((st) => chunks(st.lines, 4));
-
-function ptAiHtml(iso) {
-  const ai = PT.ai.iso === iso ? PT.ai : { busy: false, result: null, text: "" };
-  let out = "";
-  if (ai.busy) out = `<p class="pt-ai-wait"><span class="spin"></span> חושב… (עד דקה)</p>`;
-  else if (ai.result?.error) out = `<p class="pt-ai-err">${esc(ai.result.error)}</p>`;
-  else if (ai.result) {
-    const r = ai.result, items = itemsFor(iso).filter((i) => i.songs);
-    const songs = r.songs.map((s) => {
-      const it = items.find((i) => i.songs.id === s.id);
-      const before = slidesOf(it?.songs.content), after = slidesOf(s.content);
-      return `<div class="pt-ai-song"><b>${esc(it?.songs.title || "")}</b> <small>${before.length} שקופיות ← ${after.length}</small>
-        <div class="pt-ai-slides">${after.map((lines) => `<div class="pt-ai-slide">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>`).join("")}</div></div>`;
-    }).join("");
-    const pray = r.prayers_changed ? `<div class="pt-ai-song"><b>🙏 בקשות תפילה</b><ul class="pt-pray-list">${prayerLines(r.prayers).map((l) => `<li${/^-/.test(l) ? ' class="sub"' : ""}>${esc(l.replace(/^-\s*/, "")).replace(/\*([^*]+)\*/g, "<b>$1</b>")}</li>`).join("")}</ul></div>` : "";
-    const any = r.songs.length || r.prayers_changed;
-    out = `<p class="pt-ai-reply">${esc(r.reply || "")}</p>${songs}${pray}
-      ${any ? `<div class="pt-pray-bar"><button class="btn" data-pt="ai-apply" data-iso="${iso}">✅ אישור ושמירה</button><button class="btn ghost" data-pt="ai-cancel" data-iso="${iso}">ביטול</button></div>` : ""}`;
-  }
-  return `<div class="pt-section pt-ai">
-    <div class="pt-label pt-ai-title">✨ עוזר מצגת ב-AI</div>
-    <textarea class="pt-pray-text" data-pt-ai="${iso}" rows="3" placeholder="כתבו מה לשנות. למשל: בשיר 'אהלל אותך לנצח' הפזמון מתפצל לשתי שקופיות, תאחד אותו לשקופית אחת">${esc(ai.text || "")}</textarea>
-    <div class="pt-pray-bar"><button class="btn" data-pt="ai-ask" data-iso="${iso}"${ai.busy ? " disabled" : ""}>✨ שליחה</button>
-      <small class="hint">משנה שירים של האסיפה ובקשות תפילה. רואים את השינוי לפני ששומרים.</small></div>
-    <div class="pt-ai-out">${out}</div>
-  </div>`;
-}
-
-const AI_ERRORS = { not_allowed: "אין הרשאה. צריך להיות מחובר/ת לאתר.", busy: "העוזר עמוס כרגע, נסו שוב בעוד דקה.", no_key: "העוזר עוד לא הופעל (חסר מפתח).",
-  refusal: "העוזר לא יכול לטפל בבקשה הזו.", too_long: "הבקשה ארוכה מדי.", empty: "כתבו מה לשנות." };
-
-async function ptAiAsk(iso) {
-  const ta = document.querySelector(`[data-pt-ai="${iso}"]`);
-  const text = ta?.value.trim() || "";
-  if (!text) { toast("כתבו מה לשנות"); return; }
-  const m = state.meetings.find((x) => x.iso === iso);
-  const songs = itemsFor(iso).filter((i) => i.songs).map((i) => ({ id: i.songs.id, title: i.songs.title, content: i.songs.content || "" }));
-  PT.ai = { iso, busy: true, result: null, text };
-  ptRefresh();
-  try {
-    const { data, error } = await sb.functions.invoke("presentation-ai", {
-      body: { instruction: text, meeting: m ? `${meetingKind(m)} ${ptDay(iso)}` : iso, songs, prayers: prayersRow(iso)?.body || "" },
-    });
-    if (error) {
-      let code = "";
-      try { code = (await error.context?.json())?.error || ""; } catch {}
-      PT.ai.result = { error: AI_ERRORS[code] || (/not found|404/i.test(String(error.message)) ? "העוזר עוד לא הותקן ב-Supabase." : "משהו השתבש, נסו שוב.") };
-    } else PT.ai.result = { reply: data.reply, songs: data.songs || [], prayers_changed: !!data.prayers_changed, prayers: data.prayers || "" };
-  } catch (err) { console.error(err); PT.ai.result = { error: "משהו השתבש, נסו שוב." }; }
-  PT.ai.busy = false;
-  ptRefresh();
-}
-
-async function ptAiApply(iso, btn) {
-  const r = PT.ai.result;
-  if (!r || PT.ai.iso !== iso) return;
-  btn.disabled = true;
-  const jobs = r.songs.map((s) => sb.from("songs").update({ content: s.content }).eq("id", s.id).select("id"));
-  if (r.prayers_changed) jobs.push(sb.from("prayer_requests").upsert({ meeting_date: iso, body: r.prayers.trim(), updated_at: new Date().toISOString(), updated_by: (typeof user !== "undefined" && user?.email) || null }, { onConflict: "meeting_date" }));
-  const res = await Promise.all(jobs);
-  // an update RLS doesn't allow returns no error but no row: count it as failed
-  const failed = res.filter((x, n) => x.error || (n < r.songs.length && !x.data?.length)).length;
-  await Promise.all([loadSetlist(), ptLoad()]);
-  if (typeof loadSongs === "function") loadSongs().catch(() => {});
-  PT.ai = { iso: null, busy: false, result: null, text: "" };
-  toast(failed ? `${failed} שינויים לא נשמרו (אין הרשאה לערוך את השיר?)` : "השינויים נשמרו ✓", failed ? { error: true } : undefined);
-  ptRefresh();
 }
 
 function ptPrayersHtml(iso, can, open) {
@@ -375,9 +300,6 @@ document.addEventListener("click", async (e) => {
   if (a === "link") { if (PT.busy) return; PT.busy = true; try { await ptShowLink(iso); } finally { PT.busy = false; } return; }
   if (a === "clear") { ptClear(iso); return; }
   if (a === "pray-save") { ptSavePrayers(iso, b); return; }
-  if (a === "ai-ask") { ptAiAsk(iso); return; }
-  if (a === "ai-apply") { ptAiApply(iso, b); return; }
-  if (a === "ai-cancel") { PT.ai = { iso: null, busy: false, result: null, text: "" }; ptRefresh(); return; }
   if (a === "pptx") {
     const label = b.textContent; b.disabled = true; b.textContent = "יוצר מצגת…";
     try { await buildPptx(iso); } catch (err) { console.error(err); toast("יצירת המצגת נכשלה"); }
