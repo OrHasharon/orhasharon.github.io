@@ -672,3 +672,4 @@ main > .tabs button { white-space: nowrap; flex: none; }
 .pt-add { justify-self: start; }
 .pt-next { max-width: none; }
 .pt-url { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; word-break: break-all; font-size: .9rem; }
+.pt-by { margin: 0; font-size: .85rem; color: var(--muted); }

@@ -39,6 +39,19 @@ async function prayerLinesFor(iso) {
   return prayerLines(prayersRow(iso)?.body);
 }
 
+// who saved it: the name of the signed-in team member (stored as the name; older rows hold an email)
+function myName() {
+  const u = typeof user !== "undefined" ? user : null;
+  return (typeof myMemberId !== "undefined" && myMemberId && byId(myMemberId)?.name) || u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || null;
+}
+function whoName(v) {
+  if (!v) return "";
+  if (!v.includes("@")) return v;
+  const a = (typeof allowed !== "undefined" ? allowed : []).find((x) => (x.email || "").toLowerCase() === v.toLowerCase());
+  return (a?.member_id && byId(a.member_id)?.name) || v.split("@")[0];
+}
+const byLine = (row) => row?.updated_at ? `${row.updated_by ? `ע״י ${esc(whoName(row.updated_by))} · ` : ""}${ptWhen(row.updated_at)}` : "";
+
 const ptCanManage = (iso) => isAdmin || canEditSetlist(iso);
 const ptDay = (iso) => iso.split("-").reverse().slice(0, 2).join("/");
 const ptWhen = (ts) => new Date(ts).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -99,7 +112,7 @@ function ptCard(m, { next = false } = {}) {
 function ptPrayersHtml(iso, can, open) {
   if (PT.prayMissing) return "";
   const row = prayersRow(iso), lines = prayerLines(row?.body);
-  const from = row ? (row.meeting_date === iso ? `עודכן ${ptWhen(row.updated_at)}` : `ממשיך מהאסיפה של ${ptDay(row.meeting_date)}`) : "";
+  const from = row ? (row.meeting_date === iso ? `עודכן ${byLine(row)}` : `ממשיך מהאסיפה של ${ptDay(row.meeting_date)}${row.updated_by ? ` · ע״י ${esc(whoName(row.updated_by))}` : ""}`) : "";
   const summary = `🙏 בקשות תפילה ${lines.length ? `(${lines.length})` : "· אין עדיין"}${from ? ` <small>· ${from}</small>` : ""}`;
   const body = can
     ? `<textarea class="pt-pray-text" data-pt-pray="${iso}" rows="${Math.min(12, Math.max(5, lines.length + 2))}" placeholder="שורה לכל בקשה">${esc(row?.body || "")}</textarea>
@@ -127,7 +140,7 @@ function ptTextsHtml(iso, can, open) {
   const v = (f) => esc(f.startsWith("communion") ? (c?.[f] || "") : (r[f] || ""));
   const refs = parashaRefs(r), passages = passagesOf(r);
   const hasParasha = !!(r.parasha || r.reading || r.parasha_refs);
-  const from = c && c.meeting_date !== iso ? ` <small>· ממשיך מ-${ptDay(c.meeting_date)}</small>` : "";
+  const from = c ? ` <small>· ${c.meeting_date !== iso ? `ממשיך מ-${ptDay(c.meeting_date)} · ` : ""}${byLine(c)}</small>` : "";
   const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
   if (!can) {
     return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
@@ -136,6 +149,7 @@ function ptTextsHtml(iso, can, open) {
   }
   return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
     <div class="pt-form" data-pt-texts="${iso}">
+      ${textsRow(iso)?.updated_at ? `<p class="pt-by">עודכן ${byLine(textsRow(iso))}</p>` : ""}
       <p class="hint">מופיע אחרי השיר האחרון ולפני ברכת הילדים. בלי שם פרשה ובלי פסוקים = אין שקופיות.</p>
       <label>שם הפרשה<input name="parasha" value="${esc(r.parasha || "")}" placeholder="למשל: פרשת חיי שרה"></label>
       <label>קטע מהתורה<input name="torah" value="${esc(refs.torah)}" placeholder="למשל: בראשית כ״ג 1 – כ״ה 18"></label>
@@ -164,7 +178,7 @@ async function ptSaveTexts(iso, btn) {
   const f = document.querySelector(`[data-pt-texts="${iso}"]`);
   if (!f) return;
   const val = (n) => f.querySelector(`[name="${n}"]`).value.trim();
-  const row = { meeting_date: iso, updated_at: new Date().toISOString(), updated_by: (typeof user !== "undefined" && user?.email) || null };
+  const row = { meeting_date: iso, updated_at: new Date().toISOString(), updated_by: myName() };
   row.parasha = val("parasha");
   row.parasha_refs = Object.keys(REF_LABELS).filter((k) => val(k)).map((k) => `${REF_LABELS[k]}: ${val(k)}`).join("\n");
   const passages = [...f.querySelectorAll(".pt-passage")].map((d) => ({ ref: d.querySelector('[name="p_ref"]').value.trim(), text: d.querySelector('[name="p_text"]').value.trim() })).filter((p) => p.ref || p.text);
@@ -184,7 +198,7 @@ async function ptSavePrayers(iso, btn) {
   const ta = document.querySelector(`[data-pt-pray="${iso}"]`);
   if (!ta) return;
   btn.disabled = true;
-  const { error } = await sb.from("prayer_requests").upsert({ meeting_date: iso, body: ta.value.trim(), updated_at: new Date().toISOString(), updated_by: (typeof user !== "undefined" && user?.email) || null }, { onConflict: "meeting_date" });
+  const { error } = await sb.from("prayer_requests").upsert({ meeting_date: iso, body: ta.value.trim(), updated_at: new Date().toISOString(), updated_by: myName() }, { onConflict: "meeting_date" });
   btn.disabled = false;
   if (error) { console.error(error); toast("השמירה נכשלה", { error: true }); return; }
   await ptLoad();
