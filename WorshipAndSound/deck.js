@@ -27,6 +27,29 @@ function deckPlan(items, contentOf) {
   return plan;
 }
 
+// a long reading → slides of about 420 letters, cut between lines, or between sentences inside a long line
+// (the PowerPoint download; screen.js has the same rule)
+function readingPages(text, max = 420) {
+  const parts = [];
+  for (const line of (text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) {
+    let rest = line;
+    while (rest.length > max) {
+      const cut = Math.max(rest.lastIndexOf(": ", max), rest.lastIndexOf(". ", max), rest.lastIndexOf(", ", max));
+      const at = cut > max * 0.5 ? cut + 1 : rest.lastIndexOf(" ", max) || max;
+      parts.push(rest.slice(0, at).trim()); rest = rest.slice(at).trim();
+    }
+    if (rest) parts.push(rest);
+  }
+  const pages = [];
+  let cur = [], len = 0;
+  for (const p of parts) {
+    if (cur.length && len + p.length > max) { pages.push(cur); cur = []; len = 0; }
+    cur.push(p); len += p.length;
+  }
+  if (cur.length) pages.push(cur);
+  return pages;
+}
+
 // home groups as the template shows them: the city, then "ימי שני ב 20:30. לפרטים: …", a blank line between
 const serviceGroupLines = () => homeGroupLines();
 

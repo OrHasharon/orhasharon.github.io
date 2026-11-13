@@ -168,6 +168,10 @@ const FONT = (f) => /david/i.test(f) ? '"David", "David Libre", serif' : /times/
 
 function tplParas(el, entry) {
   const like = (i, text) => ({ ...(el.paras[i] || el.paras[0]), runs: text ? [{ ...(el.paras[i] || el.paras[0]).style, t: text }] : [] });
+  if (entry.key === "communion_verse" && S.dbCommunion && el.paras?.some((p) => p.runs.some((r) => r.t))) {
+    const c = S.dbCommunion, last = el.paras.length - 1;
+    return [...linesOf(c.verse).map((t) => like(0, t)), ...(c.ref ? [like(last, c.ref)] : [])];
+  }
   if (el.role === "verse") return [...linesOf(wk("verse")).map((t) => like(0, t)), ...(wk("verseRef") ? [like(1, wk("verseRef"))] : [])];
   if (el.role === "parasha_name") return [like(0, wk("parasha"))];
   if (el.role === "parasha_refs") return linesOf(wk("parashaRefs")).map((t) => like(0, t));
@@ -210,13 +214,16 @@ function prayerRuns(line, style) {
 function tplHtml(entry) {
   const d = S.deck, slide = d.slides[entry.key];
   const W = Math.min(innerWidth, innerHeight * 16 / 9), H = W * 9 / 16, u = H / 540; // px per pt (a slide is 540pt high)
-  if (STATIC.includes(entry.key)) return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="deck/static/${entry.key}.jpg?v=${STATIC_V}"></div>`;
+  // the Lord's Supper verse typed in the site: the slide's own picture without its text, the new verse on top
+  const ownVerse = entry.key === "communion_verse" && S.dbCommunion;
+  if (STATIC.includes(entry.key) && !ownVerse) return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="deck/static/${entry.key}.jpg?v=${STATIC_V}"></div>`;
   if (entry.key === "pdf") return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="${entry.src}"></div>`;
   if (entry.key === "pptx") return `<div class="tpl" style="width:${W}px;height:${H}px"><div class="pptx-slot" style="width:${W}px;height:${H}px"></div></div>`;
   if (!slide) return `<div class="tpl" style="width:${W}px;height:${H}px"></div>`;
   const px = (b) => `left:${b[0] * W}px;top:${b[1] * H}px;width:${b[2] * W}px;height:${b[3] * H}px`;
   let html = "";
-  if (d.bg?.grad) { // DrawingML 0° = left→right; CSS 90deg = left→right
+  if (ownVerse) html += `<img class="pdf-page" alt="" src="deck/static/communion_verse_bg.jpg?v=${STATIC_V}">`;
+  else if (d.bg?.grad) { // DrawingML 0° = left→right; CSS 90deg = left→right
     const g = d.bg.grad;
     html += `<div class="tpl-bg" style="inset:0;width:100%;height:100%;background:linear-gradient(${g.ang + 90}deg,${g.stops.map(([p, c]) => `${c} ${p * 100}%`).join(",")})"></div>`;
   } else if (d.bg) {
@@ -225,6 +232,7 @@ function tplHtml(entry) {
   }
   for (const el of slide.els) {
     if (!el.box) continue;
+    if (ownVerse && el.t !== "text") continue; // the picture is already in the background image
     if (el.t === "rect") { html += `<div class="tpl-el" style="${px(el.box)};background:${el.fill.c};opacity:${el.fill.a}"></div>`; continue; }
     if (el.t === "img") {
       const [cl, ct, cr, cb] = el.crop, iw = el.box[2] * W / (1 - cl - cr), ih = el.box[3] * H / (1 - ct - cb);
@@ -244,7 +252,7 @@ function tplHtml(entry) {
         : `<span style="font-size:${(p.endSz || 18) * u * el.scale}px">&nbsp;</span>`;
       return `<div style="text-align:${align};direction:${p.rtl || /[֐-׿]/.test(text) ? "rtl" : "ltr"};line-height:${p.ln && p.ln !== 1 ? p.ln * 1.15 : "normal"};margin-top:${(p.bef || 0) * u}px">${inner}</div>`;
     }).join("");
-    const fitIt = ["verse", "parasha_refs", "reading_body", "prayers", "parasha_name", "reading_ref"].includes(el.role);
+    const fitIt = ownVerse || ["verse", "parasha_refs", "reading_body", "prayers", "parasha_name", "reading_ref"].includes(el.role);
     html += `<div class="tpl-el tpl-text"${fitIt ? " data-fit" : ""} style="${px(el.box)};${pad};justify-content:${just}">${body}</div>`;
   }
   return `<div class="tpl" style="width:${W}px;height:${H}px">${html}</div>`;
@@ -287,6 +295,23 @@ async function loadDbPrayers() {
     const { data, error } = await sb.from("prayer_requests").select("meeting_date, body").lte("meeting_date", S.date).order("meeting_date", { ascending: false }).limit(1);
     if (error || !data?.length) return;
     S.dbPrayers = linesOf(data[0].body || "");
+    buildDeck(); show();
+  } catch {}
+}
+
+// the week's parasha + reading and the Lord's Supper verse, typed in the site (meeting_texts; readable without
+// signing in). The site's text wins over what was typed on this computer.
+async function loadDbTexts() {
+  try {
+    const { data, error } = await sb.from("meeting_texts").select("*").lte("meeting_date", S.date).order("meeting_date", { ascending: false }).limit(30);
+    if (error || !data?.length) return;
+    const own = data.find((r) => r.meeting_date === S.date);
+    if (own) {
+      const map = { parasha: "parasha", parasha_refs: "parashaRefs", reading_ref: "readingRef", reading: "reading" };
+      for (const [k, f] of Object.entries(map)) if ((own[k] || "").trim()) S.week[f] = own[k];
+    }
+    const c = data.find((r) => (r.communion_verse || "").trim());
+    S.dbCommunion = c ? { verse: c.communion_verse, ref: c.communion_ref || "" } : null;
     buildDeck(); show();
   } catch {}
 }
@@ -699,6 +724,6 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
   buildDeck(); show();
   if (await pickMeeting()) {
     try { const v = sessionStorage.getItem("ws-screen-pos-" + S.date); if (v !== null) S.wantPos = Number(v); } catch {}
-    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); loadDbPrayers(); preloadStatic(); }
+    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); loadDbPrayers(); loadDbTexts(); preloadStatic(); }
   wakeOn(); show(); wakeOps();
 })();

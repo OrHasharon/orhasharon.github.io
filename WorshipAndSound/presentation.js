@@ -8,7 +8,7 @@
 // Uses sb / state / esc / toast / isAdmin / WA_ICON / $ from ws.js, setlist / itemsFor / loadSetlist / canEditSetlist /
 // openSetlist / buildPptx / quietItem from setlist.js, upcomingMeetings / meetingKind from schedule.js.
 
-const PT = { info: {}, prayers: [], loaded: false, missing: false, prayMissing: false, busy: false, clearArm: null };
+const PT = { info: {}, prayers: [], texts: [], textsMissing: false, loaded: false, missing: false, prayMissing: false, busy: false, clearArm: null };
 const PT_MAX = 50 * 1024 * 1024;
 const PPTX_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 const ptKindOf = (f) => /\.pptx$/i.test(f.name || "") || f.type === PPTX_TYPE ? "pptx" : /pdf$/i.test(f.type || f.name || "") ? "pdf" : "";
@@ -16,10 +16,13 @@ const ptKindOf = (f) => /\.pptx$/i.test(f.name || "") || f.type === PPTX_TYPE ? 
 async function ptLoad() {
   if (!setlist.ready) await loadSetlist();
   const gone = (error) => !!error && ["PGRST205", "42P01", "PGRST202", "42883"].includes(error.code);
-  const [s, p] = await Promise.all([
+  const [s, p, x] = await Promise.all([
     sb.from("sermon_links").select("meeting_date, token, file_path, file_name, uploaded_at"),
     sb.from("prayer_requests").select("meeting_date, body, updated_at, updated_by").order("meeting_date"),
+    sb.from("meeting_texts").select("*").order("meeting_date"),
   ]);
+  PT.textsMissing = gone(x.error);
+  PT.texts = x.data || [];
   PT.missing = gone(s.error);
   PT.prayMissing = gone(p.error);
   PT.info = {};
@@ -59,7 +62,8 @@ function renderPresTab() {
 
 function ptWarnings() {
   return `${PT.missing ? `<p class="db-warning">העלאת הדרשה תיפתח אחרי הרצת sermon.sql ב-Supabase.</p>` : ""}
-    ${PT.prayMissing ? `<p class="db-warning">בקשות התפילה ומצגת PowerPoint לדרשה ייפתחו אחרי הרצת prayers_pptx.sql ב-Supabase.</p>` : ""}`;
+    ${PT.prayMissing ? `<p class="db-warning">בקשות התפילה ומצגת PowerPoint לדרשה ייפתחו אחרי הרצת prayers_pptx.sql ב-Supabase.</p>` : ""}
+    ${PT.textsMissing ? `<p class="db-warning">פרשת השבוע וסעודת האדון ייפתחו אחרי הרצת meeting_texts.sql ב-Supabase.</p>` : ""}`;
 }
 
 // one meeting's presentation: songs (not in the "next" tab, the card above shows them), the sermon, prayer requests
@@ -88,6 +92,7 @@ function ptCard(m, { next = false } = {}) {
       <button class="btn ghost" data-pt="screen" data-iso="${iso}">🖥️ מסך הקרנה</button>
     </div>
     ${ptPrayersHtml(iso, can, next)}
+    ${ptTextsHtml(iso, can, next)}
   </article>`;
 }
 
@@ -102,6 +107,58 @@ function ptPrayersHtml(iso, can, open) {
        <small class="hint">שורה לכל בקשה · שורה שמתחילה ב-<b>-</b> היא תת-סעיף · <b>*כוכביות*</b> סביב שמות = בכתום במצגת. נשאר גם לאסיפות הבאות עד שמעדכנים.</small></div>`
     : lines.length ? `<ul class="pt-pray-list">${lines.map((l) => `<li${/^-/.test(l) ? ' class="sub"' : ""}>${esc(l.replace(/^-\s*/, "")).replace(/\*([^*]+)\*/g, "<b>$1</b>")}</li>`).join("")}</ul>` : `<p class="pt-empty">אין בקשות.</p>`;
   return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>${body}</details>`;
+}
+
+// ---------- the week's parasha + the Lord's Supper verse (table meeting_texts, meeting_texts.sql) ----------
+// The parasha belongs to its own meeting; the Supper verse carries on to later meetings until someone changes it.
+const TEXT_FIELDS = ["parasha", "parasha_refs", "reading_ref", "reading", "communion_verse", "communion_ref"];
+const textsRow = (iso) => PT.texts.find((r) => r.meeting_date === iso) || null;
+const communionRow = (iso) => [...PT.texts].reverse().find((r) => r.meeting_date <= iso && (r.communion_verse || "").trim()) || null;
+async function meetingTextsFor(iso) {
+  if (!PT.loaded) await ptLoad().catch(() => {});
+  const r = textsRow(iso) || {}, c = communionRow(iso) || {};
+  return { parasha: r.parasha || "", parasha_refs: r.parasha_refs || "", reading_ref: r.reading_ref || "", reading: r.reading || "",
+    communion_verse: c.communion_verse || "", communion_ref: c.communion_ref || "" };
+}
+
+function ptTextsHtml(iso, can, open) {
+  if (PT.textsMissing) return "";
+  const r = textsRow(iso) || {}, c = communionRow(iso);
+  const v = (f) => esc(f.startsWith("communion") ? (c?.[f] || "") : (r[f] || ""));
+  const hasParasha = !!(r.parasha || r.reading || r.parasha_refs);
+  const from = c && c.meeting_date !== iso ? ` <small>· ממשיך מ-${ptDay(c.meeting_date)}</small>` : "";
+  const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
+  if (!can) {
+    return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
+      ${hasParasha ? `<p><b>${esc(r.parasha || "")}</b> ${esc(r.parasha_refs || "").replace(/\n/g, " · ")}</p>` : ""}
+      ${c ? `<p>🍞 ${esc(c.communion_verse)} <small>${esc(c.communion_ref || "")}</small></p>` : ""}</details>`;
+  }
+  return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
+    <div class="pt-form" data-pt-texts="${iso}">
+      <p class="hint">פרשת השבוע מופיעה אחרי השיר האחרון ולפני ברכת הילדים. שדות ריקים = אין שקופית.</p>
+      <label>שם הפרשה<input name="parasha" value="${v("parasha")}" placeholder="למשל: פרשת וירא"></label>
+      <label>קריאות (שורה לכל אחת)<textarea name="parasha_refs" rows="3" placeholder="תורה: בראשית י״ח 1 – כ״ב 24&#10;הפטרה: …&#10;ברית חדשה: …">${v("parasha_refs")}</textarea></label>
+      <label>מקור קטע הקריאה<input name="reading_ref" value="${v("reading_ref")}" placeholder="למשל: בראשית כ״ב 1-3"></label>
+      <label>קטע הקריאה (טקסט ארוך מתחלק לבד לכמה שקופיות)<textarea name="reading" rows="6">${v("reading")}</textarea></label>
+      <div class="pt-label">🍞 סעודת האדון${from}</div>
+      <label>הפסוק<textarea name="communion_verse" rows="4" placeholder="ריק = הפסוק הקבוע של המצגת">${v("communion_verse")}</textarea></label>
+      <label>מקור<input name="communion_ref" value="${v("communion_ref")}" placeholder="למשל: (קור״א י״א 26)"></label>
+      <div class="pt-pray-bar"><button class="btn" data-pt="texts-save" data-iso="${iso}">שמירה</button></div>
+    </div></details>`;
+}
+
+async function ptSaveTexts(iso, btn) {
+  const f = document.querySelector(`[data-pt-texts="${iso}"]`);
+  if (!f) return;
+  const row = { meeting_date: iso, updated_at: new Date().toISOString(), updated_by: (typeof user !== "undefined" && user?.email) || null };
+  for (const k of TEXT_FIELDS) row[k] = f.querySelector(`[name="${k}"]`).value.trim();
+  btn.disabled = true;
+  const { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
+  btn.disabled = false;
+  if (error) { console.error(error); toast("השמירה נכשלה", { error: true }); return; }
+  await ptLoad();
+  toast("נשמר ✓");
+  ptRefresh();
 }
 
 async function ptSavePrayers(iso, btn) {
@@ -300,6 +357,7 @@ document.addEventListener("click", async (e) => {
   if (a === "link") { if (PT.busy) return; PT.busy = true; try { await ptShowLink(iso); } finally { PT.busy = false; } return; }
   if (a === "clear") { ptClear(iso); return; }
   if (a === "pray-save") { ptSavePrayers(iso, b); return; }
+  if (a === "texts-save") { ptSaveTexts(iso, b); return; }
   if (a === "pptx") {
     const label = b.textContent; b.disabled = true; b.textContent = "יוצר מצגת…";
     try { await buildPptx(iso); } catch (err) { console.error(err); toast("יצירת המצגת נכשלה"); }

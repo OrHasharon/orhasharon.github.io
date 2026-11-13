@@ -255,6 +255,7 @@ async function buildPptx(iso) {
   // slide order from deckPlan (deck.js): welcome, blank, songs (a blank between), communion, …, then the fixed tail
   const order = [];
   let blanks = 0, masters = [];
+  const texts = typeof meetingTextsFor === "function" ? await meetingTextsFor(iso).catch(() => null) : null;
   for (const e of deckPlan(items, (it) => it.songs.content)) {
     // prayer requests (typed in the site, presentation.js): the template's slide, 9 requests a slide
     if (e.weekly === "prayers" && typeof prayerLinesFor === "function") {
@@ -272,7 +273,25 @@ async function buildPptx(iso) {
       } catch (err) { console.error(err); toast("לא הצלחתי להכניס את מצגת הדרשה", { error: true }); }
       continue;
     }
-    if (e.sermon || e.weekly) continue; // a PDF sermon and the verse / parasha live on the projection computer
+    // the week's parasha + reading (typed in the site, presentation.js): only when there is one
+    if ((e.weekly === "parasha" || e.weekly === "reading") && texts) {
+      const two = (xml) => { const sps = shapes(xml).filter((sp) => /<p:txBody>/.test(sp)); return [sps.find((sp) => /name="Title/.test(sp)) || sps[0], sps.find((sp) => !/name="Title/.test(sp)) || sps[1]]; };
+      const fill = (xml, title, lines) => { const [t, bd] = two(xml); let x = t ? xml.replace(t, setParagraphs(t, [title], (ps) => ps[0])) : xml; return bd ? x.replace(bd, setParagraphs(bd, lines, (ps) => ps[0])) : x; };
+      if (e.weekly === "parasha" && (texts.parasha || texts.parasha_refs))
+        order.push(await clone(TPL.parasha, (xml) => fill(xml, texts.parasha, texts.parasha_refs.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))));
+      if (e.weekly === "reading") for (const page of readingPages(texts.reading)) order.push(await clone(TPL.reading, (xml) => fill(xml, texts.reading_ref, page)));
+      continue;
+    }
+    // the Lord's Supper verse typed in the site replaces the template's
+    if (e.tpl === "communion_verse" && texts?.communion_verse) {
+      const verse = texts.communion_verse.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      order.push(await clone(TPL.communion_verse, (xml) => {
+        const sp = shapes(xml).find((s) => /<a:t>/.test(s));
+        return sp ? xml.replace(sp, setParagraphs(sp, [...verse, ...(texts.communion_ref ? [texts.communion_ref] : [])], (ps, t, n) => (n < verse.length ? ps[0] : ps[ps.length - 1]))) : xml;
+      }));
+      continue;
+    }
+    if (e.sermon || e.weekly) continue; // a PDF sermon and the opening verse live on the projection computer
     if (e.song) order.push(...(await songSlides(e.song)));
     else if (e.tpl === "blank") order.push(blanks++ ? await clone(TPL.blank) : tplSlides[TPL.blank]); // each slide once in a .pptx
     else order.push(tplSlides[TPL[e.tpl]]);
