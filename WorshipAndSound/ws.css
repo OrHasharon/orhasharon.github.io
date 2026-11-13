@@ -657,6 +657,8 @@ main > .tabs button { white-space: nowrap; flex: none; }
 .pt-pray-text { width: 100%; box-sizing: border-box; font: inherit; line-height: 1.6; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card, transparent); color: inherit; resize: vertical; }
 .pt-pray-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .pt-pray-list { margin: 0; padding-inline-start: 1.2em; }
+.pt-pray-list .sub { margin-inline-start: 1.4em; list-style: circle; }
+.pt-pray-list b { color: #e8915f; }
 #next-pres { margin-top: 14px; }
 .pt-next { max-width: none; }
 .pt-url { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; word-break: break-all; font-size: .9rem; }

@@ -99,8 +99,8 @@ function ptPrayersHtml(iso, can, open) {
   const body = can
     ? `<textarea class="pt-pray-text" data-pt-pray="${iso}" rows="${Math.min(12, Math.max(5, lines.length + 2))}" placeholder="שורה לכל בקשה">${esc(row?.body || "")}</textarea>
        <div class="pt-pray-bar"><button class="btn" data-pt="pray-save" data-iso="${iso}">שמירה</button>
-       <small class="hint">שורה לכל בקשה. נכנס למצגת של האסיפה הזו, ונשאר גם לאסיפות הבאות עד שמעדכנים.</small></div>`
-    : lines.length ? `<ul class="pt-pray-list">${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : `<p class="pt-empty">אין בקשות.</p>`;
+       <small class="hint">שורה לכל בקשה · שורה שמתחילה ב-<b>-</b> היא תת-סעיף · <b>*כוכביות*</b> סביב שמות = בכתום במצגת. נשאר גם לאסיפות הבאות עד שמעדכנים.</small></div>`
+    : lines.length ? `<ul class="pt-pray-list">${lines.map((l) => `<li${/^-/.test(l) ? ' class="sub"' : ""}>${esc(l.replace(/^-\s*/, "")).replace(/\*([^*]+)\*/g, "<b>$1</b>")}</li>`).join("")}</ul>` : `<p class="pt-empty">אין בקשות.</p>`;
   return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>${body}</details>`;
 }
 

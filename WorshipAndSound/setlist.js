@@ -159,6 +159,33 @@ const firstText = (sp) => (sp.match(/<a:t>([^<]*)<\/a:t>/) || [, ""])[1];
 
 // homeGroupLines / meetingLines / deckPlan (the presentation's order) live in deck.js, shared with the projection screen
 
+// The prayer requests slide (the community's own, from the 17.10.2026 deck): a bullet per line; a line starting with
+// "-" is a sub-bullet; *stars* mark the orange words (names). The template keeps one sample paragraph of each level,
+// each with a white run and an orange run, and every new paragraph copies their formatting.
+const ORANGE = /accent2|F2AA84/i; // the names' colour: the theme's accent 2, lightened (#F2AA84)
+function prayerSlideXml(xml, lines) {
+  const body = shapes(xml).filter((sp) => /<p:txBody>/.test(sp)).sort((a, b) => (b.match(/<a:p>/g) || []).length - (a.match(/<a:p>/g) || []).length)[0];
+  if (!body) return xml;
+  const txBody = body.match(/<p:txBody>[\s\S]*?<\/p:txBody>/)[0];
+  const paras = txBody.match(/<a:p>[\s\S]*?<\/a:p>/g) || [];
+  const head = txBody.slice(0, txBody.indexOf("<a:p>"));
+  const lvl2 = paras.find((p) => /<a:pPr[^>]*\blvl="1"/.test(p)) || paras[0];
+  const lvl1 = paras.find((p) => p !== lvl2 && /<a:r>/.test(p)) || paras[0];
+  const parts = (p) => {
+    const pPr = (p.match(/<a:pPr[\s\S]*?<\/a:pPr>|<a:pPr[^>]*\/>/) || [""])[0];
+    const rPrs = (p.match(/<a:rPr[\s\S]*?<\/a:rPr>|<a:rPr[^>]*\/>/g) || ['<a:rPr lang="he-IL"/>']);
+    return { pPr, white: rPrs.find((r) => !ORANGE.test(r)) || rPrs[0], orange: rPrs.find((r) => ORANGE.test(r)) || rPrs[0] };
+  };
+  const s1 = parts(lvl1), s2 = parts(lvl2);
+  const out = lines.map((line) => {
+    const sub = /^\s*-/.test(line), s = sub ? s2 : s1;
+    const text = line.replace(/^\s*-\s*/, "");
+    const runs = text.split("*").map((t, n) => t ? `<a:r>${n % 2 ? s.orange : s.white}<a:t>${xmlEsc(t)}</a:t></a:r>` : "").join("");
+    return `<a:p>${s.pPr}${runs}</a:p>`;
+  }).join("");
+  return xml.replace(body, body.replace(txBody, head + out + "</p:txBody>"));
+}
+
 async function buildPptx(iso) {
   if (!window.JSZip) { toast("ספריית המצגות לא נטענה, נסו לרענן"); return; }
   const items = itemsFor(iso).filter((i) => i.songs);
@@ -233,12 +260,7 @@ async function buildPptx(iso) {
     if (e.weekly === "prayers" && typeof prayerLinesFor === "function") {
       const lines = await prayerLinesFor(iso).catch(() => []);
       for (let i = 0; i < lines.length; i += 9) {
-        order.push(await clone(TPL.prayers, (xml) => {
-          const body = shapes(xml).filter((sp) => /<p:txBody>/.test(sp))[1];
-          const x = body ? xml.replace(body, setParagraphs(body, lines.slice(i, i + 9), (ps) => ps[0])) : xml;
-          return x.replace(/<a:schemeClr val="tx1"\/>/g, '<a:srgbClr val="FFFFFF"/>'); // the theme's text colour is dark on this dark slide
-
-        }));
+        order.push(await clone(TPL.prayers, (xml) => prayerSlideXml(xml, lines.slice(i, i + 9))));
       }
       continue;
     }

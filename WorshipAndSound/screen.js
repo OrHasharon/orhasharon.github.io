@@ -173,7 +173,7 @@ function tplParas(el, entry) {
   if (el.role === "parasha_refs") return linesOf(wk("parashaRefs")).map((t) => like(0, t));
   if (el.role === "reading_ref") return [like(0, wk("readingRef"))];
   if (el.role === "reading_body") return (entry.lines || []).map((t) => like(0, t));
-  if (el.role === "prayers") return (entry.lines || []).map((t) => like(0, t));
+  if (el.role === "prayers") return (entry.lines || []).map((t) => { const p = el.paras[0]; return { ...p, runs: prayerRuns(t, { ...p.style, c: "#F5F7FA" }) }; });
   if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: entry.song.title }] }];
   if (el.role === "lyrics" && entry.song) {
     // David 54 like the template; long lines shrink so each stays on one line (the same rule as the PowerPoint export)
@@ -192,9 +192,25 @@ function tplParas(el, entry) {
   return el.paras;
 }
 
+// Slides with no changing words are shown as PowerPoint's own picture of them (deck/static, exported from
+// template.pptx), so soft edges, brush-shaped pictures and fonts look exactly like the community's presentation.
+const STATIC = ["welcome", "blank", "communion", "communion_verse", "blessing", "sermon_title", "testimonies", "tithes", "closing"];
+const STATIC_V = 1; // bump after re-exporting deck/static
+function preloadStatic() { for (const k of STATIC) { const i = new Image(); i.src = `deck/static/${k}.jpg?v=${STATIC_V}`; } }
+
+// a prayer-request line: "-" at the start = a sub-bullet, *stars* = the orange words (names), like the PowerPoint slide
+function prayerRuns(line, style) {
+  const sub = /^\s*-/.test(line), text = line.replace(/^\s*-\s*/, "");
+  style = { ...style, sz: sub ? 34 : 36, f: "David" }; // like the slide: David 36, sub-bullets 34
+  const runs = [{ ...style, t: (sub ? "  • " : "• ") }];
+  text.split("*").forEach((t, n) => { if (t) runs.push({ ...style, t, ...(n % 2 ? { c: "#F2AA84" } : {}) }); });
+  return runs;
+}
+
 function tplHtml(entry) {
   const d = S.deck, slide = d.slides[entry.key];
   const W = Math.min(innerWidth, innerHeight * 16 / 9), H = W * 9 / 16, u = H / 540; // px per pt (a slide is 540pt high)
+  if (STATIC.includes(entry.key)) return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="deck/static/${entry.key}.jpg?v=${STATIC_V}"></div>`;
   if (entry.key === "pdf") return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="${entry.src}"></div>`;
   if (entry.key === "pptx") return `<div class="tpl" style="width:${W}px;height:${H}px"><div class="pptx-slot" style="width:${W}px;height:${H}px"></div></div>`;
   if (!slide) return `<div class="tpl" style="width:${W}px;height:${H}px"></div>`;
@@ -683,6 +699,6 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
   buildDeck(); show();
   if (await pickMeeting()) {
     try { const v = sessionStorage.getItem("ws-screen-pos-" + S.date); if (v !== null) S.wantPos = Number(v); } catch {}
-    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); loadDbPrayers(); }
+    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); loadDbPrayers(); preloadStatic(); }
   wakeOn(); show(); wakeOps();
 })();
