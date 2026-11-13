@@ -232,10 +232,31 @@ function tplHtml(entry) {
   return `<div class="tpl" style="width:${W}px;height:${H}px">${html}</div>`;
 }
 
-// text that doesn't fit its box shrinks (6% a step) until it does — PowerPoint's "shrink text on overflow"
+// text that doesn't fit shrinks (6% a step) until it does — PowerPoint's "shrink text on overflow". The browser
+// lacks the template's fonts (Guttman, David), so every text box is checked: it must stay inside its box, and no
+// line may run under a picture drawn on top of it (the welcome slide's QR code).
 function fitTpl() {
-  for (const box of document.querySelectorAll(".tpl-text[data-fit]")) {
-    for (let k = 0; k < 30 && box.scrollHeight > box.clientHeight + 1; k++) {
+  for (const box of document.querySelectorAll(".tpl-text")) {
+    const pics = [];
+    for (let n = box.nextElementSibling; n; n = n.nextElementSibling) if (n.classList.contains("tpl-pic")) pics.push(n.getBoundingClientRect());
+    const cs = getComputedStyle(box);
+    const room = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const over = () => {
+      let h = 0;
+      for (const c of box.children) h += c.getBoundingClientRect().height + parseFloat(getComputedStyle(c).marginTop || 0);
+      if (h > room + 1 || box.scrollWidth > box.clientWidth + 1) return true;
+      if (!pics.length) return false;
+      const r = document.createRange();
+      for (const c of box.children) {
+        r.selectNodeContents(c);
+        for (const ln of r.getClientRects()) {
+          if (ln.width < 2) continue;
+          if (pics.some((p) => ln.left < p.right - 1 && ln.right > p.left + 1 && ln.top < p.bottom - 1 && ln.bottom > p.top + 1)) return true;
+        }
+      }
+      return false;
+    };
+    for (let k = 0; k < 30 && over(); k++) {
       box.querySelectorAll("span").forEach((sp) => { sp.style.fontSize = parseFloat(sp.style.fontSize) * 0.94 + "px"; });
     }
   }
