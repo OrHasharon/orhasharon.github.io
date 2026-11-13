@@ -69,10 +69,10 @@ function nextMeetingCard(mt) {
       ${mine
         ? `<button class="btn nc-wide" data-nc="lead" data-date="${iso}">➕ בחירת שירים לסט</button>`
         : `<button class="btn ghost nc-wide" data-nc="session" data-date="${iso}">🎵 סשן הלל</button>`}
-      <p class="nc-muted nc-wide nc-hint">${mine ? "את/ה מוביל/ה את האסיפה הזו. " : "מוביל/ת ההלל עוד לא בחר/ה שירים. "}כשיהיו שירים יופיעו כאן לייב, מצגת ו-PDF.</p>
+      <p class="nc-muted nc-wide nc-hint">${mine ? "את/ה מוביל/ה את האסיפה הזו. " : "מוביל/ת ההלל עוד לא בחר/ה שירים. "}כשיהיו שירים יופיעו כאן שידור בלייב, מצגת ו-PDF.</p>
     </div>` : `
     <div class="nc-actions">
-      <button class="btn nc-live" data-nc="live" data-date="${iso}">▶ לייב</button>
+      <button class="btn nc-live" data-nc="live" data-date="${iso}">▶ שידור בלייב</button>
       <button class="btn ghost" data-nc="session" data-date="${iso}">🎵 סשן הלל</button>
       <details class="nc-menu nc-wide">
         <summary class="btn ghost">🖥️ להקרנה ולהדפסה <span class="nc-chev" aria-hidden="true">▾</span></summary>

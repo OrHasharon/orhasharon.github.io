@@ -471,7 +471,7 @@ function renderOps() {
   const ops = $("ops");
   const who = S.leaderHere && S.leader ? `👑 ${esc(S.leader.name || "")} מוביל/ה` : S.songs.length ? "אין מוביל/ה מחובר/ת · הלחצן שולט" : "ממתינים למוביל/ה";
   const src = S.leaderHere ? "" : S.setSource === "db" ? ` · ${S.songs.length} שירים מהסשן` : S.songs.length ? "" :
-    ` · <a class="ops-link" href="./" target="_blank">כדי לראות את השירים לפני הלייב — להתחבר לאתר פעם אחת במחשב הזה</a>`;
+    ` · <a class="ops-link" href="./" target="_blank">כדי לראות את השירים לפני השידור בלייב — להתחבר לאתר פעם אחת במחשב הזה</a>`;
   ops.innerHTML = `
     <span class="status"><span class="dot${S.online ? " on" : ""}"></span>${who}${src}</span>
     ${S.meetings.length ? `<select data-op="meeting" aria-label="המפגש">${S.meeting ? "" : `<option value="${S.date}" selected>${day()}</option>`}${meetingOptions().map((m) => `<option value="${m.iso}"${m.iso === S.date ? " selected" : ""}>${esc(meetingKind(m))} ${m.iso.split("-").reverse().slice(0, 2).join("/")}</option>`).join("")}</select>` : S.date ? ` · ${day()}` : ""}
