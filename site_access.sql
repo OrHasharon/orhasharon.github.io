@@ -1,6 +1,7 @@
 -- Entry to the community site (orhasharon.github.io) by phone number, instead of the shared code. Safe to re-run.
 -- * site_phones: the numbers that may enter. Only admins (allowed_users.is_admin, signed in with Google) see/edit it.
 -- * site_logins: every attempt (approved or not) with the device and the IP address. Only admins read it.
+-- * site_admins.sql (run after this) re-creates site_enter() so an admin's phone counts too: re-run it after this file.
 -- * site_enter(): the one thing the public site may call. It checks a number without revealing the list,
 --   writes the attempt to the log and blocks an IP address after 10 wrong numbers in an hour.
 

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=54">
+  <link rel="stylesheet" href="style.css?v=55">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -35,7 +35,7 @@
   <div id="adm-toast" class="adm-toast" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="site-access.js?v=2"></script>
+  <script src="site-access.js?v=3"></script>
   <script>
     const sb = window.supabase.createClient("https://pualpwrkztjzhgpaqudm.supabase.co", "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9", { db: { schema: "or_hasharon_worship" } });
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -54,30 +54,42 @@
     $("adm-out").addEventListener("click", async () => { await sb.auth.signOut(); store("oh-access", null); location.reload(); });
 
     // ---------- managers (who may sign in here) ----------
+    // each admin: Gmail (signs in here) + name (shown on the entry screen's "נא פנה לאדמין") + phone (required: enters the
+    // site by phone too; it's also put on the entry list). Names/phones need site_admins.sql; until then only e-mails.
     let admins = [], namesReady = false;
     async function loadAdmins() {
-      // display_name comes with site_admins.sql; until it runs, the list still shows (without names)
-      let { data, error } = await sb.from("allowed_users").select("email, is_admin, display_name").eq("is_admin", true).order("email");
+      let { data, error } = await sb.from("allowed_users").select("email, is_admin, display_name, phone").eq("is_admin", true).order("email");
       namesReady = !error;
       if (error) ({ data } = await sb.from("allowed_users").select("email, is_admin").eq("is_admin", true).order("email"));
       admins = data || [];
     }
     function renderAdmins() {
       const me = (user?.email || "").toLowerCase();
+      const missing = namesReady ? admins.filter((a) => normPhone(a.phone).length < 9) : [];
       $("adm-admins").innerHTML = `<h2>מנהלים</h2>
-        <p class="adm-hint">מי שברשימה יכול/ה להיכנס כאן עם Gmail ולנהל את המספרים. השמות מופיעים למי שהמספר שלו לא ברשימה: "נא פנה לאדמין: …".</p>
-        ${namesReady ? "" : `<p class="adm-hint">כדי לשמור שמות, צריך להריץ ב-Supabase את <b dir="ltr">site_admins.sql</b>.</p>`}
-        <ul class="adm-list">${admins.map((a) => `<li>${namesReady ? `<input class="adm-name" data-adm-name="${esc(a.email)}" value="${esc(a.display_name || "")}" placeholder="שם"> ` : ""}<span dir="ltr">${esc(a.email)}</span>${a.email.toLowerCase() === me ? " (את/ה)" : ` <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
-        <form class="adm-form" id="adm-add">${namesReady ? `<input name="name" placeholder="שם">` : ""}<input name="email" type="email" required dir="ltr" placeholder="name@gmail.com"><button class="adm-btn" type="submit">הוספת מנהל/ת</button></form>`;
+        <p class="adm-hint">מנהלים נכנסים כאן עם Gmail, ונכנסים לאתר גם עם מספר הטלפון שלהם. השמות מופיעים למי שהמספר שלו לא ברשימה: "נא פנה לאדמין: …".</p>
+        ${namesReady ? "" : `<p class="db-warning">כדי לשמור שם וטלפון למנהלים, צריך להריץ ב-Supabase את <b dir="ltr">site_admins.sql</b>.</p>`}
+        ${missing.length ? `<p class="sa-alert" role="alert">⚠ חסר מספר טלפון ל: ${missing.map((a) => esc(a.display_name || a.email)).join(", ")}</p>` : ""}
+        <ul class="adm-list">${admins.map((a) => `<li>${namesReady ? `<input class="adm-name" data-adm-name="${esc(a.email)}" value="${esc(a.display_name || "")}" placeholder="שם">
+          <input class="adm-name adm-phone${normPhone(a.phone).length < 9 ? " adm-missing" : ""}" type="tel" dir="ltr" data-adm-phone="${esc(a.email)}" value="${esc(a.phone ? fmtPhone(normPhone(a.phone)) : "")}" placeholder="טלפון (חובה)"> ` : ""}<span dir="ltr">${esc(a.email)}</span>${a.email.toLowerCase() === me ? " (את/ה)" : ` <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
+        <form class="adm-form" id="adm-add">${namesReady ? `<input name="name" required placeholder="שם"><input name="phone" type="tel" required dir="ltr" placeholder="טלפון (חובה)">` : ""}<input name="email" type="email" required dir="ltr" placeholder="name@gmail.com"><button class="adm-btn" type="submit">הוספת מנהל/ת</button></form>`;
+    }
+    // an admin's phone also goes on the entry list (so it shows with its entries); an existing row stays as it is
+    async function adminPhoneToList(phone, name) {
+      const { error } = await sb.from("site_phones").insert({ phone, name, added_by: user?.email || null });
+      if (!error || error.code === "23505") { await loadSiteAccess(); renderSiteAccess(); }
     }
     document.addEventListener("submit", async (e) => {
       if (e.target.id !== "adm-add") return;
       e.preventDefault();
       const f = new FormData(e.target), email = f.get("email").trim().toLowerCase(), name = (f.get("name") || "").trim();
-      const row = { is_admin: true, ...(name ? { display_name: name } : {}) };
+      const phone = normPhone(f.get("phone") || "");
+      if (namesReady && (phone.length < 9 || phone.length > 12)) { toast("צריך מספר טלפון תקין למנהל/ת"); return; }
+      const row = { is_admin: true, ...(namesReady ? { display_name: name, phone } : {}) };
       let { error } = await sb.from("allowed_users").insert({ email, ...row });
       if (error?.code === "23505") ({ error } = await sb.from("allowed_users").update(row).eq("email", email));
-      toast(error ? "ההוספה נכשלה" : `${email} נוסף/ה כמנהל/ת`);
+      toast(error ? "ההוספה נכשלה" : `${name || email} נוסף/ה כמנהל/ת`);
+      if (!error && namesReady) await adminPhoneToList(phone, name);
       await loadAdmins(); renderAdmins();
     });
     document.addEventListener("click", async (e) => {
@@ -90,10 +102,18 @@
 
     let started = false;
     document.addEventListener("change", async (e) => {
-      const n = e.target.closest("[data-adm-name]");
-      if (!n) return;
-      const { error } = await sb.from("allowed_users").update({ display_name: n.value.trim() || null }).eq("email", n.dataset.admName);
-      toast(error ? "השמירה נכשלה" : "השם נשמר");
+      const n = e.target.closest("[data-adm-name]"), ph = e.target.closest("[data-adm-phone]");
+      if (n) {
+        const { error } = await sb.from("allowed_users").update({ display_name: n.value.trim() || null }).eq("email", n.dataset.admName);
+        toast(error ? "השמירה נכשלה" : "השם נשמר");
+        if (!error) { const a = admins.find((x) => x.email === n.dataset.admName); if (a) a.display_name = n.value.trim(); }
+      } else if (ph) {
+        const phone = normPhone(ph.value), a = admins.find((x) => x.email === ph.dataset.admPhone);
+        if (phone.length < 9 || phone.length > 12) { toast("מספר הטלפון חובה ולא תקין"); ph.value = a?.phone ? fmtPhone(normPhone(a.phone)) : ""; return; }
+        const { error } = await sb.from("allowed_users").update({ phone }).eq("email", ph.dataset.admPhone);
+        toast(error ? "השמירה נכשלה" : "הטלפון נשמר");
+        if (!error) { if (a) a.phone = phone; await adminPhoneToList(phone, a?.display_name || ""); renderAdmins(); }
+      }
     });
 
     async function start() {
