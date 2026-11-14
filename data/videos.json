@@ -3,6 +3,16 @@
  "source": "yt-dlp",
  "videos": [
   {
+   "id": "jE1F33k2fj8",
+   "title": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
+   "rawTitle": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
+   "date": "2026-11-14",
+   "type": "sermon",
+   "duration": 2223,
+   "series": [],
+   "thumb": "maxresdefault"
+  },
+  {
    "id": "4glyfG-bfI8",
    "title": "הלל",
    "rawTitle": "14/11/2026 הלל",
@@ -2532,16 +2542,6 @@
    "series": [
     "זכריה"
    ],
-   "thumb": "maxresdefault"
-  },
-  {
-   "id": "jE1F33k2fj8",
-   "title": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
-   "rawTitle": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
-   "date": null,
-   "type": "sermon",
-   "duration": 2223,
-   "series": [],
    "thumb": "maxresdefault"
   }
  ],
