@@ -1,15 +1,17 @@
 {
- "updated": "2026-11-14T16:02:29+00:00",
+ "updated": "2026-11-14T21:59:44+00:00",
  "source": "yt-dlp",
  "videos": [
   {
    "id": "jE1F33k2fj8",
    "title": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
-   "rawTitle": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
+   "rawTitle": "14/11/2026 סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
    "date": "2026-11-14",
    "type": "sermon",
    "duration": 2223,
-   "series": [],
+   "series": [
+    "אגרת אל הקולוסים"
+   ],
    "thumb": "maxresdefault"
   },
   {
@@ -29,7 +31,9 @@
    "date": "2026-10-31",
    "type": "sermon",
    "duration": 2612,
-   "series": [],
+   "series": [
+    "אגרת אל הקולוסים"
+   ],
    "thumb": "mqdefault"
   },
   {
@@ -49,7 +53,9 @@
    "date": "2026-10-24",
    "type": "sermon",
    "duration": 2603,
-   "series": [],
+   "series": [
+    "אגרת אל הקולוסים"
+   ],
    "thumb": "maxresdefault"
   },
   {
@@ -69,7 +75,9 @@
    "date": "2026-10-17",
    "type": "sermon",
    "duration": 2604,
-   "series": [],
+   "series": [
+    "אגרת אל הקולוסים"
+   ],
    "thumb": "maxresdefault"
   },
   {
@@ -2546,6 +2554,16 @@
   }
  ],
  "playlists": [
+  {
+   "id": "PLalQkyg3PgN0",
+   "title": "אגרת אל הקולוסים",
+   "videoIds": [
+    "jE1F33k2fj8",
+    "pmnNv8RP4IQ",
+    "gkRz_oO_qKE",
+    "izsShYvXcrk"
+   ]
+  },
   {
    "id": "PLOlYhdzLQsJ8",
    "title": "זכריה",
