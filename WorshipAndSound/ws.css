@@ -432,7 +432,16 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .live-key { white-space: nowrap; color: var(--muted); }
 .live-key b { color: var(--ink); font-size: 1.1rem; }
 .live-key .live-shifted, .live-key .live-shifted b { color: #e8833a; font-weight: 700; } /* not in the song's key: easy to spot */
-.live-shift-warn { background: #8a4a12; } /* orange-brown: white text ~7:1 */
+.live-shift-warn { background: #8a4a12; }
+/* Users tab: entry to the community site by phone (site-access.js) */
+.sa-add input[name=name] { flex: 1 1 140px; } .sa-add input[name=phone] { flex: 1 1 140px; }
+.sa-add input, .sa-name { font: inherit; color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.sa-name { width: 100%; min-width: 90px; }
+.sa-devs { margin: 6px 0 0; padding-inline-start: 18px; font-size: .85rem; color: var(--muted); }
+.sa-devs li { margin: 4px 0; }
+.sa-dev { color: var(--ink); }
+.sa-nw { white-space: nowrap; }
+#site-access h3 { margin: 22px 0 4px; } /* orange-brown: white text ~7:1 */
 .live-shift-warn .tool { color: #8a4a12; }
 .live-keys { display: inline-flex; gap: 4px; }
 .live-who { display: inline-flex; align-items: center; gap: 6px; color: var(--muted) !important; padding-inline: 2px !important; }
