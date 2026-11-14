@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=51">
+  <link rel="stylesheet" href="style.css?v=52">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -35,7 +35,7 @@
   <div id="adm-toast" class="adm-toast" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="site-access.js?v=1"></script>
+  <script src="site-access.js?v=2"></script>
   <script>
     const sb = window.supabase.createClient("https://pualpwrkztjzhgpaqudm.supabase.co", "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9", { db: { schema: "or_hasharon_worship" } });
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

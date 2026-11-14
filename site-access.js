@@ -23,22 +23,26 @@ async function loadSiteAccess() {
   siteAcc.loaded = true; siteAcc.loading = false;
 }
 
-// group log rows: per phone → { last, count, devices: Map(device+ip → {device, ip, last, count}) }
+// one device = its short id (#abc123, kept in the browser by gate.js); the same device on another network (home
+// Wi-Fi / cellular) is still one device, with several IP addresses
+const devKey = (device) => (String(device || "").match(/#(\w+)$/) || [])[1] || String(device || "");
+// group log rows: per phone → { last, count, devices: Map(device id → {device, ips: Set, last, count}) }
 function groupLogs(rows) {
   const by = new Map();
   for (const r of rows) {
     let g = by.get(r.phone);
     if (!g) by.set(r.phone, (g = { phone: r.phone, last: r.at, lastRow: r, count: 0, devices: new Map() }));
     g.count += r.hits || 1;
-    const k = (r.device || "") + "|" + (r.ip || "");
+    const k = devKey(r.device);
     const d = g.devices.get(k);
-    if (d) d.count += r.hits || 1; else g.devices.set(k, { device: r.device, ip: r.ip, last: r.at, count: r.hits || 1 });
+    if (d) { d.count += r.hits || 1; if (r.ip) d.ips.add(r.ip); }
+    else g.devices.set(k, { device: r.device, ips: new Set(r.ip ? [r.ip] : []), last: r.at, count: r.hits || 1 });
   }
   return by;
 }
 
 const devList = (g) => g ? `<ul class="sa-devs">${[...g.devices.values()].map((d) =>
-  `<li><bdi dir="ltr" class="sa-dev">${esc(d.device || "מכשיר לא ידוע")}</bdi><br>${fmtWhen(d.last)}${d.count > 1 ? ` · ${d.count} פעמים` : ""} · IP <bdi dir="ltr">${esc(d.ip || "?")}</bdi></li>`).join("")}</ul>` : "";
+  `<li><bdi dir="ltr" class="sa-dev">${esc(d.device || "מכשיר לא ידוע")}</bdi><br>${fmtWhen(d.last)}${d.count > 1 ? ` · ${d.count} פעמים` : ""} · <bdi dir="ltr">IP ${esc([...d.ips].join(", ") || "?")}</bdi></li>`).join("")}</ul>` : "";
 
 async function renderSiteAccess() {
   const el = document.getElementById("site-access");
@@ -55,19 +59,23 @@ async function renderSiteAccess() {
   const ok = groupLogs(siteAcc.logs.filter((r) => r.ok));
   const listed = new Set(siteAcc.phones.map((p) => p.phone));
   const bad = [...groupLogs(siteAcc.logs.filter((r) => !r.ok)).values()];
+  const nameOf = (ph) => siteAcc.phones.find((p) => p.phone === ph)?.name || "";
+  const multi = [...ok.values()].filter((g) => g.devices.size > 1 && listed.has(g.phone));
   const weekAgo = Date.now() - 7 * 864e5;
   const badWeek = bad.filter((g) => new Date(g.last) > weekAgo).length;
   el.innerHTML = `<h2>כניסה לאתר הקהילה בטלפון</h2>
     <p class="hint">רק מספרים שברשימה נכנסים לאתר. מכשיר שנכנס נזכר, ונבדק שוב בכל ביקור: מספר שיוסר ננעל בביקור הבא.
     דפדפן לא חושף את דגם המחשב (למשל Lenovo), אז נרשמים מערכת ההפעלה, הדפדפן, גודל המסך, דגם הטלפון כשאפשר (למשל Samsung Galaxy), מזהה קצר של המכשיר (#…) וכתובת ה-IP.</p>
     ${siteAcc.err ? `<p class="db-warning">${esc(siteAcc.err)}</p>` : ""}
+    ${multi.length ? `<div class="sa-alert" role="alert"><b>⚠ ${multi.length === 1 ? "מספר אחד נכנס" : `${multi.length} מספרים נכנסו`} מיותר ממכשיר אחד</b>
+      <ul>${multi.map((g) => `<li>${esc(nameOf(g.phone) || "בלי שם")} · <bdi dir="ltr">${esc(fmtPhone(g.phone))}</bdi> · <b>${g.devices.size} מכשירים</b>${devList(g)}</li>`).join("")}</ul></div>` : ""}
     <form class="add-user sa-add"><input name="name" required placeholder="שם"><input name="phone" type="tel" required dir="ltr" placeholder="050-0000000"><button class="btn" type="submit">הוספת מספר</button></form>
     <div class="duty-table users-table"><table><thead><tr><th>שם</th><th>טלפון</th><th>כניסה אחרונה</th><th>מכשירים</th><th></th></tr></thead><tbody>
-    ${siteAcc.phones.length ? siteAcc.phones.map((p) => { const g = ok.get(p.phone); return `<tr>
+    ${siteAcc.phones.length ? siteAcc.phones.map((p) => { const g = ok.get(p.phone); return `<tr${g && g.devices.size > 1 ? ' class="sa-multi"' : ""}>
       <td><input class="sa-name" data-sa-name="${esc(p.phone)}" value="${esc(p.name)}"></td>
       <td dir="ltr" class="sa-nw">${esc(fmtPhone(p.phone))}</td>
       <td>${g ? fmtWhen(g.last) : "עוד לא נכנס/ה"}</td>
-      <td>${g ? `<details><summary>${g.devices.size} ${g.devices.size === 1 ? "מכשיר" : "מכשירים"}</summary>${devList(g)}</details>` : "—"}</td>
+      <td>${g ? `<details${g.devices.size > 1 ? " open" : ""}><summary>${g.devices.size > 1 ? "⚠ " : ""}${g.devices.size} ${g.devices.size === 1 ? "מכשיר" : "מכשירים"}</summary>${devList(g)}</details>` : "—"}</td>
       <td><button class="link-btn" data-sa-del="${esc(p.phone)}">הסרה</button></td></tr>`; }).join("") : `<tr><td colspan="5">אין עדיין מספרים. הוסיפו את הראשון למעלה.</td></tr>`}
     </tbody></table></div>
     <h3>ניסיונות כניסה עם מספרים שלא ברשימה</h3>

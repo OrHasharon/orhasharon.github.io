@@ -359,3 +359,6 @@ html.locked body > *:not(#gate) { display: none !important; }
 .sa-devs { margin: 6px 0 0; padding-inline-start: 18px; font-size: .85rem; color: var(--muted); } .sa-devs li { margin: 4px 0; }
 .sa-dev { color: var(--ink); } .sa-nw { white-space: nowrap; }
 .adm-toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 10px; z-index: 50; }
+.sa-alert { background: #7a2a1e; color: #fff; border-radius: 10px; padding: 12px 16px; margin: 6px 0 12px; } /* white on dark red ~9:1, both themes */
+.sa-alert ul { margin: 6px 0 0; padding-inline-start: 18px; } .sa-alert .sa-devs, .sa-alert .sa-dev { color: #f3d9d4; }
+.sa-multi td { background: rgba(229, 115, 115, .12); }
