@@ -251,8 +251,9 @@ document.addEventListener("click", async (e) => {
     const ph = forget.dataset.saForget;
     if (!confirm(`להסיר את הניסיונות של ${fmtPhone(ph)} מהרשימה?`)) return;
     const { data, error } = await sb.from("site_logins").delete().eq("phone", ph).eq("ok", false).select("id");
-    if (!error && !data?.length) toast("צריך להריץ ב-Supabase את site_logins_delete.sql");
-    else toast(error ? "ההסרה נכשלה" : "הוסר");
+    // no delete permission yet (42501) or no policy (0 rows): the SQL hasn't run
+    if ((!error && !data?.length) || error?.code === "42501" || /permission/i.test(error?.message || "")) toast("כדי להסיר, צריך להריץ ב-Supabase את site_logins_delete.sql");
+    else toast(error ? "ההסרה נכשלה: " + error.message : "הוסר");
     await loadSiteAccess(); renderSiteAccess();
   } else if (allow) {
     const name = prompt(`שם עבור ${fmtPhone(allow.dataset.saAllow)}:`);
