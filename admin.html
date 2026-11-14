@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=53">
+  <link rel="stylesheet" href="style.css?v=54">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -54,24 +54,29 @@
     $("adm-out").addEventListener("click", async () => { await sb.auth.signOut(); store("oh-access", null); location.reload(); });
 
     // ---------- managers (who may sign in here) ----------
-    let admins = [];
+    let admins = [], namesReady = false;
     async function loadAdmins() {
-      const { data } = await sb.from("allowed_users").select("email, is_admin").eq("is_admin", true).order("email");
+      // display_name comes with site_admins.sql; until it runs, the list still shows (without names)
+      let { data, error } = await sb.from("allowed_users").select("email, is_admin, display_name").eq("is_admin", true).order("email");
+      namesReady = !error;
+      if (error) ({ data } = await sb.from("allowed_users").select("email, is_admin").eq("is_admin", true).order("email"));
       admins = data || [];
     }
     function renderAdmins() {
       const me = (user?.email || "").toLowerCase();
       $("adm-admins").innerHTML = `<h2>מנהלים</h2>
-        <p class="adm-hint">מי שברשימה יכול/ה להיכנס כאן עם Gmail ולנהל את המספרים.</p>
-        <ul class="adm-list">${admins.map((a) => `<li><span dir="ltr">${esc(a.email)}</span>${a.email.toLowerCase() === me ? " (את/ה)" : ` <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
-        <form class="adm-form" id="adm-add"><input name="email" type="email" required dir="ltr" placeholder="name@gmail.com"><button class="adm-btn" type="submit">הוספת מנהל/ת</button></form>`;
+        <p class="adm-hint">מי שברשימה יכול/ה להיכנס כאן עם Gmail ולנהל את המספרים. השמות מופיעים למי שהמספר שלו לא ברשימה: "נא פנה לאדמין: …".</p>
+        ${namesReady ? "" : `<p class="adm-hint">כדי לשמור שמות, צריך להריץ ב-Supabase את <b dir="ltr">site_admins.sql</b>.</p>`}
+        <ul class="adm-list">${admins.map((a) => `<li>${namesReady ? `<input class="adm-name" data-adm-name="${esc(a.email)}" value="${esc(a.display_name || "")}" placeholder="שם"> ` : ""}<span dir="ltr">${esc(a.email)}</span>${a.email.toLowerCase() === me ? " (את/ה)" : ` <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
+        <form class="adm-form" id="adm-add">${namesReady ? `<input name="name" placeholder="שם">` : ""}<input name="email" type="email" required dir="ltr" placeholder="name@gmail.com"><button class="adm-btn" type="submit">הוספת מנהל/ת</button></form>`;
     }
     document.addEventListener("submit", async (e) => {
       if (e.target.id !== "adm-add") return;
       e.preventDefault();
-      const email = new FormData(e.target).get("email").trim().toLowerCase();
-      let { error } = await sb.from("allowed_users").insert({ email, is_admin: true });
-      if (error?.code === "23505") ({ error } = await sb.from("allowed_users").update({ is_admin: true }).eq("email", email));
+      const f = new FormData(e.target), email = f.get("email").trim().toLowerCase(), name = (f.get("name") || "").trim();
+      const row = { is_admin: true, ...(name ? { display_name: name } : {}) };
+      let { error } = await sb.from("allowed_users").insert({ email, ...row });
+      if (error?.code === "23505") ({ error } = await sb.from("allowed_users").update(row).eq("email", email));
       toast(error ? "ההוספה נכשלה" : `${email} נוסף/ה כמנהל/ת`);
       await loadAdmins(); renderAdmins();
     });
@@ -84,6 +89,13 @@
     });
 
     let started = false;
+    document.addEventListener("change", async (e) => {
+      const n = e.target.closest("[data-adm-name]");
+      if (!n) return;
+      const { error } = await sb.from("allowed_users").update({ display_name: n.value.trim() || null }).eq("email", n.dataset.admName);
+      toast(error ? "השמירה נכשלה" : "השם נשמר");
+    });
+
     async function start() {
       if (started) return; started = true;
       const { data: { session } } = await sb.auth.getSession();

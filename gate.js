@@ -32,6 +32,20 @@
   }
 
   // → { ok, name, reason } | { missing: true } (no function yet) | null (offline / error)
+  // the admins' names for the "not on the list" message (site_admins.sql); the current list if that isn't there yet
+  async function adminNames() {
+    try {
+      const r = await fetch(API.replace("site_enter", "site_admin_names"), {
+        method: "POST", headers: { apikey: ANON, "Content-Type": "application/json", "Content-Profile": "or_hasharon_worship" }, body: "{}",
+      });
+      const names = r.ok ? await r.json() : null;
+      if (Array.isArray(names) && names.length) return names;
+    } catch {}
+    return ["אוריה", "נעמי", "ליה"];
+  }
+  const andList = (a) => (a.length > 1 ? a.slice(0, -1).join(", ") + " ו" + a[a.length - 1] : a[0] || "");
+  const notListed = async () => `הינך חבר קהילת אור השרון, או שחלה טעות בזיהוי מספרך? נא פנה לאדמין: ${andList(await adminNames())}.`;
+
   async function check(phone, kind) {
     try {
       const r = await fetch(API, {
@@ -54,7 +68,7 @@
   if (saved) {
     // open straight away; the quiet re-check only closes the site when the number was taken off the list
     check(saved, "visit").then((r) => {
-      if (r && r.ok === false && r.reason === "unknown") { set(PHONE, null); set(KEY, null); lock("המספר שלך כבר לא ברשימה. אפשר לפנות לאוריה."); }
+      if (r && r.ok === false && r.reason === "unknown") { set(PHONE, null); set(KEY, null); notListed().then(lock); }
     });
     return;
   }
@@ -121,7 +135,7 @@
         } else if (!r) fail("אין חיבור כרגע. נסו שוב בעוד רגע.");
         else if (r.reason === "blocked") fail("יותר מדי ניסיונות. נסו שוב בעוד שעה.");
         else if (r.reason === "invalid") fail("המספר לא נראה תקין");
-        else fail("המספר לא ברשימה. אפשר לפנות לאוריה כדי להצטרף.");
+        else fail(await notListed());
       });
       input.focus();
     };

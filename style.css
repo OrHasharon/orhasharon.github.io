@@ -363,3 +363,5 @@ html.locked body > *:not(#gate) { display: none !important; }
 .sa-alert ul { margin: 6px 0 0; padding-inline-start: 18px; } .sa-alert .sa-devs, .sa-alert .sa-dev { color: #f3d9d4; }
 .sa-multi td { background: rgba(229, 115, 115, .12); }
 .header-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-inline-start: auto; } /* admins: 'ניהול' next to the YouTube link (gate.js) */
+.adm-name { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; width: 110px; margin-inline-end: 6px; }
+.adm-list li { list-style: none; } .adm-list { padding: 0; }
