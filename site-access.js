@@ -95,7 +95,7 @@ async function renderSiteAccess() {
     ${bad.length ? `<div class="duty-table users-table"><table><thead><tr><th>מספר שהוקלד</th><th>ניסיון אחרון</th><th>ניסיונות</th><th>מכשיר ו-IP</th><th></th></tr></thead><tbody>
       ${bad.map((g) => `<tr data-q="${q(g.phone)}"><td dir="ltr" class="sa-nw">${esc(fmtPhone(g.phone))}</td><td>${fmtWhen(g.last)}</td><td>${g.count}</td>
         <td><details><summary>${g.devices.size} ${g.devices.size === 1 ? "מכשיר" : "מכשירים"}</summary>${devList(g)}</details></td>
-        <td>${listed.has(g.phone) ? "נוסף מאז" : `<button class="link-btn" data-sa-allow="${esc(g.phone)}">הוספה לרשימה</button>`}</td></tr>`).join("")}
+        <td class="sa-nw"><button class="link-btn" data-sa-allow="${esc(g.phone)}">הוספה לרשימה</button> · <button class="link-btn" data-sa-forget="${esc(g.phone)}">הסרה</button></td></tr>`).join("")}
     </tbody></table></div>` : ""}
     <p><button class="link-btn" data-sa-refresh>רענון</button></p>`;
   siteFilter();
@@ -186,12 +186,20 @@ document.addEventListener("submit", async (e) => {
 }, true);
 
 document.addEventListener("click", async (e) => {
-  const del = e.target.closest("[data-sa-del]"), allow = e.target.closest("[data-sa-allow]");
+  const del = e.target.closest("[data-sa-del]"), allow = e.target.closest("[data-sa-allow]"), forget = e.target.closest("[data-sa-forget]");
   if (del) {
     const p = siteAcc.phones.find((x) => x.phone === del.dataset.saDel);
     if (!confirm(`להסיר את ${p?.name || fmtPhone(del.dataset.saDel)}? המכשירים שלו/ה יינעלו בביקור הבא.`)) return;
     const { error } = await sb.from("site_phones").delete().eq("phone", del.dataset.saDel);
     toast(error ? "ההסרה נכשלה" : "הוסר/ה");
+    await loadSiteAccess(); renderSiteAccess();
+  } else if (forget) {
+    // a recognized number (e.g. a typo of a member's): remove its failed attempts from the log
+    const ph = forget.dataset.saForget;
+    if (!confirm(`להסיר את הניסיונות של ${fmtPhone(ph)} מהרשימה?`)) return;
+    const { data, error } = await sb.from("site_logins").delete().eq("phone", ph).eq("ok", false).select("id");
+    if (!error && !data?.length) toast("צריך להריץ ב-Supabase את site_logins_delete.sql");
+    else toast(error ? "ההסרה נכשלה" : "הוסר");
     await loadSiteAccess(); renderSiteAccess();
   } else if (allow) {
     const name = prompt(`שם עבור ${fmtPhone(allow.dataset.saAllow)}:`);
