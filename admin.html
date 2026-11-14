@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=55">
+  <link rel="stylesheet" href="style.css?v=56">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -24,6 +24,7 @@
   </header>
   <main class="wrap adm">
     <p id="adm-status" class="adm-hint">טוען…</p>
+    <div id="sa-report" class="sa-report" hidden></div>
     <div id="adm-login" class="adm-box" hidden>
       <h2>כניסת מנהל</h2>
       <p class="adm-hint">כניסה עם חשבון ה-Gmail של המנהלים.</p>
@@ -35,7 +36,7 @@
   <div id="adm-toast" class="adm-toast" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="site-access.js?v=3"></script>
+  <script src="site-access.js?v=4"></script>
   <script>
     const sb = window.supabase.createClient("https://pualpwrkztjzhgpaqudm.supabase.co", "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9", { db: { schema: "or_hasharon_worship" } });
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -57,11 +58,13 @@
     // each admin: Gmail (signs in here) + name (shown on the entry screen's "נא פנה לאדמין") + phone (required: enters the
     // site by phone too; it's also put on the entry list). Names/phones need site_admins.sql; until then only e-mails.
     let admins = [], namesReady = false;
+    let siteAdminPhones = new Set(); // site-access.js leaves these out of the "more than one device" report
     async function loadAdmins() {
       let { data, error } = await sb.from("allowed_users").select("email, is_admin, display_name, phone").eq("is_admin", true).order("email");
       namesReady = !error;
       if (error) ({ data } = await sb.from("allowed_users").select("email, is_admin").eq("is_admin", true).order("email"));
       admins = data || [];
+      siteAdminPhones = new Set(admins.map((a) => normPhone(a.phone)).filter((p) => p.length >= 9));
     }
     function renderAdmins() {
       const me = (user?.email || "").toLowerCase();
@@ -89,8 +92,8 @@
       let { error } = await sb.from("allowed_users").insert({ email, ...row });
       if (error?.code === "23505") ({ error } = await sb.from("allowed_users").update(row).eq("email", email));
       toast(error ? "ההוספה נכשלה" : `${name || email} נוסף/ה כמנהל/ת`);
-      if (!error && namesReady) await adminPhoneToList(phone, name);
       await loadAdmins(); renderAdmins();
+      if (!error && namesReady) await adminPhoneToList(phone, name);
     });
     document.addEventListener("click", async (e) => {
       const b = e.target.closest("[data-adm-del]");
@@ -112,7 +115,7 @@
         if (phone.length < 9 || phone.length > 12) { toast("מספר הטלפון חובה ולא תקין"); ph.value = a?.phone ? fmtPhone(normPhone(a.phone)) : ""; return; }
         const { error } = await sb.from("allowed_users").update({ phone }).eq("email", ph.dataset.admPhone);
         toast(error ? "השמירה נכשלה" : "הטלפון נשמר");
-        if (!error) { if (a) a.phone = phone; await adminPhoneToList(phone, a?.display_name || ""); renderAdmins(); }
+        if (!error) { if (a) a.phone = phone; siteAdminPhones.add(phone); await adminPhoneToList(phone, a?.display_name || ""); renderAdmins(); }
       }
     });
 
@@ -137,8 +140,9 @@
       if (from === "site" || new URLSearchParams(location.search).has("login")) { location.replace("/"); return; } // signed in from the entry screen: to the site
       $("adm-status").innerHTML = `מחובר/ת כ-<b dir="ltr">${esc(user.email)}</b>`;
       $("site-access").hidden = false; $("adm-admins").hidden = false;
-      renderSiteAccess();
+      $("sa-report").hidden = false;
       await loadAdmins(); renderAdmins();
+      renderSiteAccess();
     }
     sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" && !user) { started = false; start(); } });
     start();

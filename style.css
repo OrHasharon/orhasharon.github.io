@@ -367,3 +367,5 @@ html.locked body > *:not(#gate) { display: none !important; }
 .adm-list li { list-style: none; } .adm-list { padding: 0; }
 .adm-phone { width: 130px; } .adm-missing { border-color: #e57373; box-shadow: 0 0 0 1px #e57373; }
 .adm-list li { margin: 8px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sa-report .sa-alert { margin: 0; } .sa-ok { background: rgba(102, 187, 106, .14); border: 1px solid rgba(102, 187, 106, .5); border-radius: 10px; padding: 10px 14px; }
+.sa-search { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; width: 100%; margin: 4px 0 8px; }

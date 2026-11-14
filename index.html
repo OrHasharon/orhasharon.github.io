@@ -17,7 +17,7 @@
   <script>/* sign-in links (Supabase) land on the site root: hand them to the admin page (an admin sign-in started there) or the team page */ if (/access_token=|error_description=/.test(location.hash) || new URLSearchParams(location.search).has("code")) { let a = null; try { a = localStorage.getItem("oh-admin-login"); } catch {} location.replace((a ? "/admin.html" : "/WorshipAndSound/") + location.search + location.hash); }</script>
   <script>try { const p = new URLSearchParams(location.search).get("p") || "brown"; if (p !== "brown") document.documentElement.dataset.p = p; } catch {}</script>
   <script src="gate.js?v=6"></script>
-  <link rel="stylesheet" href="style.css?v=55">
+  <link rel="stylesheet" href="style.css?v=56">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
