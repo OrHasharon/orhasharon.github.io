@@ -1,7 +1,17 @@
 {
- "updated": "2026-11-13T23:16:42+00:00",
+ "updated": "2026-11-14T16:02:29+00:00",
  "source": "yt-dlp",
  "videos": [
+  {
+   "id": "4glyfG-bfI8",
+   "title": "הלל",
+   "rawTitle": "14/11/2026 הלל",
+   "date": "2026-11-14",
+   "type": "hallel",
+   "duration": 2090,
+   "series": [],
+   "thumb": "maxresdefault"
+  },
   {
    "id": "pmnNv8RP4IQ",
    "title": "הֵן הָאָב הִצִּילָנוּ מִשִּׁלְטוֹן הַחֹשֶׁךְ | אל הקולוסים א 13-23",
@@ -2522,6 +2532,16 @@
    "series": [
     "זכריה"
    ],
+   "thumb": "maxresdefault"
+  },
+  {
+   "id": "jE1F33k2fj8",
+   "title": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
+   "rawTitle": "סבל, שמחה, למען הבשורה | אל הקולוסים א 22-27",
+   "date": null,
+   "type": "sermon",
+   "duration": 2223,
+   "series": [],
    "thumb": "maxresdefault"
   }
  ],
