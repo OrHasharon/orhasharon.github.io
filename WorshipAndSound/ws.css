@@ -431,6 +431,9 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .live-bar .live-title { flex: 1; min-width: 0; font-size: 1.35rem; }
 .live-key { white-space: nowrap; color: var(--muted); }
 .live-key b { color: var(--ink); font-size: 1.1rem; }
+.live-key .live-shifted, .live-key .live-shifted b { color: #e8833a; font-weight: 700; } /* not in the song's key: easy to spot */
+.live-shift-warn { background: #8a4a12; } /* orange-brown: white text ~7:1 */
+.live-shift-warn .tool { color: #8a4a12; }
 .live-keys { display: inline-flex; gap: 4px; }
 .live-who { display: inline-flex; align-items: center; gap: 6px; color: var(--muted) !important; padding-inline: 2px !important; }
 .live-quick .live-gear { margin-inline-start: auto; }

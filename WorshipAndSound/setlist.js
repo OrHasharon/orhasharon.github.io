@@ -521,6 +521,9 @@ function startLive(date) {
   setlist.openDate = date;
   Object.assign(live, { on: true, idx: 0, shift: {} });
   if (typeof restoreLivePos === "function") restoreLivePos(date);
+  // key changes kept from an earlier opening (e.g. the rehearsal) come back with the position: say so out loud,
+  // so nobody finds out in the middle of the set that a song isn't in its key
+  live.shiftWarn = Object.values(live.shift).some(Boolean);
   document.documentElement.requestFullscreen?.().catch(() => {});
   renderLive();
   if (typeof syncStart === "function") syncStart(date);
@@ -556,7 +559,7 @@ function renderLive() {
       <div class="live-row">
         <span class="live-pos">${live.idx + 1}/${items.length}</span>
         <strong class="live-title">${esc(song.title)}</strong>
-        <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}</span>
+        <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}${live.shift[it.id] && base ? `<small class="live-shifted"> · מקורי <b dir="ltr">${esc(base)}</b></small>` : ""}</span>
         <button class="tool live-exit" data-live="exit" aria-label="יציאה ממצב הלל" title="יציאה">✕</button>
       </div>
       ${it.notes ? `<div class="live-note">📝 ${esc(it.notes)}</div>` : ""}
@@ -573,7 +576,7 @@ function renderLive() {
         ${syncPanelHtml()}
       </div>` : ""}
     </div>
-    ${syncPeopleHtml()}${syncAwayHtml()}
+    ${shiftWarnHtml(items)}${syncPeopleHtml()}${syncAwayHtml()}
     <div class="live-body"><div class="chordpro song-body">${quietItem(song) ? `<p class="quiet-item">🍞 ${esc(song.title)} · שקט</p>` : renderChordPro(song.content, shift, { chords: live.chords, key: base })}</div></div>
     <div class="live-nav">
       <button class="tool" data-live="prev" ${live.idx ? "" : "disabled"}>→ הקודם</button>
@@ -582,6 +585,18 @@ function renderLive() {
     </div>`;
   fitLive(el);
   if (keep) { const b = el.querySelector(".live-body"); b.scrollLeft = keep.l; b.scrollTop = keep.t; }
+}
+
+// the banner for key changes left over from an earlier opening (only for whoever can change keys: the leader / no sync)
+function shiftWarnHtml(items) {
+  const moved = items.filter((i) => live.shift[i.id]);
+  if (!live.shiftWarn || !moved.length || syncLocksKey()) return "";
+  const list = moved.map((i) => {
+    const base = i.songs.song_key || firstChord(i.songs.content || ""), n = live.shift[i.id];
+    return `${esc(i.songs.title)}: ${base ? `<b dir="ltr">${esc(transposeChord(base, n, prefersFlats(base, n)))}</b> במקום <b dir="ltr">${esc(base)}</b>` : `${n > 0 ? "+" : "−"}${n * n === 1 ? "½" : Math.abs(n) / 2} טון`}`;
+  }).join(" · ");
+  return `<div class="live-away live-shift-warn">⚠ לא בסולם המקורי (נשמר מפתיחה קודמת): ${list}
+    <button class="tool" data-live="shiftreset">הכל לסולם המקורי</button><button class="tool" data-live="shiftkeep">להשאיר</button></div>`;
 }
 
 // Columns of a fixed width: one per screen on a phone, two side by side on a wide screen.
@@ -621,7 +636,9 @@ function liveAction(a) {
   if (syncAction(a)) { renderLive(); return; }
   // a follower who moves on their own stops following (a bar offers the way back), like OnSong
   if (syncActive() && !sync.iLead && sync.follow && (a === "next" || a === "prev")) sync.follow = false;
-  if (a === "exit") { live.on = false; syncStop(); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
+  if (a === "shiftreset") { live.shift = {}; live.shiftWarn = false; }
+  else if (a === "shiftkeep") live.shiftWarn = false;
+  else if (a === "exit") { live.on = false; syncStop(); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
   else if (a === "next") live.idx++;
   else if (a === "prev") live.idx--;
   else if (a.startsWith("key")) { const n = Number(a.slice(3)); live.shift[it.id] = n ? (live.shift[it.id] || 0) + n : 0; }
@@ -632,7 +649,7 @@ function liveAction(a) {
   }
   else if (a === "chords") live.chords = !live.chords;
   renderLive();
-  if (sync.iLead && (a === "next" || a === "prev" || a.startsWith("key"))) broadcastState();
+  if (sync.iLead && (a === "next" || a === "prev" || a.startsWith("key") || a === "shiftreset")) broadcastState();
 }
 
 document.addEventListener("click", (e) => {
