@@ -50,7 +50,7 @@
   }
 
   const access = get(KEY), saved = get(PHONE);
-  if (access === "admin") return; // signed in as an admin (admin.html)
+  if (access === "admin") { adminButton(); return; } // signed in as an admin (admin.html)
   if (saved) {
     // open straight away; the quiet re-check only closes the site when the number was taken off the list
     check(saved, "visit").then((r) => {
@@ -69,6 +69,23 @@
   }
   lock();
 
+  // admins: a 'ניהול' button in the site's header, next to the YouTube link
+  function adminButton() {
+    const add = () => {
+      const bar = document.querySelector(".site-header .header-inner");
+      if (!bar || bar.querySelector(".admin-link")) return;
+      const a = document.createElement("a");
+      a.className = "yt-link admin-link"; a.href = "/admin.html"; a.textContent = "ניהול";
+      // one group with the YouTube link, so the header keeps its layout
+      const yt = bar.querySelector(".yt-link"), group = document.createElement("div");
+      group.className = "header-actions";
+      if (yt) { yt.before(group); group.append(a, yt); } else { group.append(a); bar.append(group); }
+      const sw = bar.querySelector(".theme-switch"); // theme.js adds it first (it loads earlier)
+      if (sw) group.append(sw);
+    };
+    document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", add) : add();
+  }
+
   function lock(message) {
     document.documentElement.classList.add("locked");
     const show = () => {
@@ -82,7 +99,7 @@
         <input id="gate-phone" type="tel" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="050-0000000">
         <button type="submit" class="btn">כניסה</button>
         <p class="gate-err" role="alert"${message ? "" : " hidden"}>${message || ""}</p>
-        <a class="gate-admin" href="/admin.html">כניסת מנהל (Gmail)</a>
+        <a class="gate-admin" href="/admin.html?login">כניסת מנהל (Gmail)</a>
       </form>`;
       document.body.prepend(box);
       const input = box.querySelector("input"), err = box.querySelector(".gate-err"), btn = box.querySelector("button");

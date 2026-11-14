@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=53">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -44,10 +44,13 @@
     function toast(t) { const el = $("adm-toast"); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2600); }
     const store = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
 
-    $("adm-google").addEventListener("click", () => {
-      store("oh-admin-login", "1"); // the site root sends the Google answer back here (index.html)
+    // "site" = started from the entry screen's 'כניסת מנהל' (after signing in → the site itself);
+    // "admin" = started on this page (stay here). Either way the site root sends Google's answer back here (index.html).
+    function googleSignIn(from) {
+      store("oh-admin-login", from);
       sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/admin.html" } });
-    });
+    }
+    $("adm-google").addEventListener("click", () => googleSignIn("admin"));
     $("adm-out").addEventListener("click", async () => { await sb.auth.signOut(); store("oh-access", null); location.reload(); });
 
     // ---------- managers (who may sign in here) ----------
@@ -85,15 +88,21 @@
       if (started) return; started = true;
       const { data: { session } } = await sb.auth.getSession();
       user = session?.user || null;
-      if (!user) { $("adm-status").hidden = true; $("adm-login").hidden = false; return; }
+      if (!user) {
+        if (new URLSearchParams(location.search).has("login")) { $("adm-status").textContent = "עובר לכניסה עם Google…"; googleSignIn("site"); return; }
+        $("adm-status").hidden = true; $("adm-login").hidden = false; return;
+      }
+      let from = null; try { from = localStorage.getItem("oh-admin-login"); } catch {}
       store("oh-admin-login", null);
       $("adm-out").hidden = false;
       const { data: isAdmin, error } = await sb.rpc("is_admin");
       if (error || !isAdmin) {
+        if (!error) store("oh-access", null); // not an admin (any more): no free pass into the site on this device
         $("adm-status").innerHTML = `החשבון <b dir="ltr">${esc(user.email)}</b> אינו מנהל באתר. אפשר לצאת ולהיכנס עם חשבון אחר.`;
         return;
       }
       store("oh-access", "admin"); // an admin enters the site without a phone number (gate.js)
+      if (from === "site" || new URLSearchParams(location.search).has("login")) { location.replace("/"); return; } // signed in from the entry screen: to the site
       $("adm-status").innerHTML = `מחובר/ת כ-<b dir="ltr">${esc(user.email)}</b>`;
       $("site-access").hidden = false; $("adm-admins").hidden = false;
       renderSiteAccess();
