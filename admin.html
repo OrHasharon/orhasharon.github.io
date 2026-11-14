@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ניהול · קהילת אור השרון</title>
+  <meta name="robots" content="noindex">
+  <script src="theme.js?v=1"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=51">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div class="brand">
+        <img class="logo" src="logo.png" alt="" width="64" height="64">
+        <div><h1>קהילת אור השרון · ניהול</h1></div>
+      </div>
+      <nav class="adm-nav"><a href="/">לאתר</a><button class="link-btn" id="adm-out" hidden>יציאה</button></nav>
+    </div>
+  </header>
+  <main class="wrap adm">
+    <p id="adm-status" class="adm-hint">טוען…</p>
+    <div id="adm-login" class="adm-box" hidden>
+      <h2>כניסת מנהל</h2>
+      <p class="adm-hint">כניסה עם חשבון ה-Gmail של המנהלים.</p>
+      <button class="adm-btn" id="adm-google">כניסה עם Google</button>
+    </div>
+    <section id="site-access" class="adm-box" hidden></section>
+    <section id="adm-admins" class="adm-box" hidden></section>
+  </main>
+  <div id="adm-toast" class="adm-toast" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="site-access.js?v=1"></script>
+  <script>
+    const sb = window.supabase.createClient("https://pualpwrkztjzhgpaqudm.supabase.co", "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9", { db: { schema: "or_hasharon_worship" } });
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const $ = (id) => document.getElementById(id);
+    let user = null, toastT = 0;
+    function toast(t) { const el = $("adm-toast"); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2600); }
+    const store = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+
+    $("adm-google").addEventListener("click", () => {
+      store("oh-admin-login", "1"); // the site root sends the Google answer back here (index.html)
+      sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/admin.html" } });
+    });
+    $("adm-out").addEventListener("click", async () => { await sb.auth.signOut(); store("oh-access", null); location.reload(); });
+
+    // ---------- managers (who may sign in here) ----------
+    let admins = [];
+    async function loadAdmins() {
+      const { data } = await sb.from("allowed_users").select("email, is_admin").eq("is_admin", true).order("email");
+      admins = data || [];
+    }
+    function renderAdmins() {
+      const me = (user?.email || "").toLowerCase();
+      $("adm-admins").innerHTML = `<h2>מנהלים</h2>
+        <p class="adm-hint">מי שברשימה יכול/ה להיכנס כאן עם Gmail ולנהל את המספרים.</p>
+        <ul class="adm-list">${admins.map((a) => `<li><span dir="ltr">${esc(a.email)}</span>${a.email.toLowerCase() === me ? " (את/ה)" : ` <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
+        <form class="adm-form" id="adm-add"><input name="email" type="email" required dir="ltr" placeholder="name@gmail.com"><button class="adm-btn" type="submit">הוספת מנהל/ת</button></form>`;
+    }
+    document.addEventListener("submit", async (e) => {
+      if (e.target.id !== "adm-add") return;
+      e.preventDefault();
+      const email = new FormData(e.target).get("email").trim().toLowerCase();
+      let { error } = await sb.from("allowed_users").insert({ email, is_admin: true });
+      if (error?.code === "23505") ({ error } = await sb.from("allowed_users").update({ is_admin: true }).eq("email", email));
+      toast(error ? "ההוספה נכשלה" : `${email} נוסף/ה כמנהל/ת`);
+      await loadAdmins(); renderAdmins();
+    });
+    document.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-adm-del]");
+      if (!b || !confirm(`להסיר את ${b.dataset.admDel} מהמנהלים?`)) return;
+      const { error } = await sb.from("allowed_users").update({ is_admin: false }).eq("email", b.dataset.admDel);
+      toast(error ? "ההסרה נכשלה" : "הוסר/ה");
+      await loadAdmins(); renderAdmins();
+    });
+
+    let started = false;
+    async function start() {
+      if (started) return; started = true;
+      const { data: { session } } = await sb.auth.getSession();
+      user = session?.user || null;
+      if (!user) { $("adm-status").hidden = true; $("adm-login").hidden = false; return; }
+      store("oh-admin-login", null);
+      $("adm-out").hidden = false;
+      const { data: isAdmin, error } = await sb.rpc("is_admin");
+      if (error || !isAdmin) {
+        $("adm-status").innerHTML = `החשבון <b dir="ltr">${esc(user.email)}</b> אינו מנהל באתר. אפשר לצאת ולהיכנס עם חשבון אחר.`;
+        return;
+      }
+      store("oh-access", "admin"); // an admin enters the site without a phone number (gate.js)
+      $("adm-status").innerHTML = `מחובר/ת כ-<b dir="ltr">${esc(user.email)}</b>`;
+      $("site-access").hidden = false; $("adm-admins").hidden = false;
+      renderSiteAccess();
+      await loadAdmins(); renderAdmins();
+    }
+    sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" && !user) { started = false; start(); } });
+    start();
+  </script>
+</body>
+</html>

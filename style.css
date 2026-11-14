@@ -323,7 +323,7 @@ body::before {
 .sched-links { margin-inline-start: auto; display: inline-flex; gap: 16px; }
 .sched-links .link-btn { margin: 0; }
 
-/* entry code (gate.js): hide the site until the code is entered */
+/* entry by phone number (gate.js): hide the site until a listed number is entered */
 html.locked body > *:not(#gate) { display: none !important; }
 #gate { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .gate-box { width: min(340px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 22px; text-align: center; display: grid; gap: 10px; }
@@ -333,9 +333,29 @@ html.locked body > *:not(#gate) { display: none !important; }
 .gate-box input { font: inherit; font-size: 1.4rem; text-align: center; letter-spacing: .3em; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 .gate-box button { font: inherit; font-weight: 700; padding: 10px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
 .gate-err { color: #e57373; margin: 0; }
+.gate-box input[type=tel] { letter-spacing: .08em; }
+.gate-box button:disabled { opacity: .7; cursor: wait; }
+.gate-admin { justify-self: center; margin-top: 10px; font-size: .8rem; color: var(--muted); text-decoration: underline; padding: 4px 8px; }
 /* icons that replace emoji (icons.js): inline, in the text colour; a few keep a meaning colour */
 .ic { display: inline-block; vertical-align: -.18em; flex: none; }
 .ic-crown { color: var(--accent-ink); }
 .ic-circle-check { color: #2e9e5b; }
 .ic-hourglass { color: var(--muted); }
 .ic-octagon-x { color: #d9534f; }
+
+/* admin page (admin.html + site-access.js): phone numbers allowed into the site, entry log, managers */
+.adm-nav { display: flex; gap: 16px; align-items: center; } .adm-nav a, .adm-nav .link-btn { color: var(--accent-ink); font-size: 1rem; margin: 0; }
+.adm { padding-top: 16px; padding-bottom: 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.adm-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.adm-box h2 { margin: 0 0 6px; font-size: 1.25rem; } .adm-box h3 { margin: 22px 0 4px; font-size: 1.05rem; }
+.adm-hint, .adm .hint { color: var(--muted); font-size: .9rem; margin: 4px 0 10px; }
+.adm .db-warning { border: 1px solid var(--accent); border-radius: 10px; padding: 10px 14px; }
+.adm-btn, .adm .btn { font: inherit; font-weight: 700; padding: 8px 16px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+.adm-form, .adm .add-user { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+.adm-form input, .adm .add-user input, .sa-name { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; flex: 1 1 160px; min-width: 0; }
+.sa-name { width: 100%; min-width: 90px; }
+.adm .link-btn { margin: 0; }
+.adm-list { margin: 0; padding-inline-start: 18px; } .adm-list li { margin: 4px 0; }
+.sa-devs { margin: 6px 0 0; padding-inline-start: 18px; font-size: .85rem; color: var(--muted); } .sa-devs li { margin: 4px 0; }
+.sa-dev { color: var(--ink); } .sa-nw { white-space: nowrap; }
+.adm-toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 10px; z-index: 50; }
