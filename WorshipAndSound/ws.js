@@ -437,9 +437,7 @@ function renderUsers() {
       <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
     </tbody></table></div>
     <form class="add-user"><input name="email" type="email" required placeholder="name@gmail.com" dir="ltr">
-      <label><input type="checkbox" name="admin"> מנהל/ת</label><button class="btn" type="submit">הוספה</button></form></div>
-    <div class="team-section" id="site-access"></div>`;
-  if (typeof renderSiteAccess === "function") renderSiteAccess(); // site-access.js
+      <label><input type="checkbox" name="admin"> מנהל/ת</label><button class="btn" type="submit">הוספה</button></form></div>`;
 }
 
 document.addEventListener("submit", async (e) => {
@@ -636,7 +634,7 @@ async function start() {
     return;
   }
   isAdmin = me.is_admin; myMemberId = me.member_id ?? null;
-  try { localStorage.setItem("oh-access", "ws"); } catch {} // signed in here = no phone number needed on the community site (gate.js)
+  try { localStorage.setItem("oh-access", "1"); } catch {} // signed in here = no entry code on the community site (gate.js)
   document.querySelector('[data-tab="users"]').hidden = !isAdmin;
   if (isAdmin) await loadUsers();
   $("login").hidden = true;

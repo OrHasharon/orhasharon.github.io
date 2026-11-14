@@ -323,7 +323,7 @@ body::before {
 .sched-links { margin-inline-start: auto; display: inline-flex; gap: 16px; }
 .sched-links .link-btn { margin: 0; }
 
-/* entry by phone number (gate.js): hide the site until a listed number is entered */
+/* entry code (gate.js): hide the site until the code is entered */
 html.locked body > *:not(#gate) { display: none !important; }
 #gate { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .gate-box { width: min(340px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 22px; text-align: center; display: grid; gap: 10px; }
@@ -333,9 +333,6 @@ html.locked body > *:not(#gate) { display: none !important; }
 .gate-box input { font: inherit; font-size: 1.4rem; text-align: center; letter-spacing: .3em; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 .gate-box button { font: inherit; font-weight: 700; padding: 10px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
 .gate-err { color: #e57373; margin: 0; }
-.gate-box input[type=tel] { letter-spacing: .08em; }
-.gate-box button:disabled { opacity: .7; cursor: wait; }
-.gate-admin { justify-self: center; margin-top: 10px; font-size: .8rem; color: var(--muted); text-decoration: underline; padding: 4px 8px; }
 /* icons that replace emoji (icons.js): inline, in the text colour; a few keep a meaning colour */
 .ic { display: inline-block; vertical-align: -.18em; flex: none; }
 .ic-crown { color: var(--accent-ink); }
