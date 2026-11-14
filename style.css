@@ -391,3 +391,8 @@ html.locked body > *:not(#gate) { display: none !important; }
 .ch-x span { flex: 1 1 0; font-size: .7rem; color: var(--muted); text-align: center; white-space: nowrap; direction: ltr; }
 .ch-table { margin-top: 10px; } .ch-table summary { cursor: pointer; color: var(--accent-ink); font-size: .88rem; }
 .ch-tip { position: fixed; z-index: 60; background: var(--ink); color: var(--bg); font-size: .85rem; padding: 6px 10px; border-radius: 8px; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.ch-slot { cursor: pointer; } .ch-slot.on { background: rgba(127, 127, 127, .2); }
+.ch-daybox { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--bg); }
+.ch-dayhead { display: flex; align-items: center; gap: 8px; } .ch-dayhead .link-btn { margin-inline-start: auto; }
+.ch-daylist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.ch-dayvids { font-size: .88rem; color: var(--muted); margin-top: 2px; }

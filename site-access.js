@@ -78,7 +78,8 @@ async function renderSiteAccess() {
     : `<div class="sa-ok">✓ אין מספר שנכנס לאתר מיותר ממכשיר אחד${typeof siteAdminPhones !== "undefined" && siteAdminPhones.size ? " (בלי המנהלים)" : ""}.</div>`;
   renderViews(nameOf, isAdminPhone);
   const report = document.getElementById("sa-report");
-  if (report) report.innerHTML = reportHtml + chartsHtml(siteAcc.logs.filter((r) => r.ok && !isAdminPhone(r.phone)), nameOf);
+  if (report) report.innerHTML = reportHtml + chartsHtml(siteAcc.logs.filter((r) => r.ok && !isAdminPhone(r.phone)), nameOf,
+    siteAcc.views.filter((r) => !isAdminPhone(r.phone)));
   const q = (...parts) => esc(parts.join(" ").toLowerCase() + " " + parts.map((x) => String(x || "").replace(/\D/g, "")).join(" "));
   el.innerHTML = `<h2>כניסה לאתר הקהילה בטלפון</h2>
     <p class="hint">רק מספרים שברשימה נכנסים לאתר. מכשיר שנכנס נזכר, ונבדק שוב בכל ביקור: מספר שיוסר ננעל בביקור הבא.
@@ -110,7 +111,7 @@ async function renderSiteAccess() {
 // one entry = one row of the log (a device's visits within 30 minutes are one row)
 const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const niceMax = (m) => { if (m <= 5) return Math.max(1, m); const p = 10 ** Math.floor(Math.log10(m)); const f = m / p; return (f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
-function chartsHtml(rows, nameOf) {
+function chartsHtml(rows, nameOf, views = []) {
   if (!rows.length) return `<div class="ch-box"><h2>כניסות לאתר</h2><p class="adm-hint">עוד אין כניסות להציג (בלי המנהלים).</p></div>`;
   const per = new Map();
   for (const r of rows) per.set(r.phone, (per.get(r.phone) || 0) + 1);
@@ -118,29 +119,42 @@ function chartsHtml(rows, nameOf) {
   const TOP = 15, top = people.slice(0, TOP), maxP = Math.max(...top.map((u) => u.n));
   const days = [];
   const today = new Date(); today.setHours(12, 0, 0, 0);
-  for (let i = 29; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); days.push({ key: dayKey(d), d, n: 0, who: new Set() }); }
+  const first = new Date(Math.min(...rows.map((r) => +new Date(r.at)))); first.setHours(12, 0, 0, 0);
+  const span = Math.min(29, Math.max(0, Math.round((today - first) / 864e5)));   // days back to the first entry
+  for (let i = span; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); days.push({ key: dayKey(d), d, n: 0, who: new Set() }); }
   const byKey = new Map(days.map((x) => [x.key, x]));
   for (const r of rows) { const x = byKey.get(dayKey(new Date(r.at))); if (x) { x.n++; x.who.add(r.phone); } }
   const maxD = niceMax(Math.max(...days.map((x) => x.n)));
   const total30 = days.reduce((a, x) => a + x.n, 0);
+  // for a click on a day: who entered and what they opened (views of that day)
+  siteAcc.days = new Map(days.map((x) => [x.key, { d: x.d, people: new Map() }]));
+  for (const r of rows) { const x = siteAcc.days.get(dayKey(new Date(r.at))); if (!x) continue;
+    const p = x.people.get(r.phone) || { name: nameOf(r.phone) || fmtPhone(r.phone), entries: 0, first: r.at, vids: new Map() };
+    p.entries++; if (r.at < p.first) p.first = r.at; x.people.set(r.phone, p); }
+  for (const v of views) { const x = siteAcc.days.get(dayKey(new Date(v.at))); if (!x) continue;
+    const p = x.people.get(v.phone) || { name: nameOf(v.phone) || v.name || fmtPhone(v.phone), entries: 0, first: v.at, vids: new Map() };
+    const t = (v.vtype === "hallel" ? "הלל" : v.title || "סרטון") + (v.vdate ? " " + fmtVDate(v.vdate).slice(0, 5) : "");
+    p.vids.set(t, (p.vids.get(t) || 0) + (v.hits || 1)); x.people.set(v.phone, p); }
+  const spanText = days.length === 1 ? "היום" : `${days.length} הימים האחרונים`;
   const people30 = new Set(rows.filter((r) => byKey.has(dayKey(new Date(r.at)))).map((r) => r.phone)).size;
   const dm = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
   const ticks = [maxD, maxD / 2, 0].filter((t, i, a) => Number.isInteger(t) && a.indexOf(t) === i);
   const word = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   return `<div class="ch-box">
     <h2>כניסות לאתר</h2>
-    <p class="adm-hint">${word(total30, "כניסה", "כניסות")} של ${word(people30, "אדם", "אנשים")} ב-30 הימים האחרונים · בלי המנהלים</p>
+    <p class="adm-hint">${word(total30, "כניסה", "כניסות")} של ${word(people30, "אדם", "אנשים")} ${days.length === 1 ? "היום" : "ב-" + spanText} · בלי המנהלים</p>
     <h3>כניסות לפי אדם</h3>
     <div class="ch-hbars">${top.map((u) => `<div class="ch-row" tabindex="0" data-tip="${esc(u.label)}: ${word(u.n, "כניסה", "כניסות")}">
       <span class="ch-lbl">${esc(u.label)}</span>
       <span class="ch-track"><span class="ch-bar" style="width:${Math.max(2, (u.n / maxP) * 92)}%"></span><span class="ch-val">${u.n}</span></span></div>`).join("")}</div>
     ${people.length > TOP ? `<p class="adm-hint">ועוד ${people.length - TOP} אנשים (בטבלה למטה)</p>` : ""}
-    <h3>כניסות לפי יום · 30 ימים אחרונים</h3>
+    <h3>כניסות לפי יום${days.length > 1 ? ` · ${spanText}` : ""} <small class="adm-hint">· לחיצה על עמודה מראה מי נכנס ומה פתח</small></h3>
     <div class="ch-cols-wrap">
       <div class="ch-grid">${ticks.map((t) => `<div class="ch-gl" style="bottom:${(t / maxD) * 100}%"><span>${t}</span></div>`).join("")}</div>
-      <div class="ch-cols">${days.map((x) => `<div class="ch-slot" tabindex="0" data-tip="${dm(x.d)}: ${word(x.n, "כניסה", "כניסות")}${x.who.size ? ` · ${word(x.who.size, "אדם", "אנשים")}` : ""}">${x.n ? `<span class="ch-col" style="height:${(x.n / maxD) * 100}%"></span>` : ""}</div>`).join("")}</div>
+      <div class="ch-cols">${days.map((x) => `<div class="ch-slot${siteAcc.dayOpen === x.key ? " on" : ""}" tabindex="0" role="button" data-day="${x.key}" data-tip="${dm(x.d)}: ${word(x.n, "כניסה", "כניסות")}${x.who.size ? ` · ${word(x.who.size, "אדם", "אנשים")}` : ""}">${x.n ? `<span class="ch-col" style="height:${(x.n / maxD) * 100}%"></span>` : ""}</div>`).join("")}</div>
     </div>
-    <div class="ch-x">${days.map((x, i) => `<span>${i % 5 === 4 || i === 29 ? dm(x.d) : ""}</span>`).join("")}</div>
+    <div class="ch-x">${days.map((x, i) => `<span>${days.length <= 10 || (days.length - 1 - i) % 5 === 0 ? dm(x.d) : ""}</span>`).join("")}</div>
+    <div id="ch-day">${dayPanelHtml(siteAcc.dayOpen)}</div>
     <details class="ch-table"><summary>הצגה כטבלה</summary><div class="duty-table"><table><thead><tr><th>יום</th><th>כניסות</th><th>אנשים</th></tr></thead><tbody>
       ${days.slice().reverse().map((x) => `<tr><td>${dm(x.d)}</td><td>${x.n}</td><td>${x.who.size}</td></tr>`).join("")}</tbody></table></div></details>
   </div>`;
@@ -192,6 +206,26 @@ function viewsFilter() {
   });
 }
 document.addEventListener("input", (e) => { if (e.target.id === "sv-search") { siteAcc.vq = e.target.value; viewsFilter(); } });
+
+// the clicked day: each person who entered, how many times, and the videos they opened that day
+function dayPanelHtml(key) {
+  const x = key && siteAcc.days?.get(key);
+  if (!x) return "";
+  const dm = `${String(x.d.getDate()).padStart(2, "0")}/${String(x.d.getMonth() + 1).padStart(2, "0")}/${x.d.getFullYear()}`;
+  const people = [...x.people.values()].sort((a, b) => a.first.localeCompare(b.first));
+  return `<div class="ch-daybox"><div class="ch-dayhead"><b>${dm}</b> · ${people.length} ${people.length === 1 ? "אדם" : "אנשים"}
+      <button class="link-btn" data-day-close aria-label="סגירה">✕</button></div>
+    ${people.length ? `<ul class="ch-daylist">${people.map((p) => `<li><b>${esc(p.name)}</b>${p.entries ? ` · ${p.entries === 1 ? "כניסה אחת" : p.entries + " כניסות"} · מ-${new Date(p.first).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}` : ""}
+      <div class="ch-dayvids">${p.vids.size ? [...p.vids].map(([t, n]) => `🎬 ${esc(t)}${n > 1 ? ` (${n})` : ""}`).join(" · ") : "לא פתח/ה סרטון"}</div></li>`).join("")}</ul>` : `<p class="adm-hint">אין כניסות ביום הזה.</p>`}</div>`;
+}
+document.addEventListener("click", (e) => {
+  const slot = e.target.closest("#sa-report .ch-slot[data-day]"), close = e.target.closest("[data-day-close]");
+  if (!slot && !close) return;
+  siteAcc.dayOpen = slot && siteAcc.dayOpen !== slot.dataset.day ? slot.dataset.day : null;
+  document.querySelectorAll("#sa-report .ch-slot").forEach((s) => s.classList.toggle("on", s.dataset.day === siteAcc.dayOpen));
+  document.getElementById("ch-day").innerHTML = dayPanelHtml(siteAcc.dayOpen);
+});
+document.addEventListener("keydown", (e) => { const s = e.target.closest?.("#sa-report .ch-slot[data-day]"); if (s && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); s.click(); } });
 
 // one tooltip for both charts: hover, keyboard focus or a tap
 (function chartTip() {
