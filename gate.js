@@ -63,6 +63,20 @@
     return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
+  // the site (app.js) reports an opened video: who (the phone this device entered with) watched what (site_views.sql).
+  // Admins without a phone on this device aren't logged. Fire and forget: a failure never bothers the viewer.
+  window.ohLogView = async (v) => {
+    const phone = get(PHONE);
+    if (!phone || !v?.id) return;
+    try {
+      await fetch(API.replace("site_enter", "site_view"), {
+        method: "POST", keepalive: true,
+        headers: { apikey: ANON, "Content-Type": "application/json", "Content-Profile": "or_hasharon_worship" },
+        body: JSON.stringify({ p_phone: phone, p_video: v.id, p_title: v.type === "hallel" ? "הלל" : v.title || "", p_date: v.date || null, p_type: v.type || null, p_device: await deviceName() }),
+      });
+    } catch {}
+  };
+
   const access = get(KEY), saved = get(PHONE);
   if (access === "admin") { adminButton(); return; } // signed in as an admin (admin.html)
   if (saved) {

@@ -1,6 +1,6 @@
 // admin.html (admins): who may enter the community site by phone number, and the entry log (site_access.sql).
 // Shows each listed number's last entry and devices, and every attempt with a number that is NOT on the list.
-const siteAcc = { loaded: false, loading: false, missing: false, phones: [], logs: [], err: "" };
+const siteAcc = { loaded: false, loading: false, missing: false, phones: [], logs: [], err: "", views: [], viewsMissing: false, vq: "" };
 
 const normPhone = (p) => { const d = String(p || "").replace(/\D/g, ""); return d.startsWith("972") ? "0" + d.slice(3) : d; };
 const fmtPhone = (p) => (/^05\d{8}$/.test(p) ? p.slice(0, 3) + "-" + p.slice(3) : p);
@@ -19,6 +19,10 @@ async function loadSiteAccess() {
   siteAcc.missing = !!e && /PGRST205|42P01|does not exist|schema cache/i.test(`${e.code} ${e.message}`);
   siteAcc.err = e && !siteAcc.missing ? e.message : "";
   siteAcc.phones = ph.data || [];
+  // who opened which video (site_views.sql); until it runs, the views box says so
+  const vw = await sb.from("site_views").select("*").order("at", { ascending: false }).limit(5000);
+  siteAcc.viewsMissing = !!vw.error;
+  siteAcc.views = vw.data || [];
   siteAcc.logs = lg.data || [];
   siteAcc.loaded = true; siteAcc.loading = false;
 }
@@ -72,6 +76,7 @@ async function renderSiteAccess() {
     ? `<div class="sa-alert" role="alert"><b>⚠ ${multi.length === 1 ? "מספר אחד נכנס" : `${multi.length} מספרים נכנסו`} לאתר מיותר ממכשיר אחד</b>
       <ul>${multi.map((g) => `<li>${esc(nameOf(g.phone) || "בלי שם")} · <bdi dir="ltr">${esc(fmtPhone(g.phone))}</bdi> · <b>${g.devices.size} מכשירים</b>${devList(g)}</li>`).join("")}</ul></div>`
     : `<div class="sa-ok">✓ אין מספר שנכנס לאתר מיותר ממכשיר אחד${typeof siteAdminPhones !== "undefined" && siteAdminPhones.size ? " (בלי המנהלים)" : ""}.</div>`;
+  renderViews(nameOf, isAdminPhone);
   const report = document.getElementById("sa-report");
   if (report) report.innerHTML = reportHtml + chartsHtml(siteAcc.logs.filter((r) => r.ok && !isAdminPhone(r.phone)), nameOf);
   const q = (...parts) => esc(parts.join(" ").toLowerCase() + " " + parts.map((x) => String(x || "").replace(/\D/g, "")).join(" "));
@@ -140,6 +145,54 @@ function chartsHtml(rows, nameOf) {
       ${days.slice().reverse().map((x) => `<tr><td>${dm(x.d)}</td><td>${x.n}</td><td>${x.who.size}</td></tr>`).join("")}</tbody></table></div></details>
   </div>`;
 }
+// ---------- views: who opened which video (admins left out) ----------
+const fmtVDate = (iso) => (iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "");
+function renderViews(nameOf, isAdminPhone) {
+  const el = document.getElementById("sa-views");
+  if (!el) return;
+  if (siteAcc.viewsMissing) {
+    el.innerHTML = `<h2>צפיות בסרטונים</h2><p class="db-warning">כדי לראות מי פתח איזה סרטון, צריך להריץ ב-Supabase את <b dir="ltr">site_views.sql</b>. הרישום מתחיל מרגע ההרצה.</p>`;
+    return;
+  }
+  const rows = siteAcc.views.filter((r) => !isAdminPhone(r.phone));
+  const vids = new Map();
+  for (const r of rows) {
+    let v = vids.get(r.video_id);
+    if (!v) vids.set(r.video_id, (v = { id: r.video_id, title: r.title || "", vdate: r.vdate, vtype: r.vtype, last: r.at, opens: 0, people: new Map() }));
+    v.opens += r.hits || 1;
+    const p = v.people.get(r.phone);
+    if (p) p.n += r.hits || 1; else v.people.set(r.phone, { name: nameOf(r.phone) || r.name || fmtPhone(r.phone), last: r.at, n: r.hits || 1 });
+  }
+  const list = [...vids.values()].sort((a, b) => (b.vdate || "").localeCompare(a.vdate || "") || b.last.localeCompare(a.last));
+  const label = (v) => (v.vtype === "hallel" ? "הלל" : v.title || "סרטון") + (v.vdate ? " · " + fmtVDate(v.vdate).slice(0, 5) : "");
+  const top = [...list].sort((a, b) => b.people.size - a.people.size || b.opens - a.opens).slice(0, 10);
+  const maxN = Math.max(1, ...top.map((v) => v.people.size));
+  const word = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const q = (v) => esc([v.title, v.vtype === "hallel" ? "הלל" : "דרשה", fmtVDate(v.vdate), fmtVDate(v.vdate).slice(0, 5), ...[...v.people.values()].map((p) => p.name)].join(" ").toLowerCase());
+  el.innerHTML = `<h2>צפיות בסרטונים</h2>
+    <p class="adm-hint">מי פתח איזה סרטון באתר (לא כמה זמן צפה) · ${word(list.length, "סרטון", "סרטונים")}, ${word(new Set(rows.map((r) => r.phone)).size, "אדם", "אנשים")} · בלי המנהלים</p>
+    ${list.length ? `<h3>הסרטונים הנצפים ביותר (לפי מספר אנשים)</h3>
+    <div class="ch-hbars">${top.map((v) => `<div class="ch-row" tabindex="0" data-tip="${esc(label(v))}: ${word(v.people.size, "אדם", "אנשים")}, ${word(v.opens, "פתיחה", "פתיחות")}">
+      <span class="ch-lbl">${esc(label(v))}</span>
+      <span class="ch-track"><span class="ch-bar" style="width:${Math.max(2, (v.people.size / maxN) * 92)}%"></span><span class="ch-val">${v.people.size}</span></span></div>`).join("")}</div>
+    <input type="search" class="sa-search" id="sv-search" placeholder="🔍 חיפוש לפי תאריך (14/11), שם הסרטון או שם של אדם" value="${esc(siteAcc.vq)}">
+    <div class="duty-table users-table"><table><thead><tr><th>תאריך</th><th>סרטון</th><th>אנשים</th><th>מי פתח</th></tr></thead><tbody>
+    ${list.map((v) => `<tr data-vq="${q(v)}"><td class="sa-nw">${fmtVDate(v.vdate) || "—"}</td><td>${esc(v.vtype === "hallel" ? "הלל" : v.title)}</td><td>${v.people.size}</td>
+      <td><details><summary>${word(v.people.size, "אדם", "אנשים")}</summary><ul class="sa-devs">${[...v.people.values()].sort((a, b) => b.last.localeCompare(a.last)).map((p) =>
+        `<li><span class="sa-dev">${esc(p.name)}</span> · ${fmtWhen(p.last)}${p.n > 1 ? ` · ${p.n} פעמים` : ""}</li>`).join("")}</ul></details></td></tr>`).join("")}
+    </tbody></table></div>` : `<p class="adm-hint">עוד אף אחד לא פתח סרטון מאז שהרישום התחיל.</p>`}`;
+  viewsFilter();
+}
+function viewsFilter() {
+  const v = (siteAcc.vq || "").trim().toLowerCase();
+  // the search box lives in the views box; a person's name also finds every video they opened
+  document.querySelectorAll("#sa-views tr[data-vq]").forEach((tr) => {
+    tr.hidden = !!v && !tr.dataset.vq.includes(v);
+    const d = tr.querySelector("details"); if (d) d.open = !!v && !tr.hidden; // while searching, the names show
+  });
+}
+document.addEventListener("input", (e) => { if (e.target.id === "sv-search") { siteAcc.vq = e.target.value; viewsFilter(); } });
+
 // one tooltip for both charts: hover, keyboard focus or a tap
 (function chartTip() {
   let tip = null;
@@ -151,7 +204,7 @@ function chartsHtml(rows, nameOf) {
     tip.style.top = Math.max(8, y - h - 12) + "px";
   };
   const hide = () => { if (tip) tip.hidden = true; };
-  const at = (e) => e.target.closest?.("#sa-report [data-tip]");
+  const at = (e) => e.target.closest?.("#sa-report [data-tip], #sa-views [data-tip]");
   document.addEventListener("pointerover", (e) => { const el = at(e); el ? show(el, e.clientX, e.clientY) : hide(); });
   document.addEventListener("pointermove", (e) => { const el = at(e); if (el) show(el, e.clientX, e.clientY); });
   document.addEventListener("focusin", (e) => { const el = at(e); if (el) { const r = el.getBoundingClientRect(); show(el, r.left + r.width / 2, r.top); } else hide(); });

@@ -114,6 +114,7 @@ function openPlayer(id) {
   $("player-yt").href = `https://www.youtube.com/watch?v=${id}`;
   if (!$("player").open) $("player").showModal();
   history.replaceState(null, "", `#v=${id}`);
+  window.ohLogView?.(v); // who opened what, for the admin page (gate.js)
 }
 function closePlayer() {
   $("frame").src = "about:blank";

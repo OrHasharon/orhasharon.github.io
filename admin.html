@@ -25,6 +25,7 @@
   <main class="wrap adm">
     <p id="adm-status" class="adm-hint">טוען…</p>
     <div id="sa-report" class="sa-report" hidden></div>
+    <section id="sa-views" class="adm-box" hidden></section>
     <div id="adm-login" class="adm-box" hidden>
       <h2>כניסת מנהל</h2>
       <p class="adm-hint">כניסה עם חשבון ה-Gmail של המנהלים.</p>
@@ -36,7 +37,7 @@
   <div id="adm-toast" class="adm-toast" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="site-access.js?v=6"></script>
+  <script src="site-access.js?v=7"></script>
   <script>
     const sb = window.supabase.createClient("https://pualpwrkztjzhgpaqudm.supabase.co", "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9", { db: { schema: "or_hasharon_worship" } });
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -140,7 +141,7 @@
       if (from === "site" || new URLSearchParams(location.search).has("login")) { location.replace("/"); return; } // signed in from the entry screen: to the site
       $("adm-status").innerHTML = `מחובר/ת כ-<b dir="ltr">${esc(user.email)}</b>`;
       $("site-access").hidden = false; $("adm-admins").hidden = false;
-      $("sa-report").hidden = false;
+      $("sa-report").hidden = false; $("sa-views").hidden = false;
       await loadAdmins(); renderAdmins();
       renderSiteAccess();
     }

@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
   <script>/* sign-in links (Supabase) land on the site root: hand them to the admin page (an admin sign-in started there) or the team page */ if (/access_token=|error_description=/.test(location.hash) || new URLSearchParams(location.search).has("code")) { let a = null; try { a = localStorage.getItem("oh-admin-login"); } catch {} location.replace((a ? "/admin.html" : "/WorshipAndSound/") + location.search + location.hash); }</script>
   <script>try { const p = new URLSearchParams(location.search).get("p") || "brown"; if (p !== "brown") document.documentElement.dataset.p = p; } catch {}</script>
-  <script src="gate.js?v=6"></script>
+  <script src="gate.js?v=7"></script>
   <link rel="stylesheet" href="style.css?v=57">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png">
@@ -83,6 +83,6 @@
   </dialog>
 
   <script src="schedule.js?v=37"></script>
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=39"></script>
 </body>
 </html>
