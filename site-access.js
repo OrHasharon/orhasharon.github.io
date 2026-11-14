@@ -58,7 +58,9 @@ async function renderSiteAccess() {
   }
   const ok = groupLogs(siteAcc.logs.filter((r) => r.ok));
   const listed = new Set(siteAcc.phones.map((p) => p.phone));
-  const bad = [...groupLogs(siteAcc.logs.filter((r) => !r.ok)).values()];
+  const isAdminPhone0 = (ph) => typeof siteAdminPhones !== "undefined" && siteAdminPhones.has(ph);
+  // attempts with a number that is on the list by now (or is an admin's) aren't "unknown" any more: left out
+  const bad = [...groupLogs(siteAcc.logs.filter((r) => !r.ok && !listed.has(r.phone) && !isAdminPhone0(r.phone))).values()];
   const nameOf = (ph) => siteAcc.phones.find((p) => p.phone === ph)?.name || "";
   // admins aren't checked (admin.html fills siteAdminPhones from the managers list)
   const isAdminPhone = (ph) => typeof siteAdminPhones !== "undefined" && siteAdminPhones.has(ph);
@@ -71,7 +73,7 @@ async function renderSiteAccess() {
       <ul>${multi.map((g) => `<li>${esc(nameOf(g.phone) || "בלי שם")} · <bdi dir="ltr">${esc(fmtPhone(g.phone))}</bdi> · <b>${g.devices.size} מכשירים</b>${devList(g)}</li>`).join("")}</ul></div>`
     : `<div class="sa-ok">✓ אין מספר שנכנס לאתר מיותר ממכשיר אחד${typeof siteAdminPhones !== "undefined" && siteAdminPhones.size ? " (בלי המנהלים)" : ""}.</div>`;
   const report = document.getElementById("sa-report");
-  if (report) report.innerHTML = reportHtml;
+  if (report) report.innerHTML = reportHtml + chartsHtml(siteAcc.logs.filter((r) => r.ok && !isAdminPhone(r.phone)), nameOf);
   const q = (...parts) => esc(parts.join(" ").toLowerCase() + " " + parts.map((x) => String(x || "").replace(/\D/g, "")).join(" "));
   el.innerHTML = `<h2>כניסה לאתר הקהילה בטלפון</h2>
     <p class="hint">רק מספרים שברשימה נכנסים לאתר. מכשיר שנכנס נזכר, ונבדק שוב בכל ביקור: מספר שיוסר ננעל בביקור הבא.
@@ -98,6 +100,63 @@ async function renderSiteAccess() {
     <p><button class="link-btn" data-sa-refresh>רענון</button></p>`;
   siteFilter();
 }
+
+// ---------- charts (top of the admin page): entries per person, entries per day. Admins left out. ----------
+// one entry = one row of the log (a device's visits within 30 minutes are one row)
+const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const niceMax = (m) => { if (m <= 5) return Math.max(1, m); const p = 10 ** Math.floor(Math.log10(m)); const f = m / p; return (f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
+function chartsHtml(rows, nameOf) {
+  if (!rows.length) return `<div class="ch-box"><h2>כניסות לאתר</h2><p class="adm-hint">עוד אין כניסות להציג (בלי המנהלים).</p></div>`;
+  const per = new Map();
+  for (const r of rows) per.set(r.phone, (per.get(r.phone) || 0) + 1);
+  const people = [...per].map(([ph, n]) => ({ ph, n, label: nameOf(ph) || fmtPhone(ph) })).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label, "he"));
+  const TOP = 15, top = people.slice(0, TOP), maxP = Math.max(...top.map((u) => u.n));
+  const days = [];
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  for (let i = 29; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); days.push({ key: dayKey(d), d, n: 0, who: new Set() }); }
+  const byKey = new Map(days.map((x) => [x.key, x]));
+  for (const r of rows) { const x = byKey.get(dayKey(new Date(r.at))); if (x) { x.n++; x.who.add(r.phone); } }
+  const maxD = niceMax(Math.max(...days.map((x) => x.n)));
+  const total30 = days.reduce((a, x) => a + x.n, 0);
+  const people30 = new Set(rows.filter((r) => byKey.has(dayKey(new Date(r.at)))).map((r) => r.phone)).size;
+  const dm = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const ticks = [maxD, maxD / 2, 0].filter((t, i, a) => Number.isInteger(t) && a.indexOf(t) === i);
+  const word = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  return `<div class="ch-box">
+    <h2>כניסות לאתר</h2>
+    <p class="adm-hint">${word(total30, "כניסה", "כניסות")} של ${word(people30, "אדם", "אנשים")} ב-30 הימים האחרונים · בלי המנהלים</p>
+    <h3>כניסות לפי אדם</h3>
+    <div class="ch-hbars">${top.map((u) => `<div class="ch-row" tabindex="0" data-tip="${esc(u.label)}: ${word(u.n, "כניסה", "כניסות")}">
+      <span class="ch-lbl">${esc(u.label)}</span>
+      <span class="ch-track"><span class="ch-bar" style="width:${Math.max(2, (u.n / maxP) * 92)}%"></span><span class="ch-val">${u.n}</span></span></div>`).join("")}</div>
+    ${people.length > TOP ? `<p class="adm-hint">ועוד ${people.length - TOP} אנשים (בטבלה למטה)</p>` : ""}
+    <h3>כניסות לפי יום · 30 ימים אחרונים</h3>
+    <div class="ch-cols-wrap">
+      <div class="ch-grid">${ticks.map((t) => `<div class="ch-gl" style="bottom:${(t / maxD) * 100}%"><span>${t}</span></div>`).join("")}</div>
+      <div class="ch-cols">${days.map((x) => `<div class="ch-slot" tabindex="0" data-tip="${dm(x.d)}: ${word(x.n, "כניסה", "כניסות")}${x.who.size ? ` · ${word(x.who.size, "אדם", "אנשים")}` : ""}">${x.n ? `<span class="ch-col" style="height:${(x.n / maxD) * 100}%"></span>` : ""}</div>`).join("")}</div>
+    </div>
+    <div class="ch-x">${days.map((x, i) => `<span>${i % 5 === 4 || i === 29 ? dm(x.d) : ""}</span>`).join("")}</div>
+    <details class="ch-table"><summary>הצגה כטבלה</summary><div class="duty-table"><table><thead><tr><th>יום</th><th>כניסות</th><th>אנשים</th></tr></thead><tbody>
+      ${days.slice().reverse().map((x) => `<tr><td>${dm(x.d)}</td><td>${x.n}</td><td>${x.who.size}</td></tr>`).join("")}</tbody></table></div></details>
+  </div>`;
+}
+// one tooltip for both charts: hover, keyboard focus or a tap
+(function chartTip() {
+  let tip = null;
+  const show = (el, x, y) => {
+    if (!tip) { tip = document.createElement("div"); tip.className = "ch-tip"; tip.setAttribute("role", "tooltip"); document.body.append(tip); }
+    tip.textContent = el.dataset.tip; tip.hidden = false;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.min(innerWidth - w - 8, Math.max(8, x - w / 2)) + "px";
+    tip.style.top = Math.max(8, y - h - 12) + "px";
+  };
+  const hide = () => { if (tip) tip.hidden = true; };
+  const at = (e) => e.target.closest?.("#sa-report [data-tip]");
+  document.addEventListener("pointerover", (e) => { const el = at(e); el ? show(el, e.clientX, e.clientY) : hide(); });
+  document.addEventListener("pointermove", (e) => { const el = at(e); if (el) show(el, e.clientX, e.clientY); });
+  document.addEventListener("focusin", (e) => { const el = at(e); if (el) { const r = el.getBoundingClientRect(); show(el, r.left + r.width / 2, r.top); } else hide(); });
+  document.addEventListener("scroll", hide, { passive: true });
+})();
 
 // search: hides the rows that don't match (name, or digits of the number), in both tables; no re-render, so typing keeps focus
 function siteFilter() {

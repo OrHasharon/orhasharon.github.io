@@ -369,3 +369,25 @@ html.locked body > *:not(#gate) { display: none !important; }
 .adm-list li { margin: 8px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .sa-report .sa-alert { margin: 0; } .sa-ok { background: rgba(102, 187, 106, .14); border: 1px solid rgba(102, 187, 106, .5); border-radius: 10px; padding: 10px 14px; }
 .sa-search { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; width: 100%; margin: 4px 0 8px; }
+/* admin charts (site-access.js): one series in the site's gold; hairline grid; text in text colours */
+.ch-box { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.ch-box h2 { margin: 0 0 4px; font-size: 1.25rem; } .ch-box h3 { margin: 18px 0 8px; font-size: 1rem; }
+.ch-hbars { display: grid; gap: 6px; }
+.ch-row { display: grid; grid-template-columns: minmax(70px, 160px) 1fr; align-items: center; gap: 10px; border-radius: 6px; outline-offset: 2px; }
+.ch-lbl { font-size: .9rem; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-track { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ch-bar { display: block; height: 18px; background: var(--accent); border-radius: 4px 0 0 4px; min-width: 3px; } /* RTL: the data end is on the left */
+.ch-val { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ch-row:hover .ch-bar, .ch-row:focus .ch-bar { filter: brightness(1.12); }
+.ch-cols-wrap { position: relative; height: 170px; margin-inline-start: 28px; }
+.ch-grid { position: absolute; inset: 0; pointer-events: none; }
+.ch-gl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.ch-gl span { position: absolute; inset-inline-start: -28px; top: -.6em; width: 22px; text-align: end; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ch-cols { position: absolute; inset: 0; display: flex; flex-direction: row-reverse; align-items: flex-end; gap: 2px; } /* time runs left to right, also on a Hebrew page */
+.ch-slot { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; border-radius: 4px; }
+.ch-slot:hover, .ch-slot:focus { background: rgba(127, 127, 127, .12); }
+.ch-col { display: block; width: 100%; max-width: 24px; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 3px; }
+.ch-x { display: flex; flex-direction: row-reverse; gap: 2px; margin-inline-start: 28px; margin-top: 4px; }
+.ch-x span { flex: 1 1 0; font-size: .7rem; color: var(--muted); text-align: center; white-space: nowrap; direction: ltr; }
+.ch-table { margin-top: 10px; } .ch-table summary { cursor: pointer; color: var(--accent-ink); font-size: .88rem; }
+.ch-tip { position: fixed; z-index: 60; background: var(--ink); color: var(--bg); font-size: .85rem; padding: 6px 10px; border-radius: 8px; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
