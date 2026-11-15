@@ -110,6 +110,8 @@
       if (yt) { yt.before(group); group.append(a, yt); } else { group.append(a); bar.append(group); }
       const sw = bar.querySelector(".theme-switch"); // theme.js adds it first (it loads earlier)
       if (sw) group.append(sw);
+      const ws = bar.querySelector(".ws-link"); // 'הלל וסאונד': last, so YouTube + the theme switch keep their places
+      if (ws) group.append(ws);
     };
     document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", add) : add();
   }

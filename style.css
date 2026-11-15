@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: #faf7f2;
   --surface: #ffffff;
   --ink: #2a2520;
@@ -464,5 +464,12 @@ button.duty-chip { cursor: pointer; }
 /* admin roles: 'מנהל/ת' / 'תורנויות בלבד' */
 .adm-role { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; width: auto; min-width: 9.5em; flex: none; }
 .adm-form .adm-role { padding: 6px 10px; }
-/* header: 'הלל וסאונד' (the team site) next to the YouTube link */
-.head-links { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+/* header: 'הלל וסאונד' (the team site) just before the YouTube link; the YouTube link and the theme switch stay where they were */
+.ws-link { display: inline-flex; align-items: center; gap: 8px; }
+.ws-link + .header-actions { margin-inline-start: 0; }
+.ws-link { color: inherit; text-decoration: none; border: 1px solid rgba(255, 255, 255, .3); padding: 8px 14px; border-radius: 999px; font-size: .95rem; }
+.ws-link:hover { background: rgba(255, 255, 255, .1); }
+.ws-link svg { width: 20px; height: 20px; fill: currentColor; }
+[data-theme="light"] .ws-link { border-color: var(--line); }
+[data-theme="light"] .ws-link:hover { background: rgba(0,0,0,.05); }
+.header-actions .ws-link { margin-inline-start: 0; }

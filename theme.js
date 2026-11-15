@@ -27,5 +27,7 @@
     });
     paint(btn);
     host.appendChild(btn);
+    const ws = host.querySelector(".ws-link"); // community site: 'הלל וסאונד' after the switch, so YouTube + the switch keep their places
+    if (ws) btn.after(ws);
   });
 })();
