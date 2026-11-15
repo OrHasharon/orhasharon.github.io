@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=61">
+  <link rel="stylesheet" href="style.css?v=62">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -80,7 +80,8 @@
         ${namesReady ? "" : `<p class="db-warning">כדי לשמור שם וטלפון למנהלים, צריך להריץ ב-Supabase את <b dir="ltr">site_admins.sql</b>.</p>`}
         ${missing.length ? `<p class="sa-alert" role="alert">⚠ חסר מספר טלפון ל: ${missing.map((a) => esc(a.display_name || a.email)).join(", ")}</p>` : ""}
         <ul class="adm-list">${admins.map((a) => `<li>${namesReady ? `<input class="adm-name" data-adm-name="${esc(a.email)}" value="${esc(a.display_name || "")}" placeholder="שם">
-          <input class="adm-name adm-phone${normPhone(a.phone).length < 9 ? " adm-missing" : ""}" type="tel" dir="ltr" data-adm-phone="${esc(a.email)}" value="${esc(a.phone ? fmtPhone(normPhone(a.phone)) : "")}" placeholder="טלפון (חובה)"> ` : ""}<span dir="ltr">${esc(a.email)}</span>${a.email.toLowerCase() === me ? " (את/ה)" : ` <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
+          <input class="adm-name adm-phone${normPhone(a.phone).length < 9 ? " adm-missing" : ""}" type="tel" dir="ltr" data-adm-phone="${esc(a.email)}" value="${esc(a.phone ? fmtPhone(normPhone(a.phone)) : "")}" placeholder="טלפון (חובה)"> ` : ""}${a.email.toLowerCase() === me ? `<span dir="ltr">${esc(a.email)}</span> (את/ה)`
+          : `<input class="adm-name adm-email" type="email" dir="ltr" data-adm-email="${esc(a.email)}" value="${esc(a.email)}" aria-label="מייל"> <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
         <form class="adm-form" id="adm-add">${namesReady ? `<input name="name" required placeholder="שם"><input name="phone" type="tel" required dir="ltr" placeholder="טלפון (חובה)">` : ""}<input name="email" type="email" required dir="ltr" placeholder="name@gmail.com"><button class="adm-btn" type="submit">הוספת מנהל/ת</button></form>`;
     }
     // an admin's phone also goes on the entry list (so it shows with its entries); an existing row stays as it is
@@ -111,7 +112,17 @@
 
     let started = false;
     document.addEventListener("change", async (e) => {
-      const n = e.target.closest("[data-adm-name]"), ph = e.target.closest("[data-adm-phone]");
+      const n = e.target.closest("[data-adm-name]"), ph = e.target.closest("[data-adm-phone]"), em = e.target.closest("[data-adm-email]");
+      if (em) {
+        // fix a mistyped Gmail (e.g. ".co" instead of ".com"); not your own, so nobody locks themselves out
+        const old = em.dataset.admEmail, email = em.value.trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)) { toast("כתובת המייל לא תקינה"); em.value = old; return; }
+        if (email === old.toLowerCase()) return;
+        const { error } = await sb.from("allowed_users").update({ email }).eq("email", old);
+        toast(error ? (error.code === "23505" ? "המייל הזה כבר קיים ברשימה" : "השמירה נכשלה") : "המייל עודכן");
+        await loadAdmins(); renderAdmins();
+        return;
+      }
       if (n) {
         const { error } = await sb.from("allowed_users").update({ display_name: n.value.trim() || null }).eq("email", n.dataset.admName);
         toast(error ? "השמירה נכשלה" : "השם נשמר");

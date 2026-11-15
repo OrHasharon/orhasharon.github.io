@@ -455,3 +455,4 @@ button.duty-chip { cursor: pointer; }
 .duty-msg .adm-btn { text-decoration: none; font-size: .88rem; padding: 5px 12px; }
 .duty-swaps li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .duty-swaps small { color: var(--muted); }
+.adm-email { width: 230px; }
