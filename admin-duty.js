@@ -10,7 +10,7 @@ const dutyAdm = { loaded: false, missing: false, teams: {}, swaps: [], meetings:
 function dutyReminderText(firstName, m) {
   const dd = m.dateText.slice(0, 5);
   const kind = meetingKind(m);
-  return `היי ${firstName}! 🙏\n` +
+  return `היי${firstName ? " " + firstName : ""}! 🙏\n` +
     `תזכורת: אתם בתורנות ב${kind} ביום ${m.day} ${dd}${m.place ? ` ב${m.place}` : ""}.\n` +
     (kind === "אסיפה" ? `הגעה ב-10:30.\n` : "") +
     `ההנחיות לתורנים:\nhttps://orhasharon.github.io/#guide\n` +
@@ -82,12 +82,12 @@ function renderDuty() {
   const preview = next.map((m) => `<div class="duty-rem">
       <h4>${esc(meetingKind(m))} · ${m.dateText.slice(0, 5)} — ${esc(m.duty)}</h4>
       ${dutyTeams(m.duty).map((n) => (dutyAdm.teams[n] || []).map((p) => {
-        const first = (dutyName(p) || "").split(" ")[0];
+        const first = ((siteAcc.phones || []).find((x) => x.phone === p)?.name || "").trim().split(/\s+/)[0];
         return `<div class="duty-msg"><span>${esc(dutyName(p))}</span>
           <a class="adm-btn" target="_blank" rel="noopener" href="https://wa.me/${("972" + p.replace(/^0/, ""))}?text=${encodeURIComponent(dutyReminderText(first, m))}">שליחה ידנית</a></div>`;
       }).join("") || `<p class="duty-miss">${esc(n)}: אין טלפון — לא תצא תזכורת</p>`).join("")}
     </div>`).join("");
-  const sample = next[0] ? dutyReminderText("רנדי", next[0]) : "";
+  const sample = next[0] ? dutyReminderText("[שם התורן/ית]", next[0]) : "";   // each message uses that person's own first name
   const swapRow = (s) => `<li><span>${s.from_date.slice(8, 10)}/${s.from_date.slice(5, 7)} ${esc(s.from_team)} ⇄ ${s.to_date.slice(8, 10)}/${s.to_date.slice(5, 7)} ${esc(s.to_team)}</span>
     <small>${{ pending: "ממתינה לאישור", approved: "אושרה ✓", declined: "נדחתה", cancelled: "בוטלה" }[s.status]} · ${esc(s.req_name || "")}</small>
     ${s.status === "approved" || s.status === "pending" ? `<button class="link-btn" data-duty-cancel="${s.id}">ביטול</button>` : ""}</li>`;
