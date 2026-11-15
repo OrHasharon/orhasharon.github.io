@@ -53,10 +53,12 @@
     // "admin" = started on this page (stay here). Either way the site root sends Google's answer back here (index.html).
     function googleSignIn(from) {
       store("oh-admin-login", from);
-      sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/admin.html" } });
+      // select_account: Google always asks which account (otherwise it silently reuses the last one, e.g. the community account)
+      sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + "/admin.html", queryParams: { prompt: "select_account" } } });
     }
     $("adm-google").addEventListener("click", () => googleSignIn("admin"));
-    $("adm-out").addEventListener("click", async () => { await sb.auth.signOut(); store("oh-access", null); location.reload(); });
+    // sign out → the page without ?login, so it doesn't start Google again by itself (that was a loop)
+    $("adm-out").addEventListener("click", async () => { await sb.auth.signOut(); store("oh-access", null); store("oh-admin-login", null); location.replace("/admin.html"); });
 
     // ---------- managers (who may sign in here) ----------
     // each admin: Gmail (signs in here) + name (shown on the entry screen's "נא פנה לאדמין") + phone (required: enters the
@@ -137,7 +139,8 @@
       const { data: isAdmin, error } = await sb.rpc("is_admin");
       if (error || !isAdmin) {
         if (!error) store("oh-access", null); // not an admin (any more): no free pass into the site on this device
-        $("adm-status").innerHTML = `החשבון <b dir="ltr">${esc(user.email)}</b> אינו מנהל באתר. אפשר לצאת ולהיכנס עם חשבון אחר.`;
+        $("adm-status").innerHTML = `החשבון <b dir="ltr">${esc(user.email)}</b> אינו מנהל באתר. <button class="adm-btn" id="adm-switch">כניסה עם חשבון אחר</button>`;
+        $("adm-switch").addEventListener("click", async () => { await sb.auth.signOut(); store("oh-access", null); googleSignIn(from || "admin"); });
         return;
       }
       store("oh-access", "admin"); // an admin enters the site without a phone number (gate.js)
