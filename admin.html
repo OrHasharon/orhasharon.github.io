@@ -118,8 +118,16 @@
         const old = em.dataset.admEmail, email = em.value.trim().toLowerCase();
         if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)) { toast("כתובת המייל לא תקינה"); em.value = old; return; }
         if (email === old.toLowerCase()) return;
-        const { error } = await sb.from("allowed_users").update({ email }).eq("email", old);
-        toast(error ? (error.code === "23505" ? "המייל הזה כבר קיים ברשימה" : "השמירה נכשלה") : "המייל עודכן");
+        let { error } = await sb.from("allowed_users").update({ email }).eq("email", old);
+        if (error?.code === "23505") {
+          // the right address is already there (e.g. a team-site user who isn't an admin): make that one the admin,
+          // with this row's name and phone, and drop the mistyped row
+          if (!confirm(`${email} כבר רשום/ה במערכת (בלי הרשאת ניהול). להפוך אותו/ה למנהל/ת ולמחוק את הכתובת השגויה ${old}?`)) { em.value = old; return; }
+          const a = admins.find((x) => x.email === old) || {};
+          ({ error } = await sb.from("allowed_users").update({ is_admin: true, ...(a.display_name ? { display_name: a.display_name } : {}), ...(a.phone ? { phone: a.phone } : {}) }).eq("email", email));
+          if (!error) ({ error } = await sb.from("allowed_users").delete().eq("email", old));
+        }
+        toast(error ? "השמירה נכשלה" : "המייל עודכן");
         await loadAdmins(); renderAdmins();
         return;
       }
