@@ -464,3 +464,5 @@ button.duty-chip { cursor: pointer; }
 /* admin roles: 'מנהל/ת' / 'תורנויות בלבד' */
 .adm-role { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; width: auto; min-width: 9.5em; flex: none; }
 .adm-form .adm-role { padding: 6px 10px; }
+/* header: 'הלל וסאונד' (the team site) next to the YouTube link */
+.head-links { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
