@@ -201,19 +201,14 @@ function renderSchedule(meetings) {
       <span class="sched-links">${toggle("guide", "הנחיות לתורנים", openPanel === "guide")}${toggle("duty", "שיבוץ מלא", openPanel === "duty")}</span>
     </div>
     ${dutyPanel}
-    ${openPanel === "guide" ? guideHtml(next.iso) : ""}` : ""}`;
+    ${openPanel === "guide" ? guideHtml() : ""}` : ""}`;
   el.querySelectorAll("[data-panel]").forEach((b) => b.addEventListener("click", () => {
     openPanel = openPanel === b.dataset.panel ? null : b.dataset.panel;
     renderSchedule(meetings);
   }));
-  el.querySelectorAll("[data-guide-item]").forEach((c) => c.addEventListener("change", () => {
-    guideSave(next.iso, c.dataset.guideItem, c.checked);
-    guideCounts(el);
-  }));
-  el.querySelector("[data-guide-reset]")?.addEventListener("click", () => { guideClear(next.iso); renderSchedule(meetings); });
 }
 
-// ---- the duty team's guidelines: three stages, each a checklist (ticks are kept on this device, per meeting) ----
+// ---- the duty team's guidelines: three stages, each a list of points ----
 const GUIDE = {
   verse: "״וּבְכֵן אִם תֹּאכְלוּ אוֹ תִשְׁתּוּ, אוֹ כָּל מַה שֶּׁתַּעֲשׂוּ — עֲשׂוּ אֶת הַכֹּל לְמַעַן כְּבוֹד אֱלֹהִים.״",
   ref: "קור״א י׳ 31",
@@ -244,40 +239,20 @@ const GUIDE = {
     ] },
   ],
 };
-const guideKey = (iso) => "duty-guide-" + iso;
-function guideDone(iso) { try { return JSON.parse(localStorage.getItem(guideKey(iso)) || "{}"); } catch { return {}; } }
-function guideSave(iso, id, on) {
-  const d = guideDone(iso); if (on) d[id] = 1; else delete d[id];
-  try { localStorage.setItem(guideKey(iso), JSON.stringify(d)); } catch {}
-}
-function guideClear(iso) { try { localStorage.removeItem(guideKey(iso)); } catch {} }
-function guideCounts(root) {
-  root.querySelectorAll(".guide-stage").forEach((s) => {
-    const all = s.querySelectorAll("input").length, on = s.querySelectorAll("input:checked").length;
-    s.querySelector(".guide-count").textContent = `${on}/${all}`;
-    s.classList.toggle("done", on === all);
-  });
-}
-function guideHtml(iso) {
-  const done = guideDone(iso);
-  const stage = (st, n) => {
-    const on = st.items.filter((_, i) => done[st.id + i]).length;
-    return `<section class="guide-stage${on === st.items.length ? " done" : ""}">
+function guideHtml() {
+  const stage = (st, n) => `<section class="guide-stage">
       <header class="guide-head">
         <span class="guide-num">${n + 1}</span>
         <span class="guide-titles"><small>${st.when}</small><strong>${st.title}</strong></span>
-        <span class="guide-count" aria-label="בוצעו">${on}/${st.items.length}</span>
       </header>
-      <ul class="guide-list">${st.items.map((t, i) => `<li><label><input type="checkbox" data-guide-item="${st.id + i}"${done[st.id + i] ? " checked" : ""}><span>${t}</span></label></li>`).join("")}</ul>
+      <ul class="guide-list">${st.items.map((t) => `<li>${t}</li>`).join("")}</ul>
     </section>`;
-  };
   return `<div class="guide">
     <div class="guide-top">
       <h3>הנחיות לצוות תורנות</h3>
       <p class="guide-verse">${GUIDE.verse} <small>(${GUIDE.ref})</small></p>
     </div>
     <div class="guide-stages">${GUIDE.stages.map(stage).join("")}</div>
-    <p class="guide-foot">אפשר לסמן ✓ תוך כדי עבודה — הסימון נשמר רק בטלפון הזה, למפגש הקרוב. <button class="link-btn" data-guide-reset>איפוס הסימונים</button></p>
   </div>`;
 }
 loadMeetings()
