@@ -161,7 +161,7 @@ fetch("data/videos.json", { cache: "no-cache" })
   .catch(() => { $("status").textContent = "שגיאה בטעינת הסרטונים"; });
 
 // ---- meeting schedule (data from schedule.js) ----
-let openPanel = null; // "schedule" | "duty" | null
+let openPanel = /^#guide\b/.test(location.hash) ? "guide" : null; // "schedule" | "duty" | "guide" | null (#guide = the reminder's link)
 
 function renderSchedule(meetings) {
   const upcoming = upcomingMeetings(meetings);
@@ -184,7 +184,7 @@ function renderSchedule(meetings) {
       <td class="col-times">${meetingKind(m) === "אסיפה" ? "התאספות 10:40 · הלל 11:00" : ""}</td>${hasNotes ? `<td>${esc(m.notes)}</td>` : ""}</tr>`).join("")) : "";
   const dutyPanel = openPanel === "duty" ? table(
     ["תאריך", "מפגש", "תורנות"],
-    upcoming.map((m) => `<tr class="${m === next ? "next" : ""}${m.duty === "כולם" ? " all" : ""}"><td>${short(m)}</td><td>${meetingKind(m)}</td><td>${esc(m.duty || "טרם שובץ")}</td></tr>`).join("")) : "";
+    upcoming.map((m) => `<tr class="${m === next ? "next" : ""}${m.duty === "כולם" ? " all" : ""}"><td>${short(m)}</td><td>${meetingKind(m)}</td><td>${esc(m.duty || "טרם שובץ")}${m.swapped ? ` <span class="swap-tag" title="הוחלף באתר">🔁 הוחלף</span>` : ""}</td></tr>`).join("")) + swapHtml(upcoming) : "";
 
   el.hidden = false;
   el.innerHTML = `
@@ -197,7 +197,7 @@ function renderSchedule(meetings) {
     ${schedulePanel}
     ${hasDuty ? `<div class="sched-row sched-duty">
       <span class="sched-label">תורנות</span>
-      <span>${next.duty ? esc(next.duty) : "טרם שובץ"}</span>
+      <span>${next.duty ? esc(next.duty) : "טרם שובץ"}${next.swapped ? ` <span class="swap-tag">🔁 הוחלף</span>` : ""}</span>
       <span class="sched-links">${toggle("guide", "הנחיות לתורנים", openPanel === "guide")}${toggle("duty", "שיבוץ מלא", openPanel === "duty")}</span>
     </div>
     ${dutyPanel}
@@ -206,6 +206,68 @@ function renderSchedule(meetings) {
     openPanel = openPanel === b.dataset.panel ? null : b.dataset.panel;
     renderSchedule(meetings);
   }));
+  el.querySelector("[data-swap-open]")?.addEventListener("click", () => { swap.open = !swap.open; swap.result = null; swap.err = ""; renderSchedule(meetings); });
+  el.querySelector("[data-swap-send]")?.addEventListener("click", () => swapSend(meetings));
+  if (openPanel === "guide" && /^#guide\b/.test(location.hash) && !renderSchedule.scrolled) {
+    renderSchedule.scrolled = true;
+    setTimeout(() => el.querySelector(".guide")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+}
+
+// ---- duty swap: someone on duty asks another team (duty.sql → duty_swap_request; approval on duty.html) ----
+const swap = { open: false, busy: false, err: "", result: null };
+const myPhone = () => { try { return localStorage.getItem("oh-phone") || ""; } catch { return ""; } };
+const SWAP_ERR = {
+  not_member: "המספר שאיתו נכנסת לאתר לא ברשימה. פנו למיכל.",
+  not_on_duty: "המספר שלך לא משויך לצוות הזה בתאריך שבחרת. פנו למיכל.",
+  bad_team: "בחרו צוות אחר להחלפה.",
+  no_phone: "לצוות הזה עוד אין טלפון ברשימה — פנו למיכל.",
+  bad_dates: "בחרו שני תאריכים שונים שעוד לא עברו.",
+};
+function swapHtml(upcoming) {
+  const rows = upcoming.flatMap((m) => dutyTeams(m.duty).map((t) => ({ m, t })));
+  if (!rows.length) return "";
+  const opt = (r) => `<option value="${r.m.iso}|${esc(r.t)}">${r.m.dateText.slice(0, 5)} · ${esc(r.t)}</option>`;
+  let body = "";
+  if (swap.open) {
+    if (!myPhone()) body = `<p class="swap-note">בקשת החלפה נשלחת מהטלפון שאיתו נכנסים לאתר (מספר מהרשימה).</p>`;
+    else if (swap.result) {
+      const r = swap.result;
+      body = `<p class="swap-ok">הבקשה מוכנה ✓ — שלחו אותה בוואטסאפ. כשהצד השני יאשר, השיבוץ באתר יתעדכן לבד.</p>
+        <div class="swap-wa">${r.to.map((x) => `<a class="btn wa" target="_blank" rel="noopener" href="https://wa.me/${waIntl(x.phone)}?text=${encodeURIComponent(r.text(x.name))}">שליחה ל${esc(x.name || x.phone)}</a>`).join("")}</div>`;
+    } else body = `
+      <label>התורנות שלי<select id="swap-from">${rows.map(opt).join("")}</select></label>
+      <label>להתחלף עם<select id="swap-to">${rows.map(opt).join("")}</select></label>
+      ${swap.err ? `<p class="swap-err" role="alert">${esc(swap.err)}</p>` : ""}
+      <button class="btn" data-swap-send ${swap.busy ? "disabled" : ""}>${swap.busy ? "שולח…" : "יצירת בקשה"}</button>`;
+  }
+  return `<div class="swap">
+    <button class="link-btn" data-swap-open aria-expanded="${swap.open}">${swap.open ? "סגירה" : "🔁 לא יכול/ה להגיע? בקשת החלפה"}</button>
+    ${swap.open ? `<div class="swap-box">${body}</div>` : ""}
+  </div>`;
+}
+const waIntl = (p) => { const d = String(p || "").replace(/\D/g, ""); return d.startsWith("0") ? "972" + d.slice(1) : d; };
+async function swapSend(meetings) {
+  const [fIso, fTeam] = (document.getElementById("swap-from")?.value || "").split("|");
+  const [tIso, tTeam] = (document.getElementById("swap-to")?.value || "").split("|");
+  const fm = meetings.find((m) => m.iso === fIso), tm = meetings.find((m) => m.iso === tIso);
+  if (!fm || !tm || fIso === tIso) { swap.err = SWAP_ERR.bad_dates; renderSchedule(meetings); return; }
+  swap.busy = true; swap.err = ""; renderSchedule(meetings);
+  try {
+    const r = await dutyRpc("duty_swap_request", { p_phone: myPhone(), p_from: fIso, p_from_duty: fm.duty, p_to_team: tTeam, p_to: tIso, p_to_duty: tm.duty });
+    if (r.error) swap.err = SWAP_ERR[r.error] || "הבקשה לא נוצרה";
+    else {
+      const url = location.origin + "/duty.html?s=" + r.token;
+      const d = (m) => `${meetingKind(m)} ${m.dateText.slice(0, 5)}`;
+      swap.result = { to: r.to || [], text: (name) =>
+        `היי${name ? " " + name.split(" ")[0] : ""}, כאן ${r.req_name}. אני לא יכול/ה להגיע לתורנות ב${d(fm)}. אפשר להתחלף? ` +
+        `אתם תהיו ב${d(fm)} ואנחנו ב${d(tm)}.
+לאישור או לסירוב בלחיצה:
+${url}
+תודה! 🙏` };
+    }
+  } catch { swap.err = "בקשת ההחלפה עוד לא פעילה באתר (ממתינה להפעלה). פנו למיכל."; }
+  swap.busy = false; renderSchedule(meetings);
 }
 
 // ---- the duty team's guidelines: three stages, each a list of points ----

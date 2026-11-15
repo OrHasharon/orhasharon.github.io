@@ -69,12 +69,32 @@ function mergeMeetings(sheet, roster) {
   }));
 }
 
+// duty swaps approved on the site (duty.sql → duty_overrides): replace the duty text of those dates.
+// Until duty.sql runs the call fails and nothing changes.
+const DUTY_RPC = "https://pualpwrkztjzhgpaqudm.supabase.co/rest/v1/rpc/";
+const DUTY_KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
+function dutyRpc(fn, body = {}) {
+  return fetch(DUTY_RPC + fn, {
+    method: "POST", body: JSON.stringify(body),
+    headers: { apikey: DUTY_KEY, "Content-Type": "application/json", "Content-Profile": "or_hasharon_worship", "Accept-Profile": "or_hasharon_worship" },
+  }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
+}
+const dutyTeams = (duty) => String(duty || "").split(",").map((x) => x.trim()).filter((x) => x && x !== "כולם");
+
 // all meetings, oldest first
 function loadMeetings() {
   return Promise.all([
     fetch(SCHEDULE_CSV).then((r) => r.text()).catch(() => ""),
     fetch(DUTY_JSON, { cache: "no-cache" }).then((r) => r.json()).catch(() => ({ meetings: [] })),
-  ]).then(([text, roster]) => mergeMeetings(parseSheet(text), roster.meetings || []));
+    dutyRpc("duty_overrides").catch(() => []),
+  ]).then(([text, roster, swaps]) => {
+    const ms = mergeMeetings(parseSheet(text), roster.meetings || []);
+    for (const o of Array.isArray(swaps) ? swaps : []) {
+      const m = ms.find((x) => x.iso === o.meeting_date);
+      if (m && o.duty) { m.dutyBase = m.duty; m.duty = o.duty; m.swapped = true; }
+    }
+    return ms;
+  });
 }
 
 const upcomingMeetings = (meetings, now = new Date()) => meetings.filter((m) => meetingEnd(m) > now);

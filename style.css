@@ -412,3 +412,46 @@ html.locked body > *:not(#gate) { display: none !important; }
 .ch-dayhead { display: flex; align-items: center; gap: 8px; } .ch-dayhead .link-btn { margin-inline-start: auto; }
 .ch-daylist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .ch-dayvids { font-size: .88rem; color: var(--muted); margin-top: 2px; }
+
+/* duty swap (app.js) */
+.swap { margin: 8px 0 0; }
+.swap-box { display: grid; gap: 10px; margin-top: 8px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.swap-box label { display: grid; gap: 4px; font-size: .92rem; color: var(--muted); }
+.swap-box select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 42px; max-width: 100%; }
+.swap-box .btn, .swap-page .btn, .swap-wa .btn { font: inherit; font-weight: 700; min-height: 44px; padding: 8px 18px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.swap-page .btn.ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+.btn.wa { background: #1f7a4d; color: #fff; }
+.swap-wa { display: flex; flex-wrap: wrap; gap: 8px; }
+.swap-err { margin: 0; color: #b3261e; font-weight: 600; }
+.swap-ok, .swap-done { margin: 0; color: var(--hallel); font-weight: 700; }
+.swap-note { margin: 0; color: var(--muted); }
+.swap-tag { font-size: .8rem; color: var(--hallel); white-space: nowrap; }
+.swap-page { max-width: 520px; padding-top: 28px; padding-bottom: 40px; }
+.swap-page h1 { font: 500 1.6rem "Google Sans", "Noto Sans Hebrew", sans-serif; letter-spacing: .03em; color: var(--accent-ink); margin: 0 0 14px; }
+.swap-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; display: grid; gap: 14px; }
+.swap-card p { margin: 0; }
+.swap-dates { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.swap-dates > div { display: grid; gap: 2px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.swap-dates small { color: var(--muted); }
+.swap-dates strong { font-size: 1.15rem; }
+.swap-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.swap-back { text-align: center; margin-top: 18px; }
+/* admin → duty (admin-duty.js) */
+.duty-teams { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.duty-team { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.duty-team.unmapped { border-color: var(--accent); }
+.duty-phones { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.duty-chip { font: inherit; font-size: .9rem; display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+button.duty-chip { cursor: pointer; }
+.duty-chip.sug { border-color: var(--hallel); color: var(--hallel); font-weight: 600; }
+.duty-chip.amb { border-color: var(--accent); }
+.duty-pick { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .9rem; }
+.duty-miss { color: var(--accent-ink); font-size: .9rem; }
+.duty-team select { font: inherit; font-size: .9rem; max-width: 100%; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+.duty-all { padding: 4px 12px; font-size: .9rem; }
+.duty-sample { white-space: pre-wrap; font: inherit; font-size: .92rem; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; }
+.duty-rem h4 { margin: 10px 0 6px; font-size: .95rem; }
+.duty-msg { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.duty-msg .adm-btn { text-decoration: none; font-size: .88rem; padding: 5px 12px; }
+.duty-swaps li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.duty-swaps small { color: var(--muted); }
