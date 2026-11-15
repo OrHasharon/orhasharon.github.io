@@ -456,3 +456,8 @@ button.duty-chip { cursor: pointer; }
 .duty-swaps li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .duty-swaps small { color: var(--muted); }
 .adm-email { width: 230px; }
+/* admin page tabs (admin.html) */
+.adm-tabs { margin: 0; }
+/* daily chart: with only a few days the columns stay close together (no wide gaps), from the left like a timeline */
+.ch-slot, .ch-x span { max-width: 56px; }
+.ch-col { max-width: 28px; }

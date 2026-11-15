@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=62">
+  <link rel="stylesheet" href="style.css?v=64">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -24,6 +24,11 @@
   </header>
   <main class="wrap adm">
     <p id="adm-status" class="adm-hint">טוען…</p>
+    <!-- after signing in: "משתמשים" (entries, site access, admins) and "תורניות" (duty reminders) -->
+    <nav class="tabs adm-tabs" role="tablist" hidden>
+      <button role="tab" data-adm-tab="users" aria-selected="true">משתמשים</button>
+      <button role="tab" data-adm-tab="duty" aria-selected="false">תורניות</button>
+    </nav>
     <div id="sa-report" class="sa-report" hidden></div>
     <section id="sa-views" class="adm-box" hidden></section>
     <div id="adm-login" class="adm-box" hidden>
@@ -110,6 +115,16 @@
       await loadAdmins(); renderAdmins();
     });
 
+    // tabs: which sections each one shows (the last tab is remembered on this device)
+    const ADM_TABS = { users: ["sa-report", "sa-views", "site-access", "adm-admins"], duty: ["adm-duty"] };
+    function showAdmTab(tab) {
+      if (!ADM_TABS[tab]) tab = "users";
+      for (const [k, ids] of Object.entries(ADM_TABS)) for (const id of ids) $(id).hidden = k !== tab;
+      document.querySelectorAll("[data-adm-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.admTab === tab));
+      store("oh-admin-tab", tab);
+    }
+    document.addEventListener("click", (e) => { const b = e.target.closest("[data-adm-tab]"); if (b) showAdmTab(b.dataset.admTab); });
+
     let started = false;
     document.addEventListener("change", async (e) => {
       const n = e.target.closest("[data-adm-name]"), ph = e.target.closest("[data-adm-phone]"), em = e.target.closest("[data-adm-email]");
@@ -165,11 +180,12 @@
       store("oh-access", "admin"); // an admin enters the site without a phone number (gate.js)
       if (from === "site" || new URLSearchParams(location.search).has("login")) { location.replace("/"); return; } // signed in from the entry screen: to the site
       $("adm-status").innerHTML = `מחובר/ת כ-<b dir="ltr">${esc(user.email)}</b>`;
-      $("site-access").hidden = false; $("adm-admins").hidden = false;
-      $("sa-report").hidden = false; $("sa-views").hidden = false;
+      document.querySelector(".adm-tabs").hidden = false;
       await loadAdmins(); renderAdmins();
       renderSiteAccess();
-      $("adm-duty").hidden = false; renderDuty();
+      renderDuty();
+      let tab = "users"; try { tab = localStorage.getItem("oh-admin-tab") || "users"; } catch {}
+      showAdmTab(tab);
     }
     sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" && !user) { started = false; start(); } });
     start();
