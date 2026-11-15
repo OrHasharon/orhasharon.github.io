@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=64">
+  <link rel="stylesheet" href="style.css?v=65">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -76,18 +76,29 @@
       if (error) ({ data } = await sb.from("allowed_users").select("email, is_admin").eq("is_admin", true).order("email"));
       admins = data || [];
       siteAdminPhones = new Set(admins.map((a) => normPhone(a.phone)).filter((p) => p.length >= 9));
+      const ed = await sb.from("duty_editors").select("email, display_name, phone").order("email");
+      editorsReady = !ed.error; editors = ed.data || [];
     }
+    // role: "admin" = everything; "duty" = only the "תורניות" tab (duty_editors.sql; no team-site access, no admin rights)
+    let editors = [], editorsReady = false;
+    const roleSel = (email, role, attr) => editorsReady ? `<select class="adm-name adm-role" ${attr}="${esc(email)}" aria-label="תפקיד">
+        <option value="admin"${role === "admin" ? " selected" : ""}>מנהל/ת</option><option value="duty"${role === "duty" ? " selected" : ""}>תורנויות בלבד</option></select>` : "";
     function renderAdmins() {
       const me = (user?.email || "").toLowerCase();
       const missing = namesReady ? admins.filter((a) => normPhone(a.phone).length < 9) : [];
       $("adm-admins").innerHTML = `<h2>מנהלים</h2>
         <p class="adm-hint">מנהלים נכנסים כאן עם Gmail, ונכנסים לאתר גם עם מספר הטלפון שלהם. השמות מופיעים למי שהמספר שלו לא ברשימה: "נא פנה לאדמין: …".</p>
         ${namesReady ? "" : `<p class="db-warning">כדי לשמור שם וטלפון למנהלים, צריך להריץ ב-Supabase את <b dir="ltr">site_admins.sql</b>.</p>`}
+        ${editorsReady ? `<p class="adm-hint"><b>תורנויות בלבד</b>: נכנס/ת כאן עם Gmail ורואה רק את לשונית התורניות (בלי גישה לאתר הצוות ולשאר הניהול).</p>` : `<p class="db-warning">כדי להוסיף "תורנויות בלבד", צריך להריץ ב-Supabase את <b dir="ltr">duty_editors.sql</b>.</p>`}
         ${missing.length ? `<p class="sa-alert" role="alert">⚠ חסר מספר טלפון ל: ${missing.map((a) => esc(a.display_name || a.email)).join(", ")}</p>` : ""}
         <ul class="adm-list">${admins.map((a) => `<li>${namesReady ? `<input class="adm-name" data-adm-name="${esc(a.email)}" value="${esc(a.display_name || "")}" placeholder="שם">
           <input class="adm-name adm-phone${normPhone(a.phone).length < 9 ? " adm-missing" : ""}" type="tel" dir="ltr" data-adm-phone="${esc(a.email)}" value="${esc(a.phone ? fmtPhone(normPhone(a.phone)) : "")}" placeholder="טלפון (חובה)"> ` : ""}${a.email.toLowerCase() === me ? `<span dir="ltr">${esc(a.email)}</span> (את/ה)`
-          : `<input class="adm-name adm-email" type="email" dir="ltr" data-adm-email="${esc(a.email)}" value="${esc(a.email)}" aria-label="מייל"> <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}</ul>
-        <form class="adm-form" id="adm-add">${namesReady ? `<input name="name" required placeholder="שם"><input name="phone" type="tel" required dir="ltr" placeholder="טלפון (חובה)">` : ""}<input name="email" type="email" required dir="ltr" placeholder="name@gmail.com"><button class="adm-btn" type="submit">הוספת מנהל/ת</button></form>`;
+          : `<input class="adm-name adm-email" type="email" dir="ltr" data-adm-email="${esc(a.email)}" value="${esc(a.email)}" aria-label="מייל"> ${roleSel(a.email, "admin", "data-adm-role")} <button class="link-btn" data-adm-del="${esc(a.email)}">הסרה</button>`}</li>`).join("")}
+          ${editors.map((d) => `<li class="adm-duty-row"><input class="adm-name" data-ed-name="${esc(d.email)}" value="${esc(d.display_name || "")}" placeholder="שם">
+            <input class="adm-name adm-phone" type="tel" dir="ltr" data-ed-phone="${esc(d.email)}" value="${esc(d.phone ? fmtPhone(normPhone(d.phone)) : "")}" placeholder="טלפון">
+            <input class="adm-name adm-email" type="email" dir="ltr" data-ed-email="${esc(d.email)}" value="${esc(d.email)}" aria-label="מייל">
+            ${roleSel(d.email, "duty", "data-ed-role")} <button class="link-btn" data-ed-del="${esc(d.email)}">הסרה</button></li>`).join("")}</ul>
+        <form class="adm-form" id="adm-add">${namesReady ? `<input name="name" required placeholder="שם"><input name="phone" type="tel" required dir="ltr" placeholder="טלפון (חובה)">` : ""}<input name="email" type="email" required dir="ltr" placeholder="name@gmail.com">${editorsReady ? `<select name="role" class="adm-role" aria-label="תפקיד"><option value="admin">מנהל/ת</option><option value="duty">תורנויות בלבד</option></select>` : ""}<button class="adm-btn" type="submit">הוספה</button></form>`;
     }
     // an admin's phone also goes on the entry list (so it shows with its entries); an existing row stays as it is
     async function adminPhoneToList(phone, name) {
@@ -100,12 +111,24 @@
       const f = new FormData(e.target), email = f.get("email").trim().toLowerCase(), name = (f.get("name") || "").trim();
       const phone = normPhone(f.get("phone") || "");
       if (namesReady && (phone.length < 9 || phone.length > 12)) { toast("צריך מספר טלפון תקין למנהל/ת"); return; }
+      if (f.get("role") === "duty") {
+        const { error } = await sb.from("duty_editors").upsert({ email, display_name: name || null, phone: phone || null }, { onConflict: "email" });
+        toast(error ? "ההוספה נכשלה" : `${name || email} נוסף/ה (תורנויות בלבד)`);
+        await loadAdmins(); renderAdmins(); return;
+      }
       const row = { is_admin: true, ...(namesReady ? { display_name: name, phone } : {}) };
       let { error } = await sb.from("allowed_users").insert({ email, ...row });
       if (error?.code === "23505") ({ error } = await sb.from("allowed_users").update(row).eq("email", email));
       toast(error ? "ההוספה נכשלה" : `${name || email} נוסף/ה כמנהל/ת`);
       await loadAdmins(); renderAdmins();
       if (!error && namesReady) await adminPhoneToList(phone, name);
+    });
+    document.addEventListener("click", async (e) => {
+      const d = e.target.closest("[data-ed-del]");
+      if (d && confirm(`להסיר את ${d.dataset.edDel} (תורנויות)?`)) {
+        const { error } = await sb.from("duty_editors").delete().eq("email", d.dataset.edDel);
+        toast(error ? "ההסרה נכשלה" : "הוסר/ה"); await loadAdmins(); renderAdmins(); return;
+      }
     });
     document.addEventListener("click", async (e) => {
       const b = e.target.closest("[data-adm-del]");
@@ -127,6 +150,36 @@
 
     let started = false;
     document.addEventListener("change", async (e) => {
+      const ar = e.target.closest("[data-adm-role]"), er = e.target.closest("[data-ed-role]");
+      if (ar && ar.value === "duty") {
+        // admin → duty only (keeps name and phone)
+        const a = admins.find((x) => x.email === ar.dataset.admRole) || {};
+        if (!confirm(`${a.display_name || a.email} יאבד/תאבד את הרשאת הניהול ויראה/תראה רק את לשונית התורניות. להמשיך?`)) { ar.value = "admin"; return; }
+        let { error } = await sb.from("duty_editors").upsert({ email: a.email, display_name: a.display_name || null, phone: a.phone || null }, { onConflict: "email" });
+        if (!error) ({ error } = await sb.from("allowed_users").update({ is_admin: false }).eq("email", a.email));
+        toast(error ? "השינוי נכשל" : "עודכן: תורנויות בלבד"); await loadAdmins(); renderAdmins(); return;
+      }
+      if (er && er.value === "admin") {
+        // duty only → admin
+        const d = editors.find((x) => x.email === er.dataset.edRole) || {};
+        const row = { is_admin: true, ...(namesReady ? { display_name: d.display_name || null, phone: d.phone || null } : {}) };
+        let { error } = await sb.from("allowed_users").insert({ email: d.email, ...row });
+        if (error?.code === "23505") ({ error } = await sb.from("allowed_users").update(row).eq("email", d.email));
+        if (!error) ({ error } = await sb.from("duty_editors").delete().eq("email", d.email));
+        toast(error ? "השינוי נכשל" : "עודכן: מנהל/ת"); await loadAdmins(); renderAdmins();
+        if (!error && d.phone) await adminPhoneToList(normPhone(d.phone), d.display_name || "");
+        return;
+      }
+      const en = e.target.closest("[data-ed-name]"), ep = e.target.closest("[data-ed-phone]"), ee = e.target.closest("[data-ed-email]");
+      if (en || ep || ee) {
+        const key = (en || ep || ee).dataset.edName || (en || ep || ee).dataset.edPhone || (en || ep || ee).dataset.edEmail;
+        let patch;
+        if (en) patch = { display_name: en.value.trim() || null };
+        else if (ep) { const v = normPhone(ep.value); if (ep.value.trim() && (v.length < 9 || v.length > 12)) { toast("מספר הטלפון לא תקין"); return; } patch = { phone: v || null }; }
+        else { const v = ee.value.trim().toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(v)) { toast("כתובת המייל לא תקינה"); ee.value = key; return; } patch = { email: v }; }
+        const { error } = await sb.from("duty_editors").update(patch).eq("email", key);
+        toast(error ? "השמירה נכשלה" : "נשמר"); await loadAdmins(); renderAdmins(); return;
+      }
       const n = e.target.closest("[data-adm-name]"), ph = e.target.closest("[data-adm-phone]"), em = e.target.closest("[data-adm-email]");
       if (em) {
         // fix a mistyped Gmail (e.g. ".co" instead of ".com"); not your own, so nobody locks themselves out
@@ -171,6 +224,16 @@
       store("oh-admin-login", null);
       $("adm-out").hidden = false;
       const { data: isAdmin, error } = await sb.rpc("is_admin");
+      if (!error && !isAdmin) {
+        const { data: duty } = await sb.rpc("is_duty_editor");
+        if (duty === true) {
+          // duty contributor: only the "תורניות" tab (no entry to the site without a phone, no other admin parts)
+          $("adm-status").innerHTML = `מחובר/ת כ-<b dir="ltr">${esc(user.email)}</b> · תורנויות`;
+          if (from === "site" || new URLSearchParams(location.search).has("login")) history.replaceState(null, "", "/admin.html");
+          await loadSiteAccess(); renderDuty(); showAdmTab("duty");
+          return;
+        }
+      }
       if (error || !isAdmin) {
         if (!error) store("oh-access", null); // not an admin (any more): no free pass into the site on this device
         $("adm-status").innerHTML = `החשבון <b dir="ltr">${esc(user.email)}</b> אינו מנהל באתר. <button class="adm-btn" id="adm-switch">כניסה עם חשבון אחר</button>`;

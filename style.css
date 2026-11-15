@@ -461,3 +461,6 @@ button.duty-chip { cursor: pointer; }
 /* daily chart: with only a few days the columns stay close together (no wide gaps), from the left like a timeline */
 .ch-slot, .ch-x span { max-width: 56px; }
 .ch-col { max-width: 28px; }
+/* admin roles: 'מנהל/ת' / 'תורנויות בלבד' */
+.adm-role { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; width: auto; min-width: 9.5em; flex: none; }
+.adm-form .adm-role { padding: 6px 10px; }
