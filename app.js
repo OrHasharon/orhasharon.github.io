@@ -201,11 +201,84 @@ function renderSchedule(meetings) {
       <span class="sched-links">${toggle("guide", "הנחיות לתורנים", openPanel === "guide")}${toggle("duty", "שיבוץ מלא", openPanel === "duty")}</span>
     </div>
     ${dutyPanel}
-    ${openPanel === "guide" ? `<figure class="guide"><img src="img/duty-guidelines.png?v=1" alt="הנחיות לצוות תורנות: הכנת אולם המפגש, בסיום האסיפה, בסיום זמן ההתחברות"></figure>` : ""}` : ""}`;
+    ${openPanel === "guide" ? guideHtml(next.iso) : ""}` : ""}`;
   el.querySelectorAll("[data-panel]").forEach((b) => b.addEventListener("click", () => {
     openPanel = openPanel === b.dataset.panel ? null : b.dataset.panel;
     renderSchedule(meetings);
   }));
+  el.querySelectorAll("[data-guide-item]").forEach((c) => c.addEventListener("change", () => {
+    guideSave(next.iso, c.dataset.guideItem, c.checked);
+    guideCounts(el);
+  }));
+  el.querySelector("[data-guide-reset]")?.addEventListener("click", () => { guideClear(next.iso); renderSchedule(meetings); });
+}
+
+// ---- the duty team's guidelines: three stages, each a checklist (ticks are kept on this device, per meeting) ----
+const GUIDE = {
+  verse: "״וּבְכֵן אִם תֹּאכְלוּ אוֹ תִשְׁתּוּ, אוֹ כָּל מַה שֶּׁתַּעֲשׂוּ — עֲשׂוּ אֶת הַכֹּל לְמַעַן כְּבוֹד אֱלֹהִים.״",
+  ref: "קור״א י׳ 31",
+  stages: [
+    { id: "a", when: "לפני האסיפה · 10:30", title: "הכנת אולם המפגש", items: [
+      "להגיע בזמן: <b>10:30</b>.",
+      "להדליק את האורות ולהפעיל את המזגן (בקיץ).",
+      "לסדר את הכיסאות לכיוון הקיר ללא חלונות, בחצי עיגול / בסגנון אמפיתיאטרון — <b>לא יותר מ־60 כיסאות</b> (בערך 5 שורות).",
+      "לפתוח את המטבח ולהכין מי שתייה: למלא מיכל במים קרים עם קרח, ולמלא מיחם במים ולהרתיח. להעמיד את שני המיכלים במקומם באולם.",
+      "לפתוח <b>שולחן אחד בלבד</b> לתה ולקפה (לא לפתוח את שולחנות האוכל).",
+      "לעזור למש׳ בביץ׳ בהכנת מה שנדרש עבור סעודת האדון, אם יש צורך.",
+      "להדריך את מי שמביאים אוכל/קינוחים להכניס אותם למטבח עד סיום האסיפה, אחרי זמן ההודיות והתפילה.",
+    ] },
+    { id: "b", when: "בסיום האסיפה", title: "אוכל והתחברות", items: [
+      "לעזור בהעמדת השולחנות לאוכל ולכיבוד, ושולחנות לישיבה (עם מפות) + כסאות.",
+      "לשים לב שהכול מתנהל בצורה מסודרת.",
+      "במידת הצורך, להעיר להורים בכבוד ובעדינות לשים לב לילדיהם.",
+      "לא לעזוב לפני שמסיימים את העבודה (השלב הבא).",
+    ] },
+    { id: "c", when: "בסיום זמן ההתחברות", title: "לפני שעוזבים", items: [
+      "להחזיר את כל הציוד (כולל שולחנות וכסאות) למקומו, כפי שהיה לפני תחילת האסיפה.",
+      "לשפוך את שאריות המים הקרים ואת המים החמים (<b>בזהירות!</b>) ולהחזיר את המכלים הריקים למקומם במטבח.",
+      "לוודא שהמטבח נקי ושלא נשארו בו כלים מלוכלכים.",
+      "לוודא שאין אשפה באולם או בסביבת המבנה: מפיות, צלחות/כוסות חד־פעמיות וכל פסולת אחרת.",
+      "להחליף שקיות אשפה בכל פחי הזבל ולזרוק את המלאות ל״צפרדע״ בחוץ.",
+      "לכבות: אורות, מאווררים, מזגנים.",
+      "<b>לפני העזיבה:</b> לוודא שכל הסעיפים בוצעו, ושאולם המפגש <b>נעול</b>.",
+    ] },
+  ],
+};
+const guideKey = (iso) => "duty-guide-" + iso;
+function guideDone(iso) { try { return JSON.parse(localStorage.getItem(guideKey(iso)) || "{}"); } catch { return {}; } }
+function guideSave(iso, id, on) {
+  const d = guideDone(iso); if (on) d[id] = 1; else delete d[id];
+  try { localStorage.setItem(guideKey(iso), JSON.stringify(d)); } catch {}
+}
+function guideClear(iso) { try { localStorage.removeItem(guideKey(iso)); } catch {} }
+function guideCounts(root) {
+  root.querySelectorAll(".guide-stage").forEach((s) => {
+    const all = s.querySelectorAll("input").length, on = s.querySelectorAll("input:checked").length;
+    s.querySelector(".guide-count").textContent = `${on}/${all}`;
+    s.classList.toggle("done", on === all);
+  });
+}
+function guideHtml(iso) {
+  const done = guideDone(iso);
+  const stage = (st, n) => {
+    const on = st.items.filter((_, i) => done[st.id + i]).length;
+    return `<section class="guide-stage${on === st.items.length ? " done" : ""}">
+      <header class="guide-head">
+        <span class="guide-num">${n + 1}</span>
+        <span class="guide-titles"><small>${st.when}</small><strong>${st.title}</strong></span>
+        <span class="guide-count" aria-label="בוצעו">${on}/${st.items.length}</span>
+      </header>
+      <ul class="guide-list">${st.items.map((t, i) => `<li><label><input type="checkbox" data-guide-item="${st.id + i}"${done[st.id + i] ? " checked" : ""}><span>${t}</span></label></li>`).join("")}</ul>
+    </section>`;
+  };
+  return `<div class="guide">
+    <div class="guide-top">
+      <h3>הנחיות לצוות תורנות</h3>
+      <p class="guide-verse">${GUIDE.verse} <small>(${GUIDE.ref})</small></p>
+    </div>
+    <div class="guide-stages">${GUIDE.stages.map(stage).join("")}</div>
+    <p class="guide-foot">אפשר לסמן ✓ תוך כדי עבודה — הסימון נשמר רק בטלפון הזה, למפגש הקרוב. <button class="link-btn" data-guide-reset>איפוס הסימונים</button></p>
+  </div>`;
 }
 loadMeetings()
   .then(renderSchedule)
