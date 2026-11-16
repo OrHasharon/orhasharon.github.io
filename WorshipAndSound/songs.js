@@ -26,18 +26,185 @@ const median = (arr) => { const a = [...arr].sort((x, y) => x - y); return a.len
 // Gives the same pieces as a PDF's text layer — words with their place on the page (y counted from the bottom) —
 // so pictures go through the very same song reader.
 const OCR_JS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
-let ocrWorker = null;
+let ocrWorker = null, ocrChords = null;
 async function ocrReady() {
   if (!window.Tesseract) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = OCR_JS; s.onload = ok; s.onerror = bad; document.head.append(s); });
   if (!ocrWorker) ocrWorker = await Tesseract.createWorker(["heb", "eng"]);
+  // a second reader for the chords: English only, looking for scattered short words ("sparse text")
+  if (!ocrChords) { ocrChords = await Tesseract.createWorker("eng"); await ocrChords.setParameters({ tessedit_pageseg_mode: "11" }); }
   return ocrWorker;
+}
+// black text on white: highlights (yellow under the chords), grey backgrounds and colours go away
+function inkOnly(src) {
+  const c = document.createElement("canvas"); c.width = src.width; c.height = src.height;
+  const g = c.getContext("2d"); g.drawImage(src, 0, 0);
+  const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // a highlighter colour (yellow / light green / pink: bright, with one channel lower) → white; ink stays as it is
+    const r = d[i], gg = d[i + 1], bb = d[i + 2], mx = Math.max(r, gg, bb), mn = Math.min(r, gg, bb);
+    if (mx > 170 && mn > 90 && mx - mn > 25) { d[i] = d[i + 1] = d[i + 2] = 255; continue; }
+    const lum = 0.299 * r + 0.587 * gg + 0.114 * bb;
+    d[i] = d[i + 1] = d[i + 2] = lum > 200 ? 255 : lum;
+  }
+  g.putImageData(im, 0, 0);
+  return c;
 }
 async function ocrItems(image, width, height) {
   const w = await ocrReady();
-  const { data } = await w.recognize(image);
-  return (data.words || []).filter((x) => x.text && x.text.trim() && x.confidence > 20).map((x) => ({
-    str: cleanStr(x.text), x: x.bbox.x0, y: height - x.bbox.y1, w: x.bbox.x1 - x.bbox.x0, h: (x.bbox.y1 - x.bbox.y0) * 0.8,
-  }));
+  const clean = OCR_OPT.ink ? inkOnly(image) : image;
+  const { data } = await w.recognize(clean);
+  const toItem = (x) => ({ str: cleanStr(x.text), x: x.bbox.x0, y: height - x.bbox.y1, w: x.bbox.x1 - x.bbox.x0, h: (x.bbox.y1 - x.bbox.y0) * 0.8, box: x.bbox, conf: x.confidence });
+  let items = (data.words || []).filter((x) => x.text && x.text.trim() && x.confidence > 20).map(toItem);
+  if (OCR_OPT.rows) items = await ocrChordRows(clean, items, height);
+  if (OCR_OPT.chordPass) {
+    // the chord reader's chords replace whatever the Hebrew reader saw in the same place — never over real words
+    const res = await ocrChords.recognize(clean);
+    const chords = (res.data.words || []).map((x) => ({ ...toItem(x), str: cleanStr(x.text).replace(/[|!.,:;'"`]+$/g, "").replace(/^[|!.,:;'"`]+/, "") }))
+      .filter((x) => CHORD_RE.test(x.str));
+    const overlap = (a, b) => {
+      const ix = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), iy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+      return ix > 0 && iy > 0 ? (ix * iy) / Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0)) : 0;
+    };
+    for (const ch of chords) {
+      const hit = items.filter((it) => overlap(it.box, ch.box) > 0.3);
+      if (hit.some((it) => /[א-ת]{2}/.test(it.str.replace(/ם$/, "")))) continue; // that's a word, not a chord
+      items = items.filter((it) => !hit.includes(it));
+      items.push(ch);
+    }
+  }
+  return items;
+}
+const OCR_OPT = { ink: true, chordPass: false, rows: true, lyricRows: true };
+
+// The lines of the picture, found from where the ink is; a line with no Hebrew word is a chord row. Each chord row is
+// cut out, enlarged and read again by a reader that only knows chord characters — so a "C" can't come back as "o".
+let ocrLine = null, ocrHeb = null;
+async function ocrChordRows(canvas, items, height) {
+  if (!ocrLine) {
+    ocrLine = await Tesseract.createWorker("eng");
+    await ocrLine.setParameters({ tessedit_pageseg_mode: "7", tessedit_char_whitelist: "ABCDEFGMmajsudi7965432#b/+()|- " });
+  }
+  const W = canvas.width, H = canvas.height, d = canvas.getContext("2d").getImageData(0, 0, W, H).data;
+  const ink = new Array(H).fill(0);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4] < 140) ink[y]++; // every pixel: a thin "C" has few
+  const bands = [];
+  for (let y = 0; y < H; y++) {
+    if (!ink[y]) continue;
+    let e = y; while (e + 1 < H && (ink[e + 1] || (e + 2 < H && ink[e + 2] && ink[e] > 0 && false))) e++; // lines touch only through ink
+    if (e - y >= 6) bands.push([y, e]);
+    y = e;
+  }
+  // a band much thinner than the text lines is niqqud dots or an underline, not a line of its own
+  const medH = median(bands.map((b) => b[1] - b[0])) || 20;
+  const LABEL = /^(בית|פזמון|גשר|מעבר|סיום|פתיחה|הקדמה|קודה|פרי|קורוס|[א-ד]['׳]?)[:'׳/]*$/;
+  const realHeb = (s) => { const h = s.replace(/[\u0591-\u05C7]/g, "").replace(/[^א-ת]/g, ""); return h.length >= 3 && !LABEL.test(s.replace(/[\u0591-\u05C7]/g, "").trim()); };
+  const hebIn = (b) => items.some((it) => { const cy = (it.box.y0 + it.box.y1) / 2; return cy >= b[0] && cy <= b[1] && realHeb(it.str); });
+  const labelsIn = (b) => items.filter((it) => { const cy = (it.box.y0 + it.box.y1) / 2; return cy >= b[0] && cy <= b[1] && LABEL.test(it.str.replace(/[\u0591-\u05C7]/g, "").trim()); });
+  let out = items;
+  for (const b of bands) {
+    if (b[1] - b[0] > Math.max(80, medH * 2.2) || b[1] - b[0] < medH * 0.45) continue;
+    const pad = 6, y0 = Math.max(0, b[0] - pad), y1 = Math.min(H, b[1] + pad), k = 2;
+    const c = document.createElement("canvas"); c.width = W * k; c.height = (y1 - y0) * k;
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(canvas, 0, y0, W, y1 - y0, 0, 0, c.width, c.height);
+    const { data } = await ocrLine.recognize(c);
+    // where the row has real Hebrew words, chords may only sit beside them, never on them
+    // a Hebrew word: 3+ letters, or a short word read with confidence ("כל", "לך") — a chord misread as "וח" comes back unsure
+    const anyHeb = (s, conf = 100) => { const h = s.replace(/[\u0591-\u05C7]/g, ""); return /[א-ת]{2}/.test(h) && !LABEL.test(h.trim()) && (h.replace(/[^א-ת]/g, "").length >= 3 || conf >= 75); };
+    const hebBoxes = hebIn(b) ? items.filter((it) => { const cy = (it.box.y0 + it.box.y1) / 2; return cy >= b[0] && cy <= b[1] && anyHeb(it.str, it.conf); }).map((it) => it.box) : [];
+    const found = [];
+    for (const w of data.words || []) {
+      let txt = w.text.replace(/[|()\-]/g, "").trim().replace(/^([A-G])\1$/, "$1"); // "EE": one letter read twice
+      // "CEm": either C#m ("#" read as "E") or two chords "C Em" written close — the gap after the first letter decides
+      const cem = txt.match(/^([A-G])E(m?)$/);
+      if (cem) {
+        const sy = (w.symbols || []).filter((s) => s.text.trim());
+        const gap = sy.length >= 2 ? sy[1].bbox.x0 - sy[0].bbox.x1 : 0, cw0 = sy.length ? sy[0].bbox.x1 - sy[0].bbox.x0 : 1;
+        txt = gap > cw0 * 0.45 ? `${cem[1]} E${cem[2]}` : `${cem[1]}#${cem[2]}`;
+      }
+      for (const tok of txt.split(" ").flatMap((piece, pi, all) => (splitGlued(piece) || []).map((g) => ({ ...g, at: g.at + all.slice(0, pi).join(" ").length + (pi ? 1 : 0) })))) {
+        if (!CHORD_RE.test(tok.name)) continue;
+        // a glued "FAm" → "F" + "Am": share the word's width by letters
+        const cw = (w.bbox.x1 - w.bbox.x0) / k / Math.max(1, txt.length);
+        const x = w.bbox.x0 / k + tok.at * cw, wid = tok.name.length * cw;
+        if (hebBoxes.some((hb) => Math.min(hb.x1, x + wid) - Math.max(hb.x0, x) > -wid * 0.3)) continue;
+        found.push({ str: tok.name, x, y: height - y1 + pad, w: wid, h: (b[1] - b[0]) * 0.8, box: { x0: x, x1: x + wid, y0: b[0], y1: b[1] } });
+      }
+    }
+    // a lyric line that came out with Latin junk ("NYY", "NIN": Hebrew with niqqud misread): read it again alone,
+    // enlarged, with a Hebrew-only reader, and keep that if it has more Hebrew
+    if (hebIn(b)) {
+      if (!OCR_OPT.lyricRows) continue;
+      const inBand = out.filter((it) => { const cy = (it.box.y0 + it.box.y1) / 2; return cy >= b[0] - 2 && cy <= b[1] + 2; });
+      {
+        if (!ocrHeb) { ocrHeb = await Tesseract.createWorker("heb"); await ocrHeb.setParameters({ tessedit_pageseg_mode: "7" }); }
+        const k3 = 2, c3 = document.createElement("canvas"); c3.width = W * k3; c3.height = (y1 - y0) * k3;
+        const g3 = c3.getContext("2d"); g3.fillStyle = "#fff"; g3.fillRect(0, 0, c3.width, c3.height); g3.drawImage(canvas, 0, y0, W, y1 - y0, 0, 0, c3.width, c3.height);
+        const r3 = await ocrHeb.recognize(c3);
+        const heb = (s) => (s.match(/[א-ת]/g) || []).length;
+        const words = (r3.data.words || []).filter((w) => w.text.trim() && w.confidence > 10);
+        // merge word by word: a re-read Hebrew word replaces what it covers when it has more Hebrew letters;
+        // anything it doesn't cover stays — a line is never lost
+        for (const w of words) {
+          if (!/[א-ת]{2}/.test(w.text)) continue;
+          const x = w.bbox.x0 / k3, wid = (w.bbox.x1 - w.bbox.x0) / k3, by0 = y0 + w.bbox.y0 / k3, by1 = y0 + w.bbox.y1 / k3;
+          const cover = out.filter((it) => inBand.includes(it) && Math.min(it.box.x1, x + wid) - Math.max(it.box.x0, x) > Math.min(it.box.x1 - it.box.x0, wid) * 0.5);
+          if (cover.length && heb(cover.map((c) => c.str).join("")) >= heb(w.text)) continue;
+          out = out.filter((it) => !cover.includes(it));
+          out.push({ str: cleanStr(w.text), x, y: height - by1, w: wid, h: (by1 - by0) * 0.8, box: { x0: x, x1: x + wid, y0: by0, y1: by1 } });
+        }
+      }
+    }
+    // nothing read on the whole line (often a lone chord): cut tightly around the ink and read it as one word
+    if (!found.length && !hebIn(b)) {
+      let x0 = W, x1 = 0;
+      for (let y = b[0]; y <= b[1]; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4] < 140) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+      if (x1 > x0 && x1 - x0 < W * 0.3) {
+        const k2 = 4, px = 10, cx0 = Math.max(0, x0 - px), cw = Math.min(W, x1 + px) - cx0;
+        const c2 = document.createElement("canvas"); c2.width = cw * k2; c2.height = (y1 - y0) * k2;
+        const g2 = c2.getContext("2d"); g2.fillStyle = "#fff"; g2.fillRect(0, 0, c2.width, c2.height);
+        g2.imageSmoothingEnabled = true; g2.drawImage(canvas, cx0, y0, cw, y1 - y0, 0, 0, c2.width, c2.height);
+        // sharp black on white
+        const im2 = g2.getImageData(0, 0, c2.width, c2.height);
+        for (let i = 0; i < im2.data.length; i += 4) { const v = im2.data[i] < 150 ? 0 : 255; im2.data[i] = im2.data[i + 1] = im2.data[i + 2] = v; }
+        g2.putImageData(im2, 0, 0);
+        const single = (x1 - x0) < (b[1] - b[0]) * 1.4; // one letter: read it as one character
+        await ocrLine.setParameters({ tessedit_pageseg_mode: single ? "10" : "8" });
+        const r2 = await ocrLine.recognize(c2);
+        await ocrLine.setParameters({ tessedit_pageseg_mode: "7" });
+        const tok = (r2.data.text || "").replace(/[|()\-\s]/g, "");
+        if (CHORD_RE.test(tok)) found.push({ str: tok, x: x0, y: height - y1 + pad, w: x1 - x0, h: (b[1] - b[0]) * 0.8, box: { x0, x1, y0: b[0], y1: b[1] } });
+      }
+    }
+    if (window.OCR_DEBUG) OCR_DEBUG.push({ band: b, heb: hebIn(b), text: (data.words || []).map((w) => w.text).join(" "), found: found.map((f) => f.str).join(" ") });
+    // in a row with words, chords only as a group (a chord row beside the words, e.g. the next column): a lone "D"
+    // there is a short word misread
+    if (hebBoxes.length && found.length < 2) found.length = 0;
+    // a chord row only if chords were really found there; what the first reader saw in it goes, except Hebrew words
+    if (!found.length) {
+      if (OCR_OPT.lyricRows && !hebIn(b) && b[1] - b[0] >= medH * 0.7) {
+        if (!ocrHeb) { ocrHeb = await Tesseract.createWorker("heb"); await ocrHeb.setParameters({ tessedit_pageseg_mode: "7" }); }
+        const k3 = 2, c3 = document.createElement("canvas"); c3.width = W * k3; c3.height = (y1 - y0) * k3;
+        const g3 = c3.getContext("2d"); g3.fillStyle = "#fff"; g3.fillRect(0, 0, c3.width, c3.height); g3.drawImage(canvas, 0, y0, W, y1 - y0, 0, 0, c3.width, c3.height);
+        const words = ((await ocrHeb.recognize(c3)).data.words || []).filter((w) => w.text.trim() && w.confidence > 50);
+        if (words.some((w) => /[א-ת]{2}/.test(w.text))) {
+          out = out.filter((it) => { const cy = (it.box.y0 + it.box.y1) / 2; return cy < b[0] - 2 || cy > b[1] + 2; });
+          for (const w of words) {
+            const x = w.bbox.x0 / k3, wid = (w.bbox.x1 - w.bbox.x0) / k3, by0 = y0 + w.bbox.y0 / k3, by1 = y0 + w.bbox.y1 / k3;
+            out.push({ str: cleanStr(w.text), x, y: height - by1, w: wid, h: (by1 - by0) * 0.8, box: { x0: x, x1: x + wid, y0: by0, y1: by1 } });
+          }
+        }
+      }
+      continue;
+    }
+    const reach = Math.max(3, (b[1] - b[0]) * 0.6);
+    const keep = labelsIn(b);
+    // what the first reader saw where the chords are found goes (a misread chord), the rest of the row stays
+    const near = (it) => found.some((f) => Math.min(f.box.x1, it.box.x1) - Math.max(f.box.x0, it.box.x0) > -f.w * 0.5);
+    out = out.filter((it) => { const cy = (it.box.y0 + it.box.y1) / 2; return cy < b[0] - reach || cy > b[1] + reach || keep.includes(it) || (anyHeb(it.str, it.conf) && (it.conf ?? 100) >= 75) || (hebBoxes.length && !near(it)); });
+    out.push(...found);
+  }
+  return out;
 }
 // text recognition reads chord letters as look-alikes: "G"→"6", "D"→"0"/"O", "m"→"ם". On a row of short tokens with no
 // Hebrew words (a chord row) put them back, so the chords land over the words like in a PDF.
@@ -49,11 +216,11 @@ function fixOcrChordRow(items) {
     if (!/^[םm]$/.test(s)) continue;
     const nb = items.find((o) => o !== it && /^[A-G0-9O][#b]?$/.test(o.str.trim()) && Math.abs(o.x + o.w - it.x) < it.h * 0.8);
     if (nb) { nb.str = nb.str.trim() + "m"; nb.w = it.x + it.w - nb.x; items.splice(k, 1); }
-    else if (s === "ם") it.str = "D"; // on its own, a "D" read as the look-alike "ם"
+
   }
   const toks = items.map((i) => i.str.trim()).filter(Boolean);
   if (!toks.length || toks.some((t) => t.length > 6 || /[א-ת]{2}/.test(t.replace(/ם$/, "")))) return;
-  const fix = (t) => t.replace(/^6/, "G").replace(/^[0Oo]/, "D").replace(/^8/, "B").replace(/ם/g, "m").replace(/^([A-G])\s*[#H]/, "$1#");
+  const fix = (t) => t.replace(/^6/, "G").replace(/^8/, "B").replace(/ם/g, "m").replace(/^([A-G])\s*[#H]/, "$1#");
   const fixed = toks.map(fix);
   const chordish = fixed.filter((t) => CHORD_RE.test(t)).length;
   if (chordish < Math.ceil(toks.length * 0.6)) return;
@@ -183,11 +350,15 @@ async function pdfToSongs(file) {
       lines.sort((a, b) => b.y - a.y);
       for (const l of lines) {
         if (src[p - 1].ocr) fixOcrChordRow(l.items);
+        // a line of only a dash / bar / dot (a mark at the side of a sheet) is not a line of the song
+        if (l.items.every((i) => /^[\s\-–—|.·_~•]*$/.test(i.str))) continue;
         // "בית א'  F  Gm  Dm": a section name on the chord row → the name on its own line, then the chords
         const heb = l.items.filter((i) => HEB.test(i.str)), rest = l.items.filter((i) => !HEB.test(i.str) && i.str.trim());
         const name = heb.sort((a, b) => b.x - a.x).map((i) => i.str.trim()).join(" ").trim();
         const chordy = rest.length && rest.every((i) => i.str.trim().split(/\s+/).every((t) => CHORD_RE.test(t) || /^[|/\-–()x\d]+$/.test(t)));
-        if (heb.length && chordy && /^(בית\s*[א-ת0-9]?['׳]?|פזמון|גשר|מעבר|סיום|פתיחה|קודה)\s*:?$/.test(name)) {
+        // also a few words on a chord row (the end of the line above, wrapped onto it): the words first, then the chords
+        const chordCount = rest.reduce((n, i) => n + i.str.trim().split(/\s+/).filter((x) => CHORD_RE.test(x)).length, 0);
+        if (heb.length && chordy && (chordCount >= 2 || /^(בית\s*[א-ת0-9]?['׳]?|פזמון|גשר|מעבר|סיום|פתיחה|קודה)\s*:?$/.test(name))) {
           all.push({ ...toLine({ y: l.y, items: heb }), page: p, y: l.y + 0.01 });
           all.push({ ...toLine({ y: l.y, items: rest }), page: p, y: l.y });
           continue;
@@ -261,6 +432,11 @@ async function pdfToSongs(file) {
     if (!current) { current = { title: `עמוד ${ln.page}`, lines: [] }; songs.push(current); }
     current.lines.push(ln);
   }
+  // a picture is one sheet: one song (logos, a phone's status bar or a second heading don't start another)
+  if (pdfToSongs.ocr && src.length === 1 && songs.length > 1) {
+    const lines = songs.flatMap((s, i) => (i && !/^עמוד \d+$/.test(s.title) ? [{ text: s.title, chords: null, page: 1, y: 0 }] : []).concat(s.lines));
+    songs.splice(0, songs.length, { title: "עמוד 1", lines });
+  }
   // one song with no title line: its name is the file's ("נושא את עיניי אל ישוע-1.pdf" → "נושא את עיניי אל ישוע")
   // — or its first line, when the next one is the credits ("מילים ולחן: …"): then that line is the name, not lyrics
   if (songs.length === 1 && /^עמוד \d+$/.test(songs[0].title)) {
@@ -312,7 +488,15 @@ async function pdfToSongs(file) {
         lines.splice(i, 2, `{c: ${m[2]}}`, `[${m[1]}]${lines[i + 1].trimStart()}`);
       }
     }
-    return { title, pageTitle, num, content: (capo ? `{capo: ${capo}}\n` : "") + lines.map(fixNiqqudLine).join("\n"), include: true };
+    // a picture: a line with no chords that is only scraps ("חא", "חח הא") or Hebrew mixed with digits / brackets
+    // ("וחץ)ם", "חא8)0") is a chord row read as Hebrew — not lyrics
+    const junk = (l) => {
+      if (!pdfToSongs.ocr || /\[|^\{/.test(l) || !l.trim()) return false;
+      const toks = l.trim().split(/\s+/);
+      return toks.every((w) => w.replace(/[^א-ת]/g, "").length <= 2) || toks.some((w) => /[א-ת]/.test(w) && /[0-9()|\/]/.test(w));
+    };
+    const kept = lines.filter((l) => !junk(l));
+    return { title, pageTitle, num, content: ((capo ? `{capo: ${capo}}\n` : "") + kept.map(fixNiqqudLine).join("\n")).replace(/(\[[^\]]+\])\1+/g, "$1"), include: true };
   }).filter((s) => s.content.trim()).map(stripCapoLines).map((s, _, all) => {
     // songs with the same name: add a line of the song in brackets, e.g. "אבינו מלכנו (שמענו קולנו)".
     // Use the first line that isn't just the name again and that differs between the twins.
