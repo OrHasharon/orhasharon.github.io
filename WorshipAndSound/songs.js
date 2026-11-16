@@ -1,4 +1,4 @@
-﻿// Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js and the chord helpers from chords.js.
+// Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js and the chord helpers from chords.js.
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 const songsState = { loaded: false, list: [], query: "", view: "list", current: null, shift: 0, noCapo: false, present: false, presentChords: false, drafts: [], importing: false };
@@ -46,17 +46,32 @@ async function pdfToSongs(file) {
         if (line) line.items.push(it); else lines.push({ y: it.y, items: [it] });
       }
       lines.sort((a, b) => b.y - a.y);
-      for (const l of lines) all.push({ ...toLine(l), page: p, y: l.y });
+      for (const l of lines) {
+        // "בית א'  F  Gm  Dm": a section name on the chord row → the name on its own line, then the chords
+        const heb = l.items.filter((i) => HEB.test(i.str)), rest = l.items.filter((i) => !HEB.test(i.str) && i.str.trim());
+        const name = heb.sort((a, b) => b.x - a.x).map((i) => i.str.trim()).join(" ").trim();
+        const chordy = rest.length && rest.every((i) => i.str.trim().split(/\s+/).every((t) => CHORD_RE.test(t) || /^[|/\-–()x\d]+$/.test(t)));
+        if (heb.length && chordy && /^(בית\s*[א-ת0-9]?['׳]?|פזמון|גשר|מעבר|סיום|פתיחה|קודה)\s*:?$/.test(name)) {
+          all.push({ ...toLine({ y: l.y, items: heb }), page: p, y: l.y + 0.01 });
+          all.push({ ...toLine({ y: l.y, items: rest }), page: p, y: l.y });
+          continue;
+        }
+        all.push({ ...toLine(l), page: p, y: l.y });
+      }
     }
   }
   if (!totalText) return null; // scanned images, no text layer
+  pdfToSongs.pages = pdf.numPages; pdfToSongs.book = false;
 
   // table of contents pages ("283 אגילה בן" lines, no chords) are skipped: the site builds its own index
   const TOC_LINE = /^\s*\d{1,4}\s+[^\d\s.)]|[^\d\s.(]\s+\d{1,4}\s*$/;
   const tocPages = new Set();
   for (const pg of new Set(all.map((l) => l.page))) {
     const lyric = all.filter((l) => l.page === pg && !l.chords && l.text.trim());
-    const toc = lyric.filter((l) => TOC_LINE.test(l.text) && !/^\s*\d{1,4}\s*[.)]/.test(l.text));
+    // "283 אגילה בן" (a book's index), or an album's track list ".1 די לי" / "1. די לי" when nearly the whole page is that
+    const track = lyric.filter((l) => /^\s*\.?\d{1,2}\.?\s+\S/.test(l.text) && l.text.trim().length < 40);
+    const toc = track.length >= 5 && track.length >= lyric.length * 0.7 ? track
+      : lyric.filter((l) => TOC_LINE.test(l.text) && !/^\s*\d{1,4}\s*[.)]/.test(l.text));
     if (toc.length >= 5 && toc.length >= lyric.length * 0.6) tocPages.add(pg);
   }
   // the table of contents names each number: that name wins over the page heading (e.g. 316 "ישוע חי")
@@ -74,16 +89,36 @@ async function pdfToSongs(file) {
   // Otherwise fall back to big text (compared with the lyrics, not the smaller chord lines).
   const NUMBERED = /^\s*\d{1,4}\s*[.)]\s*\S|\S\s*[.(]\s*\d{1,4}\s*$/;
   const numbered = all.filter((l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80);
+  pdfToSongs.book = numbered.length > 0; // a numbered songbook: many songs per file is expected
   const lyricH = median(all.filter((l) => !l.chords).map((l) => l.h));
+  // Not a numbered songbook (e.g. one song in a PDF): a song starts only with big text at the TOP of a page.
+  // Big lines further down ("פזמון", "בית 2", a bigger chorus) stay inside the song — before, one song became 4.
+  // the page's heading = the biggest of its first 3 lines; a bare page number ("1") at the top is left out altogether
+  const firstOfPage = new Set();
+  const pageNumber = (l) => /^\s*\d{1,3}\s*$/.test(l.text);
+  for (const pg of new Set(all.map((l) => l.page))) {
+    const top = all.filter((l) => l.page === pg && !l.chords && l.text.trim()).slice(0, 4);
+    top.filter((l, i) => i < 2 && pageNumber(l)).forEach((l) => all.splice(all.indexOf(l), 1));
+    const cand = top.filter((l) => !pageNumber(l)).slice(0, 3);
+    const big = cand.reduce((m, l) => (!m || l.h > m.h + 0.5 ? l : m), null);
+    if (big) firstOfPage.add(big);
+  }
   const isTitle = numbered.length
     ? (l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80
-    : (l) => !l.chords && l.h > lyricH * 1.2 && l.text.trim().length < 60;
+    : (l) => firstOfPage.has(l) && l.h > lyricH * 1.2 && l.text.trim().length < 60;
   let current = null;
+  // a key in brackets after the name ("דַּי לִי(F)", mirrored ")(Eb") isn't part of it
+  const KEY_IN_TITLE = /\s*[()]\s*\**\s*[A-G][#b]?m?\s*[()]?\s*$|\s*[()]{2}\s*\**\s*[A-G][#b]?m?\s*$/;
   for (const ln of all) {
-    if (isTitle(ln)) { current = { title: ln.text.trim(), lines: [] }; songs.push(current); continue; }
+    if (isTitle(ln)) {
+      const raw = ln.text.trim(), title = raw.replace(KEY_IN_TITLE, "").trim() || raw;
+      current = { title, lines: [] }; songs.push(current); continue;
+    }
     if (!current) { current = { title: `עמוד ${ln.page}`, lines: [] }; songs.push(current); }
     current.lines.push(ln);
   }
+  // one song with no title line: its name is the file's ("נושא את עיניי אל ישוע-1.pdf" → "נושא את עיניי אל ישוע")
+  if (songs.length === 1 && /^עמוד \d+$/.test(songs[0].title)) songs[0].title = file.name.replace(/\.pdf$/i, "").replace(/[-_ ]\(?\d+\)?$/, "").trim() || songs[0].title;
   // the TOC name wins only when it is really another name (not a spelling of the same one) and the number is unique in the book
   const numCount = {};
   songs.forEach((s) => { const n = cleanTitle(s.title).num; if (n) numCount[n] = (numCount[n] || 0) + 1; });
@@ -99,11 +134,15 @@ async function pdfToSongs(file) {
   };
   const sameName = (a, b) => { const A = words(a), B = words(b); return A.every((w) => B.includes(w)) || B.every((w) => A.includes(w)) || near(A.join(""), B.join("")); };
   return songs.map((s) => {
-    const { title: pageTitle, capo, num } = cleanTitle(s.title);
+    const ct = cleanTitle(s.title), { capo, num } = ct;
+    const pageTitle = ct.title.replace(KEY_IN_TITLE, "").trim() || ct.title; // "(*E" left after "(capo 2*E)" came out
     const toc = num && numCount[num] === 1 && tocNames[num] && cleanTitle(tocNames[num]).title;
     const title = toc && !sameName(toc, pageTitle) ? toc : pageTitle;
     const body = mergeChordLines(s.lines);
-    return { title, pageTitle, num, content: (capo ? `{capo: ${capo}}\n` : "") + body.split("\n").map(fixNiqqudLine).join("\n"), include: true };
+    // a section heading on its own line ("פזמון", "בית 2", "Chorus") becomes a {label}, so it isn't shown as lyrics
+    const SECTION = /^\s*(פזמון|בית(\s*[א-ת0-9]['׳]?)?|גשר|מעבר|סיום|פתיחה|קודה|intro|outro|chorus|pre-?chorus|verse(\s*\d+)?|bridge|tag|ending)\s*:?\s*$/i;
+    const lines = body.split("\n").map((l) => (SECTION.test(l) ? `{${l.trim().replace(/:$/, "")}}` : l));
+    return { title, pageTitle, num, content: (capo ? `{capo: ${capo}}\n` : "") + lines.map(fixNiqqudLine).join("\n"), include: true };
   }).filter((s) => s.content.trim()).map(stripCapoLines).map((s, _, all) => {
     // songs with the same name: add a line of the song in brackets, e.g. "אבינו מלכנו (שמענו קולנו)".
     // Use the first line that isn't just the name again and that differs between the twins.
@@ -152,13 +191,53 @@ function splitColumns(items, width) {
     const mid = (merged[k][0] + merged[k - 1][1]) / 2;
     if (gap > width * 0.035 && mid > width * 0.2 && mid < width * 0.8) cuts.push(mid);
   }
-  if (!cuts.length) return [items];
+  if (!cuts.length) return gutterColumns(items, width);
   const edges = [-Infinity, ...cuts, Infinity];
   const cols = edges.slice(1).map((hi, k) => items.filter((i) => i.x + i.w / 2 > edges[k] && i.x + i.w / 2 <= hi));
   const big = cols.filter((c) => c.length >= 3);
   if (big.length < 2) return [items];
   const hebrew = items.filter((i) => HEB.test(i.str)).length > items.length / 4;
   return hebrew ? big.reverse() : big; // Hebrew books read the right column first
+}
+
+// Two columns under a centred heading (song sheets: "בית א'" on the right, "בית ב'" on the left): the heading covers
+// the gap, so look for a vertical gutter that almost no line crosses. Lines above the first line that has text on both
+// sides are the heading (name, artist) and come first; then the right column, then the left one (Hebrew).
+function gutterColumns(items, width) {
+  const rows = [];
+  for (const it of [...items].sort((a, b) => b.y - a.y)) {
+    const row = rows.find((r) => Math.abs(r.y - it.y) < Math.max(2, it.h * 0.45));
+    if (row) row.items.push(it); else rows.push({ y: it.y, items: [it] });
+  }
+  if (rows.length < 8) return [items];
+  const BINS = 200, bin = (x) => Math.max(0, Math.min(BINS - 1, Math.floor((x / width) * BINS)));
+  const cover = new Array(BINS).fill(0);
+  for (const r of rows) {
+    const hit = new Set();
+    for (const it of r.items) for (let b = bin(it.x); b <= bin(it.x + it.w); b++) hit.add(b);
+    hit.forEach((b) => cover[b]++);
+  }
+  // the widest run of almost-empty bins in the middle half of the page
+  const low = Math.max(1, Math.floor(rows.length * 0.12));
+  let best = null;
+  for (let b = Math.floor(BINS * 0.25); b < BINS * 0.75; b++) {
+    if (cover[b] > low) continue;
+    let e = b; while (e + 1 < BINS * 0.75 && cover[e + 1] <= low) e++;
+    if (!best || e - b > best[1] - best[0]) best = [b, e];
+    b = e;
+  }
+  if (!best || (best[1] - best[0] + 1) / BINS < 0.02) return [items];
+  const cut = ((best[0] + best[1] + 1) / 2 / BINS) * width;
+  const side = (it) => (it.x + it.w / 2 < cut ? "L" : "R");
+  const both = rows.filter((r) => r.items.some((i) => side(i) === "L") && r.items.some((i) => side(i) === "R"));
+  if (both.length < 3) return [items];
+  const startY = Math.max(...both.map((r) => r.y)); // the first line with both columns
+  const head = items.filter((i) => i.y > startY + 1);
+  const rest = items.filter((i) => i.y <= startY + 1);
+  const L = rest.filter((i) => side(i) === "L"), R = rest.filter((i) => side(i) === "R");
+  if (L.length < 3 || R.length < 3) return [items];
+  const hebrew = items.filter((i) => HEB.test(i.str)).length > items.length / 4;
+  return [...(head.length ? [head] : []), ...(hebrew ? [R, L] : [L, R])];
 }
 
 // "Am7D" / "EmAm" -> ["Am7", "D"] / ["Em", "Am"] when the whole token is made of chords
@@ -400,12 +479,63 @@ async function saveImported(drafts, fileName) {
     const old = (key(d) && bySource.get(key(d))) || legacy.get(row.title)?.shift() || legacy.get((d.baseTitle || "").trim())?.shift();
     if (old) updates.push(sb.from("songs").update(row).eq("id", old.id)); else fresh.push(row);
   }
-  const results = await Promise.all([fresh.length ? sb.from("songs").insert(fresh) : { error: null }, ...updates]);
+  const results = await Promise.all([fresh.length ? sb.from("songs").insert(fresh).select("id, title") : { error: null, data: [] }, ...updates]);
   const failed = results.filter((r) => r.error).length;
+  const saved = [...(results[0].data || []), ...results.slice(1).flatMap((r) => r.data || [])];
+  return { added: fresh.length, updated: updates.length, failed, saved };
+}
+
+// ---------- import report: what came in from each file, and anything that looks wrong ----------
+// Stays above the song list until closed, so a file that didn't import well is never silent.
+function importChecks(drafts, pages, book = false) {
+  const w = [];
+  const lyricCount = (d) => d.content.split("\n").filter((l) => /[א-תa-zA-Z]{2}/.test(l.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").replace(/[֑-ׇ]/g, ""))).length;
+  if (!book && drafts.length > 1 && drafts.length > pages) w.push(`הקובץ (${pages} ${pages === 1 ? "עמוד" : "עמודים"}) התחלק ל-${drafts.length} שירים. אם זה שיר אחד, כדאי לבדוק.`);
+  const untitled = drafts.filter((d) => /^עמוד \d+$/.test(d.title));
+  if (untitled.length) w.push(`לא נמצא שם ל-${untitled.length} ${untitled.length === 1 ? "שיר" : "שירים"} (נקרא/ו "${untitled[0].title}").`);
+  const short = drafts.filter((d) => lyricCount(d) < 2);
+  if (short.length) w.push(`${short.length === 1 ? "שיר אחד" : short.length + " שירים"} כמעט בלי מילים: ${short.slice(0, 3).map((d) => `"${d.title}"`).join(", ")}.`);
+  if (!drafts.some((d) => /\[[^\]]+\]/.test(d.content))) w.push("לא נמצאו אקורדים בקובץ.");
+  return w;
+}
+
+function importReportHtml() {
+  const r = songsState.report;
+  if (!r?.length) return "";
+  return `<div class="import-report">
+    <div class="ir-head"><b>ייבוא קבצים</b><button class="link-btn" data-report-close>סגירה ✕</button></div>
+    ${r.map((f) => `<div class="ir-file${f.error ? " bad" : f.warnings.length ? " warn" : " ok"}">
+      <div><b dir="auto">${esc(f.name)}</b> · ${f.error ? `<span class="ir-err">❌ ${esc(f.error)}</span>`
+        : `✓ ${f.added ? `נוספו ${f.added}` : ""}${f.added && f.updated ? ", " : ""}${f.updated ? `עודכנו ${f.updated}` : ""}${!f.added && !f.updated ? "לא נשמר אף שיר" : ""}${f.failed ? ` · ${f.failed} לא נשמרו` : ""}`}</div>
+      ${f.warnings.map((w) => `<div class="ir-warn">⚠ ${esc(w)}</div>`).join("")}
+      ${f.saved?.length ? `<div class="ir-songs">${f.saved.map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}</button>`).join("")}</div>` : ""}
+    </div>`).join("")}
+  </div>`;
+}
+
+async function importFiles(files) {
+  if (!window.pdfjsLib) { toast("קורא ה-PDF לא נטען, נסו לרענן"); return; }
+  songsState.importing = true; songsState.report = []; renderSongs();
+  for (const file of files) {
+    const entry = { name: file.name, warnings: [], saved: [] };
+    songsState.report.push(entry);
+    try {
+      const drafts = await pdfToSongs(file);
+      if (drafts === null) entry.error = "ה-PDF סרוק כתמונה ואין בו טקסט, אי אפשר לקרוא ממנו מילים ואקורדים";
+      else if (!drafts.length) entry.error = "לא נמצאו שירים בקובץ";
+      else {
+        entry.warnings = importChecks(drafts, pdfToSongs.pages || 1, pdfToSongs.book);
+        Object.assign(entry, await saveImported(drafts, file.name));
+        if (entry.failed) entry.warnings.push("חלק מהשירים לא נשמרו (אין הרשאה, או בעיה בחיבור).");
+      }
+    } catch (err) { console.error(err); entry.error = "קריאת הקובץ נכשלה (הקובץ פגום או לא PDF)"; }
+  }
+  songsState.importing = false;
   await loadSongs();
   songsState.view = "list";
   renderSongs();
-  toast(failed ? `חלק מהשירים לא נשמרו (${failed})` : `נשמרו ${fresh.length} שירים חדשים${updates.length ? `, עודכנו ${updates.length}` : ""}`);
+  const bad = songsState.report.filter((f) => f.error || f.warnings.length).length;
+  toast(bad ? `הייבוא הסתיים · ${bad} ${bad === 1 ? "קובץ דורש" : "קבצים דורשים"} בדיקה` : "הייבוא הסתיים ✓", bad ? { error: true } : undefined);
 }
 
 const myEmail = () => (typeof user !== "undefined" && user?.email ? user.email.toLowerCase() : null);
@@ -423,9 +553,10 @@ function renderSongs() {
   el.innerHTML = `<div class="songs-bar">
       <input id="song-search" type="search" autofocus placeholder="חפשו שיר לפי שם או מילים…" value="${esc(songsState.query)}">
       <button class="btn" data-song-new>+ שיר חדש</button>
-      <label class="btn ghost file-btn">ייבוא מ-PDF<input type="file" accept="application/pdf" id="pdf-file" hidden></label>
+      <label class="btn ghost file-btn">ייבוא מ-PDF<input type="file" accept="application/pdf" id="pdf-file" multiple hidden></label>
     </div>
-    ${songsState.importing ? `<p class="status">קורא את הקובץ…</p>` : ""}
+    ${songsState.importing ? `<p class="status">קורא ${songsState.report?.length ? `את ${esc(songsState.report[songsState.report.length - 1].name)}` : "את הקובץ"}…</p>` : ""}
+    ${importReportHtml()}
     <div id="song-results">${searchResultsHtml()}</div>
     ${uploadsHtml()}`;
   // only the results are redrawn while typing, so the cursor never jumps
@@ -451,6 +582,9 @@ function stripCapoLines(s) {
   return { ...s, content: `{capo: ${capo}}\n` + body };
 }
 
+// the file a song was imported from ("Wb.pdf#267" → "Wb.pdf · 267"); typed-in songs show nothing
+const sourceOf = (s) => { if (!s.source) return ""; const [f, n] = s.source.split("#"); return n ? `${f} · ${n}` : f; };
+const sourceHtml = (s) => s.source ? `<small class="song-src" dir="auto">📄 ${esc(sourceOf(s))}</small>` : "";
 const sameName = (s) => songsState.list.filter((x) => x.title.trim() === s.title.trim()).length > 1;
 const firstLine = (s) => (s.content.split("\n").map((l) => l.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").trim()).find((l) => /[\u05D0-\u05EAa-zA-Z]{2}/.test(l.replace(/[\u0591-\u05C7]/g, ""))) || "").split(/[,.;:!?]/)[0].trim().slice(0, 40);
 
@@ -464,7 +598,7 @@ function searchResultsHtml() {
   const list = nq ? songsState.list.filter((s) => inTitle(s) || norm(s.content).includes(nq)) : [];
   if (!list.length) return `<p class="status">לא נמצאו שירים</p>`;
   return `<div class="search-results">${list.sort((a, b) => (inTitle(b) - inTitle(a)) || a.title.localeCompare(b.title, "he"))
-    .slice(0, 50).map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}${sameName(s) ? `<small class="first-line"> · ${esc(firstLine(s))}</small>` : ""}</button>`).join("")}</div>`;
+    .slice(0, 50).map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}${sameName(s) ? `<small class="first-line"> · ${esc(firstLine(s))}</small>` : ""}${sourceHtml(s)}</button>`).join("")}</div>`;
 }
 
 // alphabetical index grouped by first letter, titles only
@@ -509,7 +643,7 @@ function renderSongView(el) {
   el.innerHTML = `<div class="song-view${songsState.present ? " present" : ""}" style="--song-scale:${songScale}">
     <div class="song-top">
       <button class="link-btn no-print" data-song-back>→ לכל השירים</button>
-      <h2 class="song-title">${esc(s.title)}</h2>
+      <h2 class="song-title">${esc(s.title)}</h2>${s.source ? `<p class="song-src-line no-print">📄 מהקובץ <b dir="auto">${esc(sourceOf(s))}</b></p>` : ""}
       ${meta.artist ? `<p class="song-artist">${esc(meta.artist)}</p>` : ""}
     </div>
     <div class="song-toolbar no-print">
@@ -598,6 +732,7 @@ document.addEventListener("click", async (e) => {
     if (error) { toast("השמירה נכשלה"); return; }
     Object.assign(cur, row); songsState.shift = 0; toast("השיר נשמר בסולם החדש"); renderSongs(); return;
   }
+  if (t.closest("[data-report-close]")) { songsState.report = []; renderSongs(); return; }
   if (t.closest("[data-del-file]")) {
     const name = t.closest("[data-del-file]").dataset.delFile;
     const mine = songsState.list.filter((s) => (s.source || "").split("#")[0] === name && isMine(s));
@@ -630,21 +765,7 @@ document.addEventListener("click", async (e) => {
 
 document.addEventListener("change", async (e) => {
   const t = e.target;
-  if (t.id === "pdf-file" && t.files[0]) {
-    const file = t.files[0];
-    if (!window.pdfjsLib) { toast("קורא ה-PDF לא נטען, נסו לרענן"); return; }
-    songsState.importing = true; renderSongs();
-    try {
-      const drafts = await pdfToSongs(file);
-      songsState.importing = false;
-      if (drafts === null) { toast("ה-PDF הזה סרוק כתמונה ואין בו טקסט, אי אפשר לקרוא ממנו אקורדים"); renderSongs(); return; }
-      if (!drafts.length) { toast("לא נמצאו שירים בקובץ"); renderSongs(); return; }
-      await saveImported(drafts, file.name);
-    } catch (err) {
-      console.error(err); songsState.importing = false; toast("קריאת הקובץ נכשלה"); renderSongs();
-    }
-    return;
-  }
+  if (t.id === "pdf-file" && t.files.length) { const files = [...t.files]; t.value = ""; await importFiles(files); return; }
   if (t.matches("[data-draft-inc]")) { songsState.drafts[t.dataset.draftInc].include = t.checked; const b = document.querySelector("[data-import-save]"); if (b) b.textContent = `שמירת ${songsState.drafts.filter((s) => s.include).length} שירים`; }
 });
 

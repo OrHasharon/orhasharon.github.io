@@ -676,3 +676,15 @@ main > .tabs button { white-space: nowrap; flex: none; }
 .pt-next { max-width: none; }
 .pt-url { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; word-break: break-all; font-size: .9rem; }
 .pt-by { margin: 0; font-size: .85rem; color: var(--muted); }
+/* PDF import report (songs.js): what came in from each file, and warnings */
+.import-report { display: grid; gap: 8px; margin: 10px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card, rgba(255,255,255,.03)); }
+.ir-head { display: flex; justify-content: space-between; align-items: center; }
+.ir-file { display: grid; gap: 4px; padding: 8px 10px; border-radius: 8px; border-inline-start: 4px solid #3fa86b; background: rgba(127,127,127,.06); }
+.ir-file.warn { border-inline-start-color: #e0a63a; }
+.ir-file.bad { border-inline-start-color: #d9534f; }
+.ir-err { color: #e5736b; }
+.ir-warn { color: #e0a63a; font-size: .92rem; }
+.ir-songs { display: flex; flex-wrap: wrap; gap: 6px; }
+.song-src { display: block; font-size: .78rem; color: var(--muted); font-weight: 400; }
+.song-src-line { margin: 2px 0 8px; font-size: .85rem; color: var(--muted); }
+.ir-songs .idx-song { width: auto; flex: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; }

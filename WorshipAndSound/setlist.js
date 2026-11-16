@@ -22,7 +22,9 @@ function setlistButton(iso) {
 // ---------- who may change a session: that meeting's worship leader only, admins too (the DB enforces the same, setlist_leader.sql) ----------
 function canEditSetlist(iso) {
   if (typeof user === "undefined" || !user) return true; // open mode without sign-in
-  return myMemberId != null && state.signups.some((s) => s.meeting_date === iso && s.role === "leader" && s.member_id === myMemberId);
+  const leaders = state.signups.filter((s) => s.meeting_date === iso && s.role === "leader");
+  if (!leaders.length) return true; // no worship leader yet: the whole team can (setlist_no_leader.sql)
+  return myMemberId != null && leaders.some((s) => s.member_id === myMemberId);
 }
 function leaderOnly(iso) {
   const ld = state.signups.find((s) => s.meeting_date === iso && s.role === "leader");
