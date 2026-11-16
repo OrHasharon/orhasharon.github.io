@@ -224,7 +224,7 @@ async function pdfToSongs(file) {
     const title = toc && !sameName(toc, pageTitle) ? toc : pageTitle;
     const body = mergeChordLines(s.lines);
     // a section heading on its own line ("פזמון", "בית 2", "Chorus") becomes a {label}, so it isn't shown as lyrics
-    const SECTION = /^\s*(פזמון|בית(\s*[א-ת0-9]['׳]?)?|גשר|מעבר|סיום|פתיחה|קודה|intro|outro|chorus|pre-?chorus|verse(\s*\d+)?|bridge|tag|ending)\s*:?\s*$/i;
+    const SECTION = /^\s*(פזמון(\s*(?:[xX×]\s*\d|\d\s*[xX×]))?|בית(\s*[א-ת0-9]['׳]?)?|גשר|מעבר|סיום|פתיחה|קודה|intro|outro|chorus|pre-?chorus|verse(\s*\d+)?|bridge|tag|ending)\s*:?\s*$/i;
     const lines = body.split("\n").flatMap((l) => {
       if (SECTION.test(l)) return [`{${l.trim().replace(/:$/, "")}}`];
       // "פזמון: נושא את עיניי…" → {פזמון} + the line; a numbered verse "1. בניסיון…" → {בית 1} + the line
@@ -235,6 +235,13 @@ async function pdfToSongs(file) {
       // a chord written backwards inside a Hebrew line ("mG" for Gm, "maj7G" for Gmaj7)
       return [HEB.test(l) ? l.replace(/(^|[\s\[(])((?:maj7|m7|m|7|sus4|sus2|dim|add9))([A-G][#b]?)(?=[\s\])]|$)/g, "$1$3$2") : l];
     });
+    // "Gm [או Em A]" over a line: the chord goes over the line, the alternative becomes a note ({c: …}), not a chord
+    for (let i = 0; i < lines.length - 1; i++) {
+      const m = lines[i].match(/^\s*([A-G][#b]?[^\s\[\]()]*)\s*[\[(]\s*(או\s+[^\])]+?)\s*[\])]\s*$/);
+      if (m && CHORD_RE.test(m[1]) && /[א-ת]{2}/.test(lines[i + 1].replace(/\[[^\]]*\]/g, "")) && !/^\s*\[/.test(lines[i + 1])) {
+        lines.splice(i, 2, `{c: ${m[2]}}`, `[${m[1]}]${lines[i + 1].trimStart()}`);
+      }
+    }
     return { title, pageTitle, num, content: (capo ? `{capo: ${capo}}\n` : "") + lines.map(fixNiqqudLine).join("\n"), include: true };
   }).filter((s) => s.content.trim()).map(stripCapoLines).map((s, _, all) => {
     // songs with the same name: add a line of the song in brackets, e.g. "אבינו מלכנו (שמענו קולנו)".

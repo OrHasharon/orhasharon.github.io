@@ -688,3 +688,4 @@ main > .tabs button { white-space: nowrap; flex: none; }
 .song-src { display: block; font-size: .78rem; color: var(--muted); font-weight: 400; }
 .song-src-line { margin: 2px 0 8px; font-size: .85rem; color: var(--muted); }
 .ir-songs .idx-song { width: auto; flex: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; }
+.cp-note { font-size: .8em; color: var(--muted); margin: 2px 0; }

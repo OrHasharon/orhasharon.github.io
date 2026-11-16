@@ -109,8 +109,19 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
     const t = line.trim();
     if (!t) return `<div class="cp-line cp-empty"></div>`;
     if (META_RE.test(t)) return "";
+    const note = t.match(/^\{\s*(?:c|comment)\s*:\s*(.*?)\s*\}$/i); // a note for the musicians ("או Em A"), not lyrics
+    if (note) return chords ? `<div class="cp-note" dir="auto">(${esc(note[1])})</div>` : "";
     const label = t.match(/^\{(.+)\}$/);
     if (label) return `<div class="cp-section" dir="auto">[${esc(label[1])}]</div>`;
+    // "Gm [או Em A]": a chord with an alternative — a chord row, never "או Em A" as one chord over nothing
+    const alt = line.match(/^\s*([A-G][#b]?[^\s\[\]()]*)\s*[\[(]\s*או\s+([^\])]+?)\s*[\])]\s*$/);
+    if (alt && CHORD_RE.test(alt[1])) {
+      if (!chords) return "";
+      const tr = (s) => s.replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift, flats) : tok));
+      return `<div class="cp-line cp-bare-chords" dir="${songDir}">${esc(tr(alt[1]))} <span class="cp-note">(או ${esc(tr(alt[2]))})</span></div>`;
+    }
+    // [text with spaces or Hebrew] isn't a chord: show it as words in brackets
+    if (/\[[^\]]*[\sא-ת][^\]]*\]/.test(line)) return renderChordPro(line.replace(/\[([^\]]*[\sא-ת][^\]]*)\]/g, "($1)"), shift, { chords, key });
     // direction comes from the lyrics, not the (Latin) chords
     const lyricsOnly = line.replace(/\[[^\]]*\]/g, "");
     const dir = HEB.test(lyricsOnly) ? "rtl" : "ltr";
@@ -151,7 +162,7 @@ function lyricStanzas(content) {
   const stanzas = [{ label: "", lines: [] }];
   for (const raw of content.split("\n")) {
     const t = raw.trim();
-    if (/^\{\s*(capo|artist|key|screen)\s*:/i.test(t)) continue;
+    if (/^\{\s*(capo|artist|key|screen|c|comment)\s*:/i.test(t)) continue; // settings and notes are not on the slides
     const label = t.match(/^\{(.+)\}$/);
     if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
     const line = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
