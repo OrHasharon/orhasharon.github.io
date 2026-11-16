@@ -22,21 +22,89 @@ function cleanTitle(raw) {
 // ---------- PDF -> songs ----------
 const median = (arr) => { const a = [...arr].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
 
-async function pdfToSongs(file) {
+// ---------- scanned sheets and photos: text recognition (Tesseract, Hebrew + English, free, runs in the browser) ----------
+// Gives the same pieces as a PDF's text layer — words with their place on the page (y counted from the bottom) —
+// so pictures go through the very same song reader.
+const OCR_JS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+let ocrWorker = null;
+async function ocrReady() {
+  if (!window.Tesseract) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = OCR_JS; s.onload = ok; s.onerror = bad; document.head.append(s); });
+  if (!ocrWorker) ocrWorker = await Tesseract.createWorker(["heb", "eng"]);
+  return ocrWorker;
+}
+async function ocrItems(image, width, height) {
+  const w = await ocrReady();
+  const { data } = await w.recognize(image);
+  return (data.words || []).filter((x) => x.text && x.text.trim() && x.confidence > 20).map((x) => ({
+    str: cleanStr(x.text), x: x.bbox.x0, y: height - x.bbox.y1, w: x.bbox.x1 - x.bbox.x0, h: (x.bbox.y1 - x.bbox.y0) * 0.8,
+  }));
+}
+// text recognition reads chord letters as look-alikes: "G"→"6", "D"→"0"/"O", "m"→"ם". On a row of short tokens with no
+// Hebrew words (a chord row) put them back, so the chords land over the words like in a PDF.
+function fixOcrChordRow(items) {
+  // a lone "ם" / "m" read next to a chord letter is its "m" ("G" + "ם" = "Gm"); stray bars "|" are dropped
+  for (let k = items.length - 1; k >= 0; k--) {
+    const it = items[k], s = it.str.trim();
+    if (/^[|¦]+$/.test(s)) { items.splice(k, 1); continue; }
+    if (!/^[םm]$/.test(s)) continue;
+    const nb = items.find((o) => o !== it && /^[A-G0-9O][#b]?$/.test(o.str.trim()) && Math.abs(o.x + o.w - it.x) < it.h * 0.8);
+    if (nb) { nb.str = nb.str.trim() + "m"; nb.w = it.x + it.w - nb.x; items.splice(k, 1); }
+    else if (s === "ם") it.str = "D"; // on its own, a "D" read as the look-alike "ם"
+  }
+  const toks = items.map((i) => i.str.trim()).filter(Boolean);
+  if (!toks.length || toks.some((t) => t.length > 6 || /[א-ת]{2}/.test(t.replace(/ם$/, "")))) return;
+  const fix = (t) => t.replace(/^6/, "G").replace(/^[0Oo]/, "D").replace(/^8/, "B").replace(/ם/g, "m").replace(/^([A-G])\s*[#H]/, "$1#");
+  const fixed = toks.map(fix);
+  const chordish = fixed.filter((t) => CHORD_RE.test(t)).length;
+  if (chordish < Math.ceil(toks.length * 0.6)) return;
+  for (const it of items) { const f = fix(it.str.trim()); if (CHORD_RE.test(f)) it.str = f; }
+}
+const isImageFile = (file) => /^image\//.test(file.type) || /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name);
+async function imagePages(file) {
+  const img = await createImageBitmap(file);
+  // big enough for small chord letters, not so big that recognition crawls
+  const k = Math.min(2.5, Math.max(1, 2200 / img.width));
+  const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+  return [{ items: await ocrItems(c, c.width, c.height), width: c.width, ocr: true }];
+}
+// a PDF's pages: its text layer; a page with no text (a scan) is read with text recognition
+async function pdfPages(file) {
   const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const songs = [];
-  let totalText = 0;
-  const all = []; // every line of the document, in reading order
+  const pages = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
-    const items = tc.items.map((it) => ({ ...it, str: cleanStr(it.str) })).filter((it) => it.str && it.str.trim()).map((it) => ({
+    const width = page.getViewport({ scale: 1 }).width;
+    let items = tc.items.map((it) => ({ ...it, str: cleanStr(it.str) })).filter((it) => it.str && it.str.trim()).map((it) => ({
       str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height,
     }));
+    let ocr = false;
+    if (!items.length) {
+      const vp = page.getViewport({ scale: Math.min(3, 2200 / width) });
+      const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+      items = await ocrItems(c, c.width, c.height); ocr = items.length > 0; // an empty page is not a scan
+      pages.push({ items, width: c.width, ocr }); continue;
+    }
+    pages.push({ items, width, ocr });
+  }
+  return pages;
+}
+
+async function pdfToSongs(file) {
+  // a file with no extension (e.g. "מנת חלקי"): a PDF if it opens as one, otherwise a picture
+  const src = isImageFile(file) ? await imagePages(file) : await pdfPages(file).catch(() => imagePages(file));
+  const pdf = { numPages: src.length };
+  const songs = [];
+  let totalText = 0;
+  pdfToSongs.ocr = src.some((pg) => pg.ocr);
+  const all = []; // every line of the document, in reading order
+  for (let p = 1; p <= src.length; p++) {
+    const { items, width } = src[p - 1];
     totalText += items.length;
     if (!items.length) continue;
     mergeDigits(items);
-    const width = page.getViewport({ scale: 1 }).width;
     for (const col of splitColumns(items, width)) {
       // group into lines by baseline
       col.sort((a, b) => b.y - a.y || a.x - b.x);
@@ -47,6 +115,7 @@ async function pdfToSongs(file) {
       }
       lines.sort((a, b) => b.y - a.y);
       for (const l of lines) {
+        if (src[p - 1].ocr) fixOcrChordRow(l.items);
         // "בית א'  F  Gm  Dm": a section name on the chord row → the name on its own line, then the chords
         const heb = l.items.filter((i) => HEB.test(i.str)), rest = l.items.filter((i) => !HEB.test(i.str) && i.str.trim());
         const name = heb.sort((a, b) => b.x - a.x).map((i) => i.str.trim()).join(" ").trim();
@@ -60,8 +129,8 @@ async function pdfToSongs(file) {
       }
     }
   }
-  if (!totalText) return null; // scanned images, no text layer
-  pdfToSongs.pages = pdf.numPages; pdfToSongs.book = false;
+  if (!totalText) return null; // no text at all, not even with text recognition
+  pdfToSongs.pages = src.length; pdfToSongs.book = false;
 
   // table of contents pages ("283 אגילה בן" lines, no chords) are skipped: the site builds its own index
   const TOC_LINE = /^\s*\d{1,4}\s+[^\d\s.)]|[^\d\s.(]\s+\d{1,4}\s*$/;
@@ -88,7 +157,13 @@ async function pdfToSongs(file) {
   // Songbook style: "76. שם השיר" starts a song, everything under it (also on later pages) is the song.
   // Otherwise fall back to big text (compared with the lyrics, not the smaller chord lines).
   const NUMBERED = /^\s*\d{1,4}\s*[.)]\s*\S|\S\s*[.(]\s*\d{1,4}\s*$/;
-  const numbered = all.filter((l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80);
+  // numbered verses in one song ("1. בניסיון להביט…", "2. …") aren't a songbook: a short file whose numbers are just
+  // 1, 2, 3… in the lyrics' own size stays one song
+  const lyricH0 = median(all.filter((l) => !l.chords).map((l) => l.h));
+  const numberedAll = all.filter((l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80);
+  const nums = numberedAll.map((l) => Number(cleanTitle(l.text).num)).filter(Boolean);
+  const verseNumbers = pdf.numPages <= 3 && nums.length && nums.every((n, i) => n === i + 1) && numberedAll.every((l) => l.h <= lyricH0 * 1.1);
+  const numbered = verseNumbers ? [] : numberedAll;
   pdfToSongs.book = numbered.length > 0; // a numbered songbook: many songs per file is expected
   const lyricH = median(all.filter((l) => !l.chords).map((l) => l.h));
   // Not a numbered songbook (e.g. one song in a PDF): a song starts only with big text at the TOP of a page.
@@ -118,7 +193,16 @@ async function pdfToSongs(file) {
     current.lines.push(ln);
   }
   // one song with no title line: its name is the file's ("נושא את עיניי אל ישוע-1.pdf" → "נושא את עיניי אל ישוע")
-  if (songs.length === 1 && /^עמוד \d+$/.test(songs[0].title)) songs[0].title = file.name.replace(/\.pdf$/i, "").replace(/[-_ ]\(?\d+\)?$/, "").trim() || songs[0].title;
+  // — or its first line, when the next one is the credits ("מילים ולחן: …"): then that line is the name, not lyrics
+  if (songs.length === 1 && /^עמוד \d+$/.test(songs[0].title)) {
+    const [a, b] = songs[0].lines.filter((l) => !l.chords && l.text.trim());
+    if (a && b && a.text.trim().length < 50 && /מילים|לחן|מאת|תרגום|words|music|by\b/i.test(b.text)) {
+      songs[0].title = a.text.trim(); songs[0].lines.splice(songs[0].lines.indexOf(a), 1);
+    } else songs[0].title = file.name.replace(/\.(pdf|jpe?g|png|webp|bmp|gif)$/i, "").replace(/[-_ ]\(?\d+\)?$/, "").trim() || songs[0].title;
+  }
+  // a picture of one song: its file name ("06 הימים האחרונים.jpg") is more reliable than the recognized heading
+  const fileTitle = file.name.replace(/\.(pdf|jpe?g|png|webp|bmp|gif)$/i, "").replace(/^\s*\d{1,3}[\s.\-_]+/, "").replace(/[-_ ]\(?\d+\)?$/, "").replace(/\s*-\s*copy$/i, "").trim();
+  if (pdfToSongs.ocr && songs.length === 1 && /[א-תa-zA-Z]{2}/.test(fileTitle)) songs[0].title = fileTitle;
   // the TOC name wins only when it is really another name (not a spelling of the same one) and the number is unique in the book
   const numCount = {};
   songs.forEach((s) => { const n = cleanTitle(s.title).num; if (n) numCount[n] = (numCount[n] || 0) + 1; });
@@ -141,7 +225,16 @@ async function pdfToSongs(file) {
     const body = mergeChordLines(s.lines);
     // a section heading on its own line ("פזמון", "בית 2", "Chorus") becomes a {label}, so it isn't shown as lyrics
     const SECTION = /^\s*(פזמון|בית(\s*[א-ת0-9]['׳]?)?|גשר|מעבר|סיום|פתיחה|קודה|intro|outro|chorus|pre-?chorus|verse(\s*\d+)?|bridge|tag|ending)\s*:?\s*$/i;
-    const lines = body.split("\n").map((l) => (SECTION.test(l) ? `{${l.trim().replace(/:$/, "")}}` : l));
+    const lines = body.split("\n").flatMap((l) => {
+      if (SECTION.test(l)) return [`{${l.trim().replace(/:$/, "")}}`];
+      // "פזמון: נושא את עיניי…" → {פזמון} + the line; a numbered verse "1. בניסיון…" → {בית 1} + the line
+      const lab = l.match(/^\s*(פזמון|גשר|מעבר|סיום|פתיחה)\s*:\s*(\S.*)$/);
+      if (lab) return [`{${lab[1]}}`, lab[2]];
+      const vn = verseNumbers && l.match(/^\s*(\d{1,2})\s*[.)]\s*(\S.*)$/);
+      if (vn) return [`{בית ${vn[1]}}`, vn[2]];
+      // a chord written backwards inside a Hebrew line ("mG" for Gm, "maj7G" for Gmaj7)
+      return [HEB.test(l) ? l.replace(/(^|[\s\[(])((?:maj7|m7|m|7|sus4|sus2|dim|add9))([A-G][#b]?)(?=[\s\])]|$)/g, "$1$3$2") : l];
+    });
     return { title, pageTitle, num, content: (capo ? `{capo: ${capo}}\n` : "") + lines.map(fixNiqqudLine).join("\n"), include: true };
   }).filter((s) => s.content.trim()).map(stripCapoLines).map((s, _, all) => {
     // songs with the same name: add a line of the song in brackets, e.g. "אבינו מלכנו (שמענו קולנו)".
@@ -367,11 +460,16 @@ function toLine(l) {
       if (!it.str) continue;
       const icw = it.w / Math.max(1, it.str.length);
       // "C" + "#m" is one chord even if the PDF leaves a small gap between the pieces
-      const joins = /^[#b]|^(?:m|maj|min|sus|dim|aug|add|\d)/.test(it.str) && /[A-G#b]$/.test(row.map((r) => r.ch).join(""));
+      const sofar = row.map((r) => r.ch).join("");
+      // "D" + "/" + "F#" is one chord ("D/F#") even with a gap after the slash
+      const joins = (/^[#b/]|^(?:m|maj|min|sus|dim|aug|add|\d)/.test(it.str) && /[A-G#b]$/.test(sofar)) || (/^\s*[A-G]/.test(it.str) && /[A-G][#b]?(?:m|\d)*\/\s*$/.test(sofar));
+      if (joins && /\/\s+$/.test(sofar)) while (row.length && row[row.length - 1].ch === " ") row.pop();
       if (lastEnd !== null && !joins && it.x - lastEnd > Math.max(1.5, icw * 0.3)) row.push({ ch: " ", x: lastEnd });
       [...it.str].forEach((ch, k) => row.push({ ch, x: it.x + k * icw, w: icw }));
       lastEnd = it.x + it.w;
     }
+    // "D/ F#" → "D/F#": no spaces right after a slash
+    for (let k = 1; k < row.length; k++) while (k < row.length && row[k].ch === " " && row[k - 1].ch === "/") row.splice(k, 1);
     const rowText = row.map((r) => r.ch).join("");
     const chords = [];
     let ok = true, any = false;
@@ -521,10 +619,11 @@ async function importFiles(files) {
     songsState.report.push(entry);
     try {
       const drafts = await pdfToSongs(file);
-      if (drafts === null) entry.error = "ה-PDF סרוק כתמונה ואין בו טקסט, אי אפשר לקרוא ממנו מילים ואקורדים";
+      if (drafts === null) entry.error = "לא נמצא בקובץ טקסט, גם לא בזיהוי טקסט מהתמונה";
       else if (!drafts.length) entry.error = "לא נמצאו שירים בקובץ";
       else {
         entry.warnings = importChecks(drafts, pdfToSongs.pages || 1, pdfToSongs.book);
+        if (pdfToSongs.ocr) entry.warnings.unshift("נקרא מתמונה בזיהוי טקסט: כדאי לעבור על המילים והאקורדים ולתקן בעריכה.");
         Object.assign(entry, await saveImported(drafts, file.name));
         if (entry.failed) entry.warnings.push("חלק מהשירים לא נשמרו (אין הרשאה, או בעיה בחיבור).");
       }
@@ -553,7 +652,7 @@ function renderSongs() {
   el.innerHTML = `<div class="songs-bar">
       <input id="song-search" type="search" autofocus placeholder="חפשו שיר לפי שם או מילים…" value="${esc(songsState.query)}">
       <button class="btn" data-song-new>+ שיר חדש</button>
-      <label class="btn ghost file-btn">ייבוא מ-PDF<input type="file" accept="application/pdf" id="pdf-file" multiple hidden></label>
+      <label class="btn ghost file-btn">ייבוא מ-PDF / תמונה<input type="file" accept="application/pdf,image/*" id="pdf-file" multiple hidden></label>
     </div>
     ${songsState.importing ? `<p class="status">קורא ${songsState.report?.length ? `את ${esc(songsState.report[songsState.report.length - 1].name)}` : "את הקובץ"}…</p>` : ""}
     ${importReportHtml()}
