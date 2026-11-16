@@ -13,7 +13,7 @@ function cleanTitle(raw) {
   let title = raw.replace(/^\s*\d+\s*[.)\-]\s*/, "").replace(/\s*[.(]\s*\d{1,4}\s*$/, "").trim();
   // RTL text extraction can mirror the brackets, so accept either side
   // also the mirrored form the PDF gives in Hebrew lines: "(apo 3C)" = "(Capo 3)"
-  const cm = title.match(/[()]?\s*(?:(\d+)\s*c?apo|(?:c?apo|קאפו)\s*(\d+)\s*c?)\s*[()]?/i);
+  const cm = title.match(/[()]?\s*(?:(\d+)\s*[()]?\s*c?apo|(?:c?apo|קאפו)\s*[()]?\s*(\d+)\s*c?)\s*[()]?/i); // also mirrored "( 3(capo"
   const capo = cm && [cm[0], cm[1] || cm[2]];
   if (capo) title = title.replace(capo[0], "").replace(/[()]\s*[()]/g, "").replace(/^[\s()]+|[\s()]+$/g, "").trim();
   return { title, capo: capo ? capo[1] : null, num: n ? n[1] : null };
@@ -59,6 +59,73 @@ function fixOcrChordRow(items) {
   if (chordish < Math.ceil(toks.length * 0.6)) return;
   for (const it of items) { const f = fix(it.str.trim()); if (CHORD_RE.test(f)) it.str = f; }
 }
+// ---------- Word (.docx): drawn by docx-preview in a hidden box, then every word's place is measured ----------
+// so the chords typed above the words (with spaces) land where they appear on the page, like in a PDF.
+const DOCX_JS = "https://cdn.jsdelivr.net/npm/docx-preview@0.3.6/dist/docx-preview.min.js";
+const isDocxFile = (file) => /\.docx$/i.test(file.name) || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+async function docxPages(file) {
+  if (!window.docx) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = DOCX_JS; s.onload = ok; s.onerror = bad; document.head.append(s); });
+  const box = document.createElement("div");
+  box.className = "docx-measure";
+  box.style.cssText = "position:fixed;left:-20000px;top:0;width:max-content;visibility:hidden;pointer-events:none";
+  // keep every space: Word lines chords up with runs of spaces, and HTML would fold them into one
+  if (!document.getElementById("docx-measure-css")) { const st = document.createElement("style"); st.id = "docx-measure-css"; st.textContent = ".docx-measure, .docx-measure * { white-space: pre !important; }"; document.head.append(st); }
+  document.body.append(box);
+  // Word draws Hebrew with the document's "complex script" font (w:cs, e.g. Times New Roman) and Latin (the chords)
+  // with the theme font (e.g. Calibri); the preview would use one font for both, and the widths — so the chords'
+  // places over the words — would drift. Measure with the same two fonts.
+  const buf = await file.arrayBuffer();
+  try {
+    const zip = await JSZip.loadAsync(buf);
+    const styles = (await zip.file("word/styles.xml")?.async("string")) || "";
+    const theme = (await zip.file("word/theme/theme1.xml")?.async("string")) || "";
+    const cs = (styles.match(/<w:rPrDefault>[\s\S]*?w:cs="([^"]+)"/) || [])[1] || "Times New Roman";
+    const latin = (theme.match(/<a:minorFont>\s*<a:latin typeface="([^"]+)"/) || [])[1] || "Calibri";
+    let st = document.getElementById("docx-fonts");
+    if (!st) { st = document.createElement("style"); st.id = "docx-fonts"; document.head.append(st); }
+    // a Hebrew document (paragraphs right-to-left by default, <w:bidi/>): the preview leaves them left-to-right, and
+    // then the spaces before a chord land on the wrong side — Word puts them at the right, before the first chord
+    const rtl = /<w:pPrDefault>[\s\S]*?<w:bidi\/>/.test(styles);
+    // the theme's fonts: "majorBidi" / "minorBidi" = the Hebrew font of the theme's major / minor set (often Times
+    // New Roman) — Word uses it for every letter of such a run, the chords included
+    const themeFont = (set, script) => (theme.match(new RegExp(`<a:${set}>[\\s\\S]*?<a:font script="${script}" typeface="([^"]+)"`)) || [])[1];
+    const themeLatin = (set) => (theme.match(new RegExp(`<a:${set}>\\s*<a:latin typeface="([^"]+)"`)) || [])[1];
+    const v = {
+      majorBidi: themeFont("majorFont", "Hebr") || cs, minorBidi: themeFont("minorFont", "Hebr") || cs,
+      majorHAnsi: themeLatin("majorFont") || latin, minorHAnsi: themeLatin("minorFont") || latin,
+    };
+    st.textContent = `@font-face { font-family: "DocxHeb"; src: local("${cs}"); unicode-range: U+0590-05FF, U+FB1D-FB4F; }
+      .docx-measure, .docx-measure * { ${Object.entries(v).map(([k, f]) => `--docx-${k}-font: "${f}" !important;`).join(" ")} }
+      .docx-measure { font-family: "DocxHeb", "${latin}", sans-serif; }
+      ${rtl ? ".docx-measure p { direction: rtl !important; }" : ""}`;
+  } catch {}
+  try {
+    await docx.renderAsync(buf, box, null, { inWrapper: false, breakPages: true, ignoreLastRenderedPageBreak: false, renderHeaders: false, renderFooters: false, ignoreWidth: true });
+    // a chord row ("A9" + many spaces) in a right-to-left paragraph: Word keeps the spaces to the right of the chord
+    // (so the chord sits far to the left, over the end of the line); a browser moves trailing spaces aside. An
+    // invisible left-to-right mark at the end keeps the spaces with the chords, as in Word.
+    for (const p of box.querySelectorAll("p")) {
+      if (!/[֐-׿]/.test(p.textContent) && /[A-G]/.test(p.textContent) && /\s$/.test(p.textContent)) p.append("‎");
+    }
+    const sections = [...box.querySelectorAll("section")].filter((s) => s.textContent.trim());
+    const pages = [];
+    for (const sec of (sections.length ? sections : [box])) {
+      const pr = sec.getBoundingClientRect(), items = [];
+      const walk = document.createTreeWalker(sec, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        const size = parseFloat(getComputedStyle(n.parentElement).fontSize) || 12;
+        for (const m of n.data.matchAll(/\S+/g)) {
+          const r = document.createRange(); r.setStart(n, m.index); r.setEnd(n, m.index + m[0].length);
+          const rect = r.getBoundingClientRect();
+          if (!rect.width) continue;
+          items.push({ str: cleanStr(m[0]), x: rect.left - pr.left, y: pr.bottom - rect.bottom + size * 0.2, w: rect.width, h: size });
+        }
+      }
+      pages.push({ items, width: pr.width || 1000 });
+    }
+    return pages;
+  } finally { box.remove(); }
+}
 const isImageFile = (file) => /^image\//.test(file.type) || /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name);
 async function imagePages(file) {
   const img = await createImageBitmap(file);
@@ -94,7 +161,7 @@ async function pdfPages(file) {
 
 async function pdfToSongs(file) {
   // a file with no extension (e.g. "מנת חלקי"): a PDF if it opens as one, otherwise a picture
-  const src = isImageFile(file) ? await imagePages(file) : await pdfPages(file).catch(() => imagePages(file));
+  const src = isDocxFile(file) ? await docxPages(file) : isImageFile(file) ? await imagePages(file) : await pdfPages(file).catch(() => imagePages(file));
   const pdf = { numPages: src.length };
   const songs = [];
   let totalText = 0;
@@ -160,7 +227,9 @@ async function pdfToSongs(file) {
   // numbered verses in one song ("1. בניסיון להביט…", "2. …") aren't a songbook: a short file whose numbers are just
   // 1, 2, 3… in the lyrics' own size stays one song
   const lyricH0 = median(all.filter((l) => !l.chords).map((l) => l.h));
-  const numberedAll = all.filter((l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80);
+  // a repeat mark ("( X2)", "X 3") is not a numbered song heading: a heading has a real name
+  const realName = (t) => /[א-ת]{2}|[a-wyzA-WYZ]{3}/.test(cleanTitle(t).title.replace(/\b[xX×]\b/g, ""));
+  const numberedAll = all.filter((l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80 && realName(l.text));
   const nums = numberedAll.map((l) => Number(cleanTitle(l.text).num)).filter(Boolean);
   const verseNumbers = pdf.numPages <= 3 && nums.length && nums.every((n, i) => n === i + 1) && numberedAll.every((l) => l.h <= lyricH0 * 1.1);
   const numbered = verseNumbers ? [] : numberedAll;
@@ -179,7 +248,7 @@ async function pdfToSongs(file) {
     if (big) firstOfPage.add(big);
   }
   const isTitle = numbered.length
-    ? (l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80
+    ? (l) => !l.chords && NUMBERED.test(l.text) && l.text.trim().length < 80 && realName(l.text)
     : (l) => firstOfPage.has(l) && l.h > lyricH * 1.2 && l.text.trim().length < 60;
   let current = null;
   // a key in brackets after the name ("דַּי לִי(F)", mirrored ")(Eb") isn't part of it
@@ -219,7 +288,8 @@ async function pdfToSongs(file) {
   const sameName = (a, b) => { const A = words(a), B = words(b); return A.every((w) => B.includes(w)) || B.every((w) => A.includes(w)) || near(A.join(""), B.join("")); };
   return songs.map((s) => {
     const ct = cleanTitle(s.title), { capo, num } = ct;
-    const pageTitle = ct.title.replace(KEY_IN_TITLE, "").trim() || ct.title; // "(*E" left after "(capo 2*E)" came out
+    // "(*E" left after "(capo 2*E)" came out; a lone key letter after a Hebrew name ("בואו לפניו C")
+    const pageTitle = ct.title.replace(KEY_IN_TITLE, "").replace(/([א-ת][\u0591-\u05C7]*)\s+[A-G][#b]?m?\s*$/, "$1").replace(/[\s(]+$/, "").trim() || ct.title;
     const toc = num && numCount[num] === 1 && tocNames[num] && cleanTitle(tocNames[num]).title;
     const title = toc && !sameName(toc, pageTitle) ? toc : pageTitle;
     const body = mergeChordLines(s.lines);
@@ -621,9 +691,16 @@ function importReportHtml() {
 async function importFiles(files) {
   if (!window.pdfjsLib) { toast("קורא ה-PDF לא נטען, נסו לרענן"); return; }
   songsState.importing = true; songsState.report = []; renderSongs();
+  // a big batch: one file at a time, the report grows as it goes
   for (const file of files) {
     const entry = { name: file.name, warnings: [], saved: [] };
     songsState.report.push(entry);
+    // files that can't hold songs we can read: say so, with what to do instead
+    const unsupported = /\.(xlsx?|csv)$/i.test(file.name) ? "קובץ אקסל — אין בו שירים לקריאה (אם זו רשימת שירים / תוכן עניינים, האתר בונה רשימה משלו)"
+      : /\.doc$/i.test(file.name) ? "קובץ Word ישן (‎.doc) — פתחו אותו ב-Word ושמרו כ-‎.docx או PDF, ואז העלו שוב"
+      : /\.(pptx?|key)$/i.test(file.name) ? "מצגת — שמרו אותה כ-PDF ואז העלו"
+      : /\.(txt|rtf|odt|pages|zip|rar|mp3|mp4|mov|wav)$/i.test(file.name) ? "סוג הקובץ הזה לא נתמך — העלו PDF, Word (‎.docx) או תמונה" : "";
+    if (unsupported) { entry.error = unsupported; continue; }
     try {
       const drafts = await pdfToSongs(file);
       if (drafts === null) entry.error = "לא נמצא בקובץ טקסט, גם לא בזיהוי טקסט מהתמונה";
@@ -634,7 +711,8 @@ async function importFiles(files) {
         Object.assign(entry, await saveImported(drafts, file.name));
         if (entry.failed) entry.warnings.push("חלק מהשירים לא נשמרו (אין הרשאה, או בעיה בחיבור).");
       }
-    } catch (err) { console.error(err); entry.error = "קריאת הקובץ נכשלה (הקובץ פגום או לא PDF)"; }
+    } catch (err) { console.error(err); entry.error = "קריאת הקובץ נכשלה (הקובץ פגום, או שזה לא PDF / Word / תמונה)"; }
+    renderSongs(); // the report grows file by file
   }
   songsState.importing = false;
   await loadSongs();
@@ -659,7 +737,7 @@ function renderSongs() {
   el.innerHTML = `<div class="songs-bar">
       <input id="song-search" type="search" autofocus placeholder="חפשו שיר לפי שם או מילים…" value="${esc(songsState.query)}">
       <button class="btn" data-song-new>+ שיר חדש</button>
-      <label class="btn ghost file-btn">ייבוא מ-PDF / תמונה<input type="file" accept="application/pdf,image/*" id="pdf-file" multiple hidden></label>
+      <label class="btn ghost file-btn">ייבוא שירים (PDF / Word / תמונה)<input type="file" accept="application/pdf,image/*,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" id="pdf-file" multiple hidden></label>
     </div>
     ${songsState.importing ? `<p class="status">קורא ${songsState.report?.length ? `את ${esc(songsState.report[songsState.report.length - 1].name)}` : "את הקובץ"}…</p>` : ""}
     ${importReportHtml()}
