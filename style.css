@@ -376,7 +376,8 @@ html.locked body > *:not(#gate) { display: none !important; }
 .sa-dev { color: var(--ink); } .sa-nw { white-space: nowrap; }
 .adm-toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 10px; z-index: 50; }
 .sa-alert { background: #7a2a1e; color: #fff; border-radius: 10px; padding: 12px 16px; margin: 6px 0 12px; } /* white on dark red ~9:1, both themes */
-.sa-alert ul { margin: 6px 0 0; padding-inline-start: 18px; } .sa-alert .sa-devs, .sa-alert .sa-dev { color: #f3d9d4; }
+.sa-alert ul { margin: 6px 0 0; padding-inline-start: 18px; }
+.sa-alert .sa-approve { display: block; margin: 8px 0 4px; background: #fff; color: #7a2a1e; border-color: #fff; font-weight: 700; } .sa-alert .sa-devs, .sa-alert .sa-dev { color: #f3d9d4; }
 .sa-multi td { background: rgba(229, 115, 115, .12); }
 .header-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-inline-start: auto; } /* admins: 'ניהול' next to the YouTube link (gate.js) */
 .adm-name { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; width: 110px; margin-inline-end: 6px; }

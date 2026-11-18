@@ -68,13 +68,18 @@ async function renderSiteAccess() {
   const nameOf = (ph) => siteAcc.phones.find((p) => p.phone === ph)?.name || "";
   // admins aren't checked (admin.html fills siteAdminPhones from the managers list)
   const isAdminPhone = (ph) => typeof siteAdminPhones !== "undefined" && siteAdminPhones.has(ph);
-  const multi = [...ok.values()].filter((g) => g.devices.size > 1 && listed.has(g.phone) && !isAdminPhone(g.phone));
+  // an admin may mark a number's devices as fine (devices_ok, site_devices_ok.sql): it stays quiet until a new device shows up
+  siteAcc.ok = ok;
+  const okDevs = (ph) => new Set(siteAcc.phones.find((p) => p.phone === ph)?.devices_ok || []);
+  const flagged = (g) => g.devices.size > 1 && [...g.devices.keys()].some((k) => !okDevs(g.phone).has(k));
+  const multi = [...ok.values()].filter((g) => flagged(g) && listed.has(g.phone) && !isAdminPhone(g.phone));
   const weekAgo = Date.now() - 7 * 864e5;
   const badWeek = bad.filter((g) => new Date(g.last) > weekAgo).length;
   // the report: numbers that entered from more than one device, at the very top of the page (#sa-report)
   const reportHtml = multi.length
     ? `<div class="sa-alert" role="alert"><b>⚠ ${multi.length === 1 ? "מספר אחד נכנס" : `${multi.length} מספרים נכנסו`} לאתר מיותר ממכשיר אחד</b>
-      <ul>${multi.map((g) => `<li>${esc(nameOf(g.phone) || "בלי שם")} · <bdi dir="ltr">${esc(fmtPhone(g.phone))}</bdi> · <b>${g.devices.size} מכשירים</b>${devList(g)}</li>`).join("")}</ul></div>`
+      <ul>${multi.map((g) => `<li>${esc(nameOf(g.phone) || "בלי שם")} · <bdi dir="ltr">${esc(fmtPhone(g.phone))}</bdi> · <b>${g.devices.size} מכשירים</b>${devList(g)}
+        <button class="btn sa-approve" type="button" data-sa-approve="${esc(g.phone)}">✓ זה בסדר, לאשר</button></li>`).join("")}</ul></div>`
     : `<div class="sa-ok">✓ אין מספר שנכנס לאתר מיותר ממכשיר אחד${typeof siteAdminPhones !== "undefined" && siteAdminPhones.size ? " (בלי המנהלים)" : ""}.</div>`;
   renderViews(nameOf, isAdminPhone);
   const report = document.getElementById("sa-report");
@@ -89,11 +94,11 @@ async function renderSiteAccess() {
     <input type="search" class="sa-search" id="sa-search" placeholder="🔍 חיפוש לפי שם או מספר" value="${esc(siteAcc.q || "")}">
     <form class="add-user sa-add"><input name="name" required placeholder="שם"><input name="phone" type="tel" required dir="ltr" placeholder="050-0000000"><button class="btn" type="submit">הוספת מספר</button></form>
     <div class="duty-table users-table"><table><thead><tr><th>שם</th><th>טלפון</th><th>כניסה אחרונה</th><th>מכשירים</th><th></th></tr></thead><tbody>
-    ${siteAcc.phones.length ? siteAcc.phones.map((p) => { const g = ok.get(p.phone); return `<tr data-q="${q(p.name, p.phone)}"${g && g.devices.size > 1 && !isAdminPhone(p.phone) ? ' class="sa-multi"' : ""}>
+    ${siteAcc.phones.length ? siteAcc.phones.map((p) => { const g = ok.get(p.phone); return `<tr data-q="${q(p.name, p.phone)}"${g && flagged(g) && !isAdminPhone(p.phone) ? ' class="sa-multi"' : ""}>
       <td><input class="sa-name" data-sa-name="${esc(p.phone)}" value="${esc(p.name)}"></td>
       <td dir="ltr" class="sa-nw">${esc(fmtPhone(p.phone))}</td>
       <td>${g ? fmtWhen(g.last) : "עוד לא נכנס/ה"}</td>
-      <td>${g ? `<details${g.devices.size > 1 ? " open" : ""}><summary>${g.devices.size > 1 ? "⚠ " : ""}${g.devices.size} ${g.devices.size === 1 ? "מכשיר" : "מכשירים"}</summary>${devList(g)}</details>` : "—"}</td>
+      <td>${g ? `<details${g.devices.size > 1 ? " open" : ""}><summary>${flagged(g) ? "⚠ " : g.devices.size > 1 ? "✓ " : ""}${g.devices.size} ${g.devices.size === 1 ? "מכשיר" : "מכשירים"}</summary>${devList(g)}</details>` : "—"}</td>
       <td><button class="link-btn" data-sa-del="${esc(p.phone)}">הסרה</button></td></tr>`; }).join("") : `<tr><td colspan="5">אין עדיין מספרים. הוסיפו את הראשון למעלה.</td></tr>`}
     </tbody></table></div>
     <h3>ניסיונות כניסה עם מספרים שלא ברשימה</h3>
@@ -292,6 +297,14 @@ document.addEventListener("click", async (e) => {
   } else if (allow) {
     const name = prompt(`שם עבור ${fmtPhone(allow.dataset.saAllow)}:`);
     if (name !== null) await siteAddPhone(name, allow.dataset.saAllow);
+  } else if (e.target.closest("[data-sa-approve]")) {
+    // these devices are fine: the alert goes away (and comes back only for a device not seen yet)
+    const ph = e.target.closest("[data-sa-approve]").dataset.saApprove;
+    const keys = [...(siteAcc.ok?.get(ph)?.devices.keys() || [])];
+    const { data, error } = await sb.from("site_phones").update({ devices_ok: keys }).eq("phone", ph).select("phone");
+    if (error && /devices_ok|PGRST204/.test(`${error.code} ${error.message}`)) toast("כדי לאשר, צריך להריץ ב-Supabase את site_devices_ok.sql");
+    else toast(error || !data?.length ? "האישור נכשל" : "אושר");
+    await loadSiteAccess(); renderSiteAccess();
   } else if (e.target.closest("[data-sa-refresh]")) {
     await loadSiteAccess(); renderSiteAccess();
   }
