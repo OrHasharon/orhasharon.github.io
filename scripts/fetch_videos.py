@@ -110,7 +110,10 @@ def fetch_with_ytdlp():
                 continue
             if title.strip() == "הלל":
                 continue  # worship has its own tab already
-            playlists.append({"id": pid, "title": title, "videoIds": ids})
+            # the cover YouTube shows for the playlist (its chosen video), not just the oldest video
+            cover = next((m.group(1) for t in reversed(pl.get("thumbnails") or [])
+                          for m in [re.search(r"/vi/([\w-]{11})/", t.get("url") or "")] if m), None)
+            playlists.append({"id": pid, "title": title, "videoIds": ids, **({"cover": cover} if cover else {})})
             for vid in ids:
                 if vid in videos:
                     videos[vid]["series"].append(title)

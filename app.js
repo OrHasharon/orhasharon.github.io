@@ -85,7 +85,7 @@ function render() {
     grid.innerHTML = list.map((p) => {
       const first = p.videoIds.map((id) => byId[id]).filter(Boolean).sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0];
       return `<button class="card series-card" data-series="${esc(p.title)}">
-        <div class="thumb" data-n="${p.videoIds.length}">${imgHtml(first?.id || p.videoIds[0], "(max-width: 560px) 100vw, 360px")}</div>
+        <div class="thumb" data-n="${p.videoIds.length}">${imgHtml(p.cover || first?.id || p.videoIds[0], "(max-width: 560px) 100vw, 360px")}</div>
         <div class="card-body"><p class="title">${esc(p.title)}</p>
         <div class="meta">${first ? "מ־" + fmtDate(first.date) : ""}</div></div>
       </button>`;
