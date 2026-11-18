@@ -254,7 +254,7 @@ function inviteText(m, { role, instrument, date, token }) {
   const leaderName = leader ? byId(leader.member_id)?.name : "";
   const mt = state.meetings.find((x) => x.iso === date);
   const day = mt ? `${meetingKind(mt)}, ` : "";
-  return `היי ${m.name.split(" ")[0]}! 👋\n` +
+  return `היי ${m.name.split(" ")[0]}!\n` +
     `שובצת ל*${what}* ב${day}*${date.split("-").reverse().join("/")}*${mt?.place ? ` (${mt.place})` : ""}${leaderName ? `, בהובלת ${leaderName}` : ""}.\n` +
     `שיבץ/ה: ${myName()}\n\n` +
     `✅ לאישור: ${base}&a=yes\n` +

@@ -266,7 +266,7 @@ function teamText(date, url, firstName = "") {
   const ld = state.signups.find((s) => s.meeting_date === date && s.role === "leader");
   const leaderName = ld ? byId(ld.member_id)?.name : "";
   const when = `${mt ? meetingKind(mt) + " " : ""}${date.split("-").reverse().join("/")}`;
-  return `היי ${firstName || "צוות"}! 🎶\n` +
+  return `היי ${firstName || "צוות"}!\n` +
     `הסט של ההלל ב*${when}* מוכן.\n` +
     `בזמן ההלל הלינק מראה את השיר הנוכחי בסולם הנכון, וזז יחד עם ${leaderName ? "*" + leaderName + "*" : "מוביל/ת ההלל"}. בלי התחברות:\n` +
     `${url}\n\n` +

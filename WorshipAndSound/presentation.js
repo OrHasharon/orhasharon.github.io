@@ -218,7 +218,7 @@ async function ptToken(iso) {
 const ptLinkUrl = (token) => location.origin + location.pathname.replace(/[^/]*$/, "") + "sermon.html?t=" + token;
 
 function ptLinkText(m, url) {
-  return `היי! 🙏\nלינק להעלאת המסר ל*${meetingKind(m)} ${ptDay(m.iso)}*:\n${url}\n\n` +
+  return `היי!\nלינק להעלאת המסר ל*${meetingKind(m)} ${ptDay(m.iso)}*:\n${url}\n\n` +
     `מעלים את קובץ ה-PowerPoint (או PDF), בלי התחברות. המצגת נכנסת כמו שהיא למצגת האסיפה, ואפשר להעלות שוב כדי להחליף.\nתודה!`;
 }
 
