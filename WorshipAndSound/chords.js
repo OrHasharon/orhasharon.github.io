@@ -157,6 +157,18 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
 const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/[\u00A0\u2000-\u200A\u202F]/g, " ");
 
 // ---------- lyrics → slides (PowerPoint + projection screen) ----------
+// lines that are never lyrics on a slide: credits and settings ("מילים ולחן: …", "נכתב ע״י …", "מפתח: E | קצב: 127bpm"),
+// a section mark written as text ("פזמון X2", "בית א'", "גשר:", "סולו"), and a row of chords only ("Gm", "Bm | / / / D")
+const SECTION_TEXT = /^(פזמון|פזמון\s*[אב]['׳]?|בית(\s*[א-ת0-9]['׳]?)?|גשר|מעבר|סיום|פתיחה|הקדמה|קודה|סולו|פרי\s*קורוס|אינטרו|intro|outro|chorus|pre-?chorus|verse(\s*\d+)?|bridge|tag|ending)\s*[:.]?$/i;
+const CREDITS = /^(מילים|לחן|מילים\s*ולחן|מילים\s*ו?לחן|נכתב|כתב|תרגום|עיבוד|ביצוע|מבצע|מפתח|סולם|קצב|מפעם|טמפו|key|capo|tempo|words|music|lyrics|written)(?=[\s:,.\-–]|$)|ע["״']י|bpm|קאפו\s*\d|capo\s*\d/i; // (\b doesn't work with Hebrew letters)
+function isSlideLine(line) {
+  const t = line.replace(/[֑-ׇ]/g, "").trim();
+  if (SECTION_TEXT.test(t) || CREDITS.test(t)) return false;
+  const toks = t.split(/\s+/).filter((w) => !/^[|/\\\-–—.:,()]+$/.test(w));
+  if (toks.length && toks.every((w) => CHORD_RE.test(w.replace(/[()|,]/g, "")) || /^או$/.test(w))) return false; // "Gm", "A | D"
+  return true;
+}
+
 // stanzas of clean lyric lines, each tagged with its section label ({פזמון}) if any
 function lyricStanzas(content) {
   const stanzas = [{ label: "", lines: [] }];
@@ -165,9 +177,15 @@ function lyricStanzas(content) {
     if (/^\{\s*(capo|artist|key|screen|c|comment)\s*:/i.test(t)) continue; // settings and notes are not on the slides
     const label = t.match(/^\{(.+)\}$/);
     if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
-    const line = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
+    // repeat marks ("X2", "2X", "(x3)", "\u00D72") are for the band, not for the screen
+    const line = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\(?\s*(?:[xX\u00D7]\s*\d|\d\s*[xX\u00D7])\s*\)?/g, "").replace(/\s{2,}/g, " ").trim();
     if (!line) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); continue; }
     if (!/[\u05D0-\u05EAa-zA-Z]{2}/.test(line.replace(/[\u0591-\u05C7]/g, ""))) continue; // chord-only rows (niqqud ignored)
+    if (!isSlideLine(line)) {
+      // a section mark written as text ("\u05E4\u05D6\u05DE\u05D5\u05DF X2", "\u05D1\u05D9\u05EA \u05D1'", "\u05D2\u05E9\u05E8:") still separates the sections
+      if (SECTION_TEXT.test(line) && stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] });
+      continue;
+    }
     stanzas[stanzas.length - 1].lines.push(line);
   }
   return stanzas.filter((s) => s.lines.length);
