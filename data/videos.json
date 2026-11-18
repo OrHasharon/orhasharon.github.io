@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-18T00:35:14+00:00",
+ "updated": "2026-11-18T19:17:48+00:00",
  "source": "yt-dlp",
  "videos": [
   {
@@ -2562,7 +2562,8 @@
     "pmnNv8RP4IQ",
     "gkRz_oO_qKE",
     "izsShYvXcrk"
-   ]
+   ],
+   "cover": "jE1F33k2fj8"
   },
   {
    "id": "PLOlYhdzLQsJ8",
@@ -2587,7 +2588,8 @@
     "8-l1lLKk2tQ",
     "zfxgRvcxOIE",
     "wweQU_mVELQ"
-   ]
+   ],
+   "cover": "j2d1ZdGyv68"
   },
   {
    "id": "PLWoimKSv2tzs",
@@ -2601,7 +2603,8 @@
     "GXGLB48gJKY",
     "f50JIMLNl88",
     "mHVEi1hkmQc"
-   ]
+   ],
+   "cover": "bqRf1mb486M"
   },
   {
    "id": "PLIayhJQbUu-0",
@@ -2632,7 +2635,8 @@
     "dOpfhczUZD0",
     "4BE3bfwYUgM",
     "l7QVDUl6QD4"
-   ]
+   ],
+   "cover": "eDODJ6cOKs4"
   },
   {
    "id": "PLm1hv2LV9Zip1wQE4MYeqgDVvWfXNhymZ",
@@ -2647,7 +2651,8 @@
     "aZtRPW3gydc",
     "EGGdn7F25uA",
     "B8bA-IijBuo"
-   ]
+   ],
+   "cover": "RQzwskFfiTo"
   },
   {
    "id": "PLm1hv2LV9ZipMYtgwbYBZ2tRH7e3W_uvt",
@@ -2717,7 +2722,8 @@
     "z_GzQA_g18Y",
     "1eELCQsVqqo",
     "Fhx-UwDqxwI"
-   ]
+   ],
+   "cover": "gRYFoKiY7Dw"
   },
   {
    "id": "PLm1hv2LV9ZipiRJoBemSZnC1fczta04-F",
@@ -2756,14 +2762,16 @@
     "4ao21NKknHA",
     "irBnuYlexFM",
     "WmSTORjch9s"
-   ]
+   ],
+   "cover": "pTrjtuKpvF8"
   },
   {
    "id": "PLm1hv2LV9ZirBPvF7pPrJI9o9O21br8pm",
    "title": "ארבע אימהות",
    "videoIds": [
     "gjQkPGou61U"
-   ]
+   ],
+   "cover": "gjQkPGou61U"
   }
  ]
 }
