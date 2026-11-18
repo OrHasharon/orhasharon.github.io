@@ -52,7 +52,9 @@ function whoName(v) {
 }
 const byLine = (row) => row?.updated_at ? `${row.updated_by ? `ע״י ${esc(whoName(row.updated_by))} · ` : ""}${ptWhen(row.updated_at)}` : "";
 
-const ptCanManage = (iso) => isAdmin || canEditSetlist(iso);
+// the meeting's presentation (sermon, prayer requests, parasha, the Supper verse): every signed-in team member
+// (the database allows the same: is_allowed()); the songs of the session stay with the worship leader (setlist.js)
+const ptCanManage = () => typeof user !== "undefined" && !!user;
 const ptDay = (iso) => iso.split("-").reverse().slice(0, 2).join("/");
 const ptWhen = (ts) => new Date(ts).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
