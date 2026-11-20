@@ -38,6 +38,18 @@ function lyricFontSize(lines, { width = 876, height = 356, max = 44, min = 30, g
   }
   return min;
 }
+// The Lord's Supper verse (Uriya's example): just the verses — the verse numbers ("9הֵן", "10וְאַתֶּם") are dropped —
+// big, right-aligned across the slide, a long passage over several slides; the source small at the top left, no brackets.
+// The reading slide's body: 800pt wide, 398pt high.
+const SUPPER_SIZE = 36;
+function supperSlides(verse, ref) {
+  const text = (verse || "").replace(/(^|[\s;:.,(])\d{1,3}(?=[\u05D0-\u05EA])/g, "$1").replace(/[ \t]{2,}/g, " ").trim();
+  const plain = text.replace(/[\u0591-\u05C7]/g, "");
+  const perRow = 800 / (0.5 * SUPPER_SIZE), rows = Math.floor(398 / (SUPPER_SIZE * 1.4));
+  const max = Math.floor(perRow * rows * 0.8 * (text.length / Math.max(1, plain.length)));
+  return { pages: readingPages(text, max), ref: (ref || "").trim().replace(/^\(\s*|\s*\)$/g, ""), size: SUPPER_SIZE };
+}
+
 // a song slide's lines and size: a line too long for one row at that size is cut at the comma nearest its middle
 // ("בניסיון להביט על חיי מעיניו," / "לזכור שהכל לטובת אוהביו"), so it doesn't wrap at a random word
 function lyricLayout(lines) {

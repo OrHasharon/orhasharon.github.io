@@ -302,11 +302,14 @@ async function buildPptx(iso) {
       // on the template's reading slide, as Uriya asked: just the verses across the slide, the source small at the top,
       // no picture; a long passage goes over several slides (readingPages, deck.js)
       const two = (xml) => { const sps = shapes(xml).filter((sp) => /<p:txBody>/.test(sp)); return [sps.find((sp) => /name="Title/.test(sp)) || sps[0], sps.find((sp) => !/name="Title/.test(sp)) || sps[1]]; };
-      for (const page of readingPages(texts.communion_verse)) {
+      const sup = supperSlides(texts.communion_verse, texts.communion_ref); // (deck.js)
+      const left = (sp) => { const x = sp.replace(/algn="[a-z]+"/g, 'algn="l"'); return /algn=/.test(x) ? x : x.replace(/<a:pPr\b/g, '<a:pPr algn="l"'); };
+      const right = (sp) => { const x = sp.replace(/algn="[a-z]+"/g, 'algn="r"'); return /algn=/.test(x) ? x : x.replace(/<a:pPr\b/g, '<a:pPr algn="r"'); };
+      for (const page of sup.pages) {
         order.push(await clone(TPL.reading, (xml) => {
           const [t, bd] = two(xml);
-          let x = t ? xml.replace(t, setParagraphs(t, [texts.communion_ref || ""], (ps) => ps[0]).replace(/sz="\d+"/g, 'sz="2400"')) : xml;
-          return bd ? x.replace(bd, setParagraphs(bd, page, (ps) => ps[0])) : x;
+          let x = t ? xml.replace(t, left(setParagraphs(t, [sup.ref], (ps) => ps[0]).replace(/sz="\d+"/g, 'sz="2000"'))) : xml;
+          return bd ? x.replace(bd, right(setParagraphs(bd, [page.join(" ")], (ps) => ps[0]).replace(/sz="\d+"/g, `sz="${sup.size * 100}"`))) : x;
         }));
       }
       continue;

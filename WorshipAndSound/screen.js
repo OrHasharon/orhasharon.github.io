@@ -85,7 +85,7 @@ function buildDeck() {
     if (e.weekly === "reading" && S.parashaDeck.length) continue;
     if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
     // the Supper verse typed in the site: on the reading slide (just the verses, the source small at the top, no picture)
-    if (e.tpl === "communion_verse" && S.dbCommunion) { splitReading(S.dbCommunion.verse).forEach((lines) => S.deckSlides.push({ key: "reading", lines, ref: S.dbCommunion.ref || "", small: true })); continue; }
+    if (e.tpl === "communion_verse" && S.dbCommunion) { const sup = supperSlides(S.dbCommunion.verse, S.dbCommunion.ref); sup.pages.forEach((lines) => S.deckSlides.push({ key: "reading", lines: [lines.join(" ")], ref: sup.ref, supper: sup.size })); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = slideStanzas(e.song.content || "", e.song.title).flatMap((st) => chunks(st.lines, 4));
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
@@ -174,7 +174,8 @@ function weekEditor() {
 }
 
 // fonts the template names → what the browser has (David is on Windows; David Libre is loaded as its stand-in)
-const FONT = (f) => /david/i.test(f) ? '"David", "David Libre", serif' : /times/i.test(f) ? '"Times New Roman", "David Libre", serif' : 'Arial, "Noto Sans Hebrew", sans-serif';
+const FONT = (f) => /david/i.test(f) ? '"David", "David Libre", serif' : /times/i.test(f) ? '"Times New Roman", "David Libre", serif'
+  : /sbl|frank|narkis|hebrew|ezra|taamey/i.test(f) ? `"${f}", "SBL Hebrew", "Taamey Frank CLM", "Frank Ruehl CLM", "Times New Roman", "David Libre", serif` : 'Arial, "Noto Sans Hebrew", sans-serif';
 
 function tplParas(el, entry) {
   const like = (i, text) => ({ ...(el.paras[i] || el.paras[0]), runs: text ? [{ ...(el.paras[i] || el.paras[0]).style, t: text }] : [] });
@@ -185,8 +186,8 @@ function tplParas(el, entry) {
   if (el.role === "verse") return [...linesOf(wk("verse")).map((t) => like(0, t)), ...(wk("verseRef") ? [like(1, wk("verseRef"))] : [])];
   if (el.role === "parasha_name") return [like(0, wk("parasha"))];
   if (el.role === "parasha_refs") return linesOf(wk("parashaRefs")).map((t) => like(0, t));
-  if (el.role === "reading_ref") { const p = like(0, entry.ref ?? wk("readingRef")); return [entry.small ? { ...p, runs: p.runs.map((r) => ({ ...r, sz: 24 })) } : p]; }
-  if (el.role === "reading_body") return (entry.lines || []).map((t) => like(0, t));
+  if (el.role === "reading_ref") { const p = like(0, entry.ref ?? wk("readingRef")); return [entry.supper ? { ...p, algn: "l", rtl: false, runs: p.runs.map((r) => ({ ...r, sz: 20, i: true })) } : p]; }
+  if (el.role === "reading_body") return (entry.lines || []).map((t) => { const p = like(0, t); return entry.supper ? { ...p, algn: "r", runs: p.runs.map((r) => ({ ...r, sz: entry.supper })) } : p; });
   if (el.role === "prayers") return (entry.lines || []).map((t) => { const p = el.paras[0]; return { ...p, runs: prayerRuns(t, { ...p.style, c: "#F5F7FA" }) }; });
   if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: showTitle(entry.song.title) }] }];
   if (el.role === "lyrics" && entry.song) {

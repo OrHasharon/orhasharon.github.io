@@ -146,8 +146,9 @@ function ptTextsHtml(iso, can, open) {
   const refs = parashaRefs(r), passages = passagesOf(r);
   const hasParasha = !!(r.parasha || r.reading || r.parasha_refs || r.parasha_file_path);
   // who wrote the verse = communion_by (set only when the verse itself changes); older rows don't know, so no name
-  const cBy = c?.communion_by ? `ע״י ${esc(whoName(c.communion_by))}${c.communion_at ? ` · ${ptWhen(c.communion_at)}` : ""}` : "";
-  const from = c && (cBy || c.meeting_date !== iso) ? ` <small>· ${c.meeting_date !== iso ? `ממשיך מ-${ptDay(c.meeting_date)}${cBy ? " · " : ""}` : ""}${cBy}</small>` : "";
+  // (a verse saved before 20.11.2026 has no record of its writer: say so rather than show nothing)
+  const cBy = !c ? "" : c.communion_by ? `ע״י ${esc(whoName(c.communion_by))}${c.communion_at ? ` · ${ptWhen(c.communion_at)}` : ""}` : "לא נרשם מי כתב ומתי";
+  const from = c ? ` <small>· ${c.meeting_date !== iso ? `ממשיך מ-${ptDay(c.meeting_date)} · ` : ""}${cBy}</small>` : "";
   const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${r.parasha_file_path ? "מצגת: " + esc(r.parasha_file_name || "") : hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
   if (!can) {
     return `<details class="pt-section pt-pray" data-key="texts-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>

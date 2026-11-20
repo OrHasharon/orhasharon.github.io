@@ -40,6 +40,9 @@ const HEB = /[֐-׿]/;
 // and the shin/sin dot on a letter that isn't ש (moved to a nearby ש that lacks one, otherwise dropped).
 // same, for a line with [chord] markers: fix the lyrics as one piece, then put each chord back before the same letter
 function fixNiqqudLine(line) {
+  // a word broken by an old import ("אֲדֹנֵינ וּ"): no Hebrew word ends in a non-final כ מ נ פ צ, so a lone letter
+  // after one is the rest of that word — glue it back
+  line = line.replace(/([כמנפצ][֑-ׇ]*) ([א-ת][֑-ׇ]*)(?=[\s,.;:!?\-\[\]()]|$)/g, "$1$2");
   if (!line.includes("[")) return fixNiqqud(line);
   const MARK = /[֑-ׇ]/;
   const chords = []; let plain = "", bases = 0;
@@ -110,8 +113,11 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
     if (!t) return `<div class="cp-line cp-empty"></div>`;
     if (META_RE.test(t)) return "";
     const note = t.match(/^\{\s*(?:c|comment)\s*:\s*(.*?)\s*\}$/i); // a note for the musicians ("או Em A"), not lyrics
+    // a credit kept as a note ("אקורדים לפי עיבוד One For Israel 2024") is not for the screen
+    if (note && /^(אקורדים|עיבוד|מילים|לחן|תרגום|ביצוע)|ע["״']י/.test(note[1].trim())) return "";
     if (note) return chords ? `<div class="cp-note" dir="auto">(${esc(note[1])})</div>` : "";
     const label = t.match(/^\{(.+)\}$/);
+    if (label && /^בית\s*\d+$/.test(label[1].trim())) return ""; // a verse number from the import: no heading on screen
     if (label) return `<div class="cp-section" dir="auto">[${esc(label[1])}]</div>`;
     // "Gm [או Em A]": a chord with an alternative — a chord row, never "או Em A" as one chord over nothing
     const alt = line.match(/^\s*([A-G][#b]?[^\s\[\]()]*)\s*[\[(]\s*או\s+([^\])]+?)\s*[\])]\s*$/);
