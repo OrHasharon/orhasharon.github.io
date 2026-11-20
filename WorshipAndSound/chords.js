@@ -258,10 +258,16 @@ function withChorus(st, title) {
   if (c < 0) return st;
   const key = (x) => looseText(x.lines.join(" ")), ck = key(st[c]);
   if (st.some((x, i) => i !== c && key(x) === ck)) return st; // the chorus is already written out again
+  // a bridge / ending written in parts (a blank line between them, only the first labeled) is one unit: the chorus
+  // comes after its last part, not between the parts
+  const TAIL = /^(גשר|מעבר|סיום|קודה|bridge|tag|ending|outro)/i;
+  let inTail = false;
+  const tail = st.map((x) => { const l = (x.label || "").trim(); inTail = l ? TAIL.test(l) : inTail; return inTail; });
   const out = [];
   st.forEach((x, i) => {
     out.push(x);
-    if (i !== c && i + 1 !== c) out.push({ ...st[c], lines: [...st[c].lines], again: true });
+    const nextContinues = tail[i] && i + 1 < st.length && tail[i + 1] && !(st[i + 1].label || "").trim();
+    if (i !== c && i + 1 !== c && !nextContinues) out.push({ ...st[c], lines: [...st[c].lines], again: true });
   });
   return out;
 }
