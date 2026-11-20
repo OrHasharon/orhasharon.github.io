@@ -926,7 +926,8 @@ function renderSongs() {
     ${songsState.importing ? `<p class="status">קורא ${songsState.report?.length ? `את ${esc(songsState.report[songsState.report.length - 1].name)}` : "את הקובץ"}…</p>` : ""}
     ${importReportHtml()}
     <div id="song-results">${searchResultsHtml()}</div>
-    ${uploadsHtml()}`;
+    ${uploadsHtml()}
+    ${songsState.list.length ? songIndex(songsState.list) : ""}`;
   // only the results are redrawn while typing, so the cursor never jumps
   const search = $("song-search");
   search.addEventListener("input", () => { songsState.query = search.value; $("song-results").innerHTML = searchResultsHtml(); });
@@ -971,15 +972,17 @@ function searchResultsHtml() {
 
 // alphabetical index grouped by first letter, titles only
 function songIndex(list) {
-  const sorted = [...list].sort((a, b) => (b.title.includes(q) - a.title.includes(q)) || a.title.localeCompare(b.title, "he"));
+  const sorted = [...list].sort((a, b) => a.title.localeCompare(b.title, "he"));
   const groups = new Map();
   for (const s of sorted) {
     const letter = (s.title.trim()[0] || "#").replace(/[ךםןףץ]/, (c) => ({ ך: "כ", ם: "מ", ן: "נ", ף: "פ", ץ: "צ" }[c]));
     if (!groups.has(letter)) groups.set(letter, []);
     groups.get(letter).push(s);
   }
-  return `<div class="song-index">${[...groups].map(([letter, songs]) => `<section class="idx-group"><h3>${esc(letter)}</h3>
-    ${songs.map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}</button>`).join("")}</section>`).join("")}</div>`;
+  return `<details class="uploads all-songs"><summary>כל השירים לפי א״ב (${list.length})</summary>
+    <nav class="idx-letters">${[...groups.keys()].map((l, i) => `<a href="#idx-${i}">${esc(l)}</a>`).join("")}</nav>
+    <div class="song-index">${[...groups].map(([letter, songs], i) => `<section class="idx-group" id="idx-${i}"><h3>${esc(letter)}</h3>
+    ${songs.map((s) => `<button class="idx-song" data-song="${s.id}">${esc(s.title)}${sameName(s) ? `<small class="first-line"> · ${esc(firstLine(s))}</small>` : ""}</button>`).join("")}</section>`).join("")}</div></details>`;
 }
 
 // files that were imported: who, when, how many songs; only the uploader can delete
