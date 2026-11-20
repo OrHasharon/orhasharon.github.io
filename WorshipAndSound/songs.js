@@ -351,6 +351,7 @@ async function docxPages(file) {
   // with the theme font (e.g. Calibri); the preview would use one font for both, and the widths — so the chords'
   // places over the words — would drift. Measure with the same two fonts.
   const buf = await file.arrayBuffer();
+  let doc = buf;
   try {
     const zip = await JSZip.loadAsync(buf);
     const styles = (await zip.file("word/styles.xml")?.async("string")) || "";
@@ -361,7 +362,15 @@ async function docxPages(file) {
     if (!st) { st = document.createElement("style"); st.id = "docx-fonts"; document.head.append(st); }
     // a Hebrew document (paragraphs right-to-left by default, <w:bidi/>): the preview leaves them left-to-right, and
     // then the spaces before a chord land on the wrong side — Word puts them at the right, before the first chord
-    const rtl = /<w:pPrDefault>[\s\S]*?<w:bidi\/>/.test(styles);
+    // (or each paragraph marked right-to-left on its own: most paragraphs carry <w:bidi/>)
+    const docXml = (await zip.file("word/document.xml")?.async("string")) || "";
+    const paras = (docXml.match(/<w:p[ >]/g) || []).length, bidiParas = (docXml.match(/<w:bidi\/>/g) || []).length;
+    const rtl = /<w:pPrDefault>[\s\S]*?<w:bidi\/>/.test(styles) || (paras > 0 && bidiParas >= paras / 2);
+    // spaces Word marks right-to-left (a run of only spaces with <w:rtl/>, between the chords of a chord row): Word
+    // lays each chord out on its own, the first at the right; a browser would join "D   D/F#   G   A" into one
+    // left-to-right run and flip the order. A right-to-left mark in those spaces makes the browser do what Word does.
+    const marked = docXml.replace(/(<w:r(?=[ >])[^>]*>)((?:(?!<\/w:r>)[\s\S])*?<w:rtl\/>(?:(?!<\/w:r>)[\s\S])*?)<w:t([^>]*)>(\s+)<\/w:t>/g, (m, r, a, at, sp) => `${r}${a}<w:t${at}>${sp}\u200F</w:t>`);
+    if (marked !== docXml) { zip.file("word/document.xml", marked); doc = await zip.generateAsync({ type: "arraybuffer" }); }
     // the theme's fonts: "majorBidi" / "minorBidi" = the Hebrew font of the theme's major / minor set (often Times
     // New Roman) — Word uses it for every letter of such a run, the chords included
     const themeFont = (set, script) => (theme.match(new RegExp(`<a:${set}>[\\s\\S]*?<a:font script="${script}" typeface="([^"]+)"`)) || [])[1];
@@ -376,12 +385,19 @@ async function docxPages(file) {
       ${rtl ? ".docx-measure p { direction: rtl !important; }" : ""}`;
   } catch {}
   try {
-    await docx.renderAsync(buf, box, null, { inWrapper: false, breakPages: true, ignoreLastRenderedPageBreak: false, renderHeaders: false, renderFooters: false, ignoreWidth: true });
+    await docx.renderAsync(doc, box, null, { inWrapper: false, breakPages: true, ignoreLastRenderedPageBreak: false, renderHeaders: false, renderFooters: false, ignoreWidth: true });
     // a chord row ("A9" + many spaces) in a right-to-left paragraph: Word keeps the spaces to the right of the chord
     // (so the chord sits far to the left, over the end of the line); a browser moves trailing spaces aside. An
     // invisible left-to-right mark at the end keeps the spaces with the chords, as in Word.
     for (const p of box.querySelectorAll("p")) {
-      if (!/[֐-׿]/.test(p.textContent) && /[A-G]/.test(p.textContent) && /\s$/.test(p.textContent)) p.append("‎");
+      if (/[֐-׿]/.test(p.textContent) || !/[A-G]/.test(p.textContent)) continue;
+      if (/\s$/.test(p.textContent)) p.append("‎");
+      // "D/F" + "#" in separate runs: in a right-to-left row the lone "#" (or "/") would jump to the chord's left side.
+      // A left-to-right mark after it keeps it attached to its chord.
+      const tw = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+      for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+        if (/[#/]/.test(n.data)) n.data = n.data.replace(/([#/])/g, "$1‎");
+      }
     }
     const sections = [...box.querySelectorAll("section")].filter((s) => s.textContent.trim());
     const pages = [];
@@ -552,10 +568,10 @@ async function pdfToSongs(file) {
     const [a, b] = songs[0].lines.filter((l) => !l.chords && l.text.trim());
     if (a && b && a.text.trim().length < 50 && /מילים|לחן|מאת|תרגום|words|music|by\b/i.test(b.text)) {
       songs[0].title = a.text.trim(); songs[0].lines.splice(songs[0].lines.indexOf(a), 1);
-    } else songs[0].title = file.name.replace(/\.(pdf|jpe?g|png|webp|bmp|gif)$/i, "").replace(/[-_ ]\(?\d+\)?$/, "").trim() || songs[0].title;
+    } else songs[0].title = file.name.replace(/\.(pdf|docx|jpe?g|png|webp|bmp|gif)$/i, "").replace(/[-_ ]\(?\d+\)?$/, "").trim() || songs[0].title;
   }
   // a picture of one song: its file name ("06 הימים האחרונים.jpg") is more reliable than the recognized heading
-  const fileTitle = file.name.replace(/\.(pdf|jpe?g|png|webp|bmp|gif)$/i, "").replace(/^\s*\d{1,3}[\s.\-_]+/, "").replace(/[-_ ]\(?\d+\)?$/, "").replace(/\s*-\s*copy$/i, "").trim();
+  const fileTitle = file.name.replace(/\.(pdf|docx|jpe?g|png|webp|bmp|gif)$/i, "").replace(/^\s*\d{1,3}[\s.\-_]+/, "").replace(/[-_ ]\(?\d+\)?$/, "").replace(/\s*-\s*copy$/i, "").trim();
   if (pdfToSongs.ocr && songs.length === 1 && /[א-תa-zA-Z]{2}/.test(fileTitle)) {
     songs[0].title = fileTitle;
     // the sheet's own heading (the same name, read from the picture) is not the first line of the lyrics
