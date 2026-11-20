@@ -586,8 +586,20 @@ async function pdfToSongs(file) {
     const body = mergeChordLines(s.lines);
     // a section heading on its own line ("פזמון", "בית 2", "Chorus") becomes a {label}, so it isn't shown as lyrics
     const SECTION = /^\s*(פזמון(\s*(?:[xX×]\s*\d|\d\s*[xX×]))?|בית(\s*[א-ת0-9]['׳]?)?|גשר|מעבר|סיום|פתיחה|קודה|intro|outro|chorus|pre-?chorus|verse(\s*\d+)?|bridge|tag|ending)\s*:?\s*$/i;
+    const loose = (t) => t.replace(/[֑-ׇ]/g, "").replace(/[^א-תa-zA-Z0-9]+/g, " ").trim();
+    let firstText = true;
     const lines = body.split("\n").flatMap((l) => {
       if (SECTION.test(l)) return [`{${l.trim().replace(/:$/, "")}}`];
+      // the heading "שם השיר \ כותב 2022" at the top: the writer goes to {artist: …}, the name isn't sung
+      if (firstText && l.trim()) {
+        firstText = false;
+        const hd = !/\[/.test(l) && l.match(/^(.+?)\s+[\\/|–-]\s+(\S.*)$/);
+        if (hd && loose(hd[1]) === loose(title)) return [`{artist: ${hd[2].trim()}}`];
+      }
+      // a note for the band, in brackets (sometimes broken or mirrored by the PDF): "(אם חוזרים על הפזמון)",
+      // "(אקורדים לפי עיבוד …)" — a {c: …} note, not lyrics
+      const bare = l.trim().replace(/^[()]+|[()]+$/g, "").trim();
+      if (!/\[/.test(l) && /[()]/.test(l.trim()[0] + l.trim().slice(-1)) && /(^|\s)(אם\s+חוזרים|חוזרים|פעמיים|לסיום|בסיום|אקורדים|עיבוד|קאפו|מעבר\s+ל|בפעם\s+ה)/.test(bare)) return [`{c: ${bare}}`];
       // "פזמון: נושא את עיניי…" → {פזמון} + the line; a numbered verse "1. בניסיון…" → {בית 1} + the line
       const lab = l.match(/^\s*(פזמון|גשר|מעבר|סיום|פתיחה)\s*:\s*(\S.*)$/);
       if (lab) return [`{${lab[1]}}`, lab[2]];
@@ -856,9 +868,11 @@ function toLine(l) {
     for (let k = 1; k < row.length; k++) while (k < row.length && row[k].ch === " " && row[k - 1].ch === "/") row.splice(k, 1);
     const rowText = row.map((r) => r.ch).join("");
     const chords = [];
-    let ok = true, any = false;
+    let ok = true, any = false, verse = null;
     for (const m of rowText.matchAll(/\S+/g)) {
       if (FILLER_RE.test(m[0])) continue;
+      // a verse number at the row's edge ("1)", "(2", "3.") is not a chord: the row is still a chord row, and the verse is labeled
+      if (/^[()]*\d{1,2}[().]*$/.test(m[0]) && /[().]/.test(m[0])) { verse = m[0].replace(/\D/g, ""); continue; }
       const lead = m[0].match(/^[()]*/)[0].length;
       const bare = m[0].replace(/^[()]+|[()]+$/g, "");
       if (!bare) continue;
@@ -870,7 +884,7 @@ function toLine(l) {
         any = true;
       }
     }
-    if (ok && any) return { text: chords.map((c) => c.name).join(" "), rtl, chords, h };
+    if (ok && any) return { text: chords.map((c) => c.name).join(" "), rtl, chords, h, verse };
   }
   return { text, rtl, pos, h };
 }
@@ -896,6 +910,7 @@ function mergeChordLines(lines) {
     const ln = lines[i];
     if (ln.breakBefore && out.length && out[out.length - 1] !== "") out.push("");
     if (!ln.chords) { out.push(ln.text.trimEnd()); continue; }
+    if (ln.verse) { if (out.length && out[out.length - 1] !== "") out.push(""); out.push(`בית ${ln.verse}`); }
     const next = lines[i + 1];
     if (!next || next.chords) {
       const order = songIsRtl(lines) ? [...ln.chords].sort((a, b) => b.xR - a.xR) : ln.chords;
@@ -1031,6 +1046,8 @@ async function importFiles(files) {
 
 const myEmail = () => (typeof user !== "undefined" && user?.email ? user.email.toLowerCase() : null);
 const isMine = (row) => !!myEmail() && (row.added_by || "").toLowerCase() === myEmail();
+// deleting: the uploader, and admins anything (songs_admin_delete.sql)
+const canDelete = (row) => isMine(row) || (typeof isAdmin !== "undefined" && isAdmin);
 
 // ---------- views ----------
 function renderSongs() {
@@ -1123,7 +1140,7 @@ function uploadsHtml() {
   return `<details class="uploads"><summary>קבצים שהועלו (${files.size})</summary>
     <div class="duty-table"><table><thead><tr><th>קובץ</th><th>הועלה ע״י</th><th>תאריך</th><th>שירים</th><th></th></tr></thead><tbody>
     ${[...files.values()].map((f) => `<tr><td dir="auto">${esc(f.name)}</td><td dir="ltr">${esc(f.by || "")}</td><td>${f.at ? new Date(f.at).toLocaleDateString("he-IL") : ""}</td><td>${f.count}</td>
-      <td>${myEmail() && (f.by || "").toLowerCase() === myEmail() ? `<button class="link-btn" data-del-file="${esc(f.name)}">מחיקת הקובץ ושיריו</button>` : ""}</td></tr>`).join("")}
+      <td>${canDelete({ added_by: f.by }) ? `<button class="link-btn" data-del-file="${esc(f.name)}" data-del-by="${esc(f.by || "")}">מחיקת הקובץ ושיריו</button>` : ""}</td></tr>`).join("")}
     </tbody></table></div></details>`;
 }
 
@@ -1170,7 +1187,7 @@ function renderSongEdit(el) {
     <p class="hint">תצוגה מקדימה:</p>
     <div class="chordpro preview song-body">${renderChordPro(s.content)}</div>
     <div class="form-actions"><button class="btn" type="submit">שמירה</button>
-      ${s.id && (isMine(s) || !s.added_by) ? `<button class="btn ghost" type="button" data-song-delete="${s.id}">מחיקת השיר</button>` : ""}</div>
+      ${s.id && (canDelete(s) || !s.added_by) ? `<button class="btn ghost" type="button" data-song-delete="${s.id}">מחיקת השיר</button>` : ""}</div>
   </form></div>`;
   const ta = el.querySelector("textarea");
   ta.addEventListener("input", () => { el.querySelector(".preview").innerHTML = renderChordPro(ta.value); });
@@ -1228,17 +1245,19 @@ document.addEventListener("click", async (e) => {
   }
   if (t.closest("[data-report-close]")) { songsState.report = []; renderSongs(); return; }
   if (t.closest("[data-del-file]")) {
-    const name = t.closest("[data-del-file]").dataset.delFile;
-    const mine = songsState.list.filter((s) => (s.source || "").split("#")[0] === name && isMine(s));
+    const btn = t.closest("[data-del-file]"), name = btn.dataset.delFile, by = (btn.dataset.delBy || "").toLowerCase();
+    const mine = songsState.list.filter((s) => (s.source || "").split("#")[0] === name && (s.added_by || "").toLowerCase() === by && canDelete(s));
     if (!confirm(`למחוק את הקובץ "${name}" ואת ${mine.length} השירים שלו?`)) return;
-    const { error } = await sb.from("songs").delete().in("id", mine.map((s) => s.id));
+    const { data, error } = await sb.from("songs").delete().in("id", mine.map((s) => s.id)).select("id");
     if (error) { toast("המחיקה נכשלה"); return; }
+    if (!data?.length) { toast("אין הרשאה למחוק את הקובץ הזה (צריך להריץ את songs_admin_delete.sql)", { error: true }); return; }
     toast("הקובץ נמחק"); await loadSongs(); renderSongs(); return;
   }
   if (t.closest("[data-song-delete]")) {
     if (!confirm(`למחוק את "${songsState.current.title}"?`)) return;
-    const { error } = await sb.from("songs").delete().eq("id", songsState.current.id);
+    const { data, error } = await sb.from("songs").delete().eq("id", songsState.current.id).select("id");
     if (error) { toast("המחיקה נכשלה"); return; }
+    if (!data?.length) { toast("אין הרשאה למחוק את השיר הזה", { error: true }); return; }
     toast("השיר נמחק"); songsState.current = null; songsState.view = "list"; await loadSongs(); renderSongs(); return;
   }
   if (t.closest("[data-draft-edit]")) {
