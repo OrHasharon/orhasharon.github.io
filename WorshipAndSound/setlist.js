@@ -630,11 +630,19 @@ function fitLive(el) {
   if (!body) return;
   const narrow = window.matchMedia("(max-width: 760px)").matches;
   const gap = narrow ? 28 : Math.round(window.innerWidth * 0.05);
-  const w = Math.floor(narrow ? outer.clientWidth - 24 : (outer.clientWidth - 48 - gap) / 2);
+  // the room inside the box's own side padding (5vw each side on a wide screen): a column wider than that ran past the
+  // screen's edge and cut the end of long lines
+  const cs = getComputedStyle(outer), room = outer.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const w = Math.floor(narrow ? room : (room - gap) / 2);
+  body.dataset.pitch = w + gap; // one column + its gap: what the arrows move by
   body.style.columnGap = gap + "px";
   body.style.columnWidth = w + "px";
   body.style.width = w + "px";            // the box is one column wide; extra columns overflow to the side
   if (!narrow) body.style.width = (w * 2 + gap) + "px";
+  // make the box exactly as wide as all its columns, so the last page can scroll a full column (otherwise the scroll
+  // stops short by the side padding and the last column is cut at the screen's edge)
+  const cols = Math.max(narrow ? 1 : 2, Math.round((body.scrollWidth + gap) / (w + gap)));
+  body.style.width = (cols * w + (cols - 1) * gap + 4) + "px"; // +4: the padding isn't a whole number of pixels
   outer.scrollLeft = 0;
 }
 
@@ -648,7 +656,7 @@ function liveCanScroll(dir) {
 }
 function liveScroll(dir) {
   const outer = document.querySelector("#live-view .live-body");
-  const step = outer.clientWidth * (window.matchMedia("(max-width: 760px)").matches ? 1 : 0.5);
+  const step = Number(outer.querySelector(".song-body")?.dataset.pitch) || outer.clientWidth * (window.matchMedia("(max-width: 760px)").matches ? 1 : 0.5);
   outer.scrollBy({ left: (dir === "next" ? -1 : 1) * step, behavior: "smooth" });
 }
 

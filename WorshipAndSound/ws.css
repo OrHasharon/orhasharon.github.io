@@ -344,7 +344,7 @@
 /* live mode: a long song continues in a second column instead of scrolling */
 .live-body { overflow: hidden; }
 
-.live-body .cp-line, .live-body .cp-section { break-inside: avoid; }
+.live-body .cp-section, .live-body .seg { break-inside: avoid; } /* a line may continue in the next column between its rows (a wrapped line taller than a column used to jump whole and leave the column empty); a chord never leaves its word */
 
 .matrix .add-inst { font-size: .85rem; white-space: nowrap; }
 
@@ -378,7 +378,7 @@
 /* live mode: fixed-height columns; extra columns go to the left and scroll sideways */
 .live-body { overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
 .live-body .song-body { height: 100%; column-fill: auto; column-rule: 1px solid var(--line); margin-inline-start: 0; }
-.live-body .cp-line, .live-body .cp-section { break-inside: avoid; }
+.live-body .cp-section, .live-body .seg { break-inside: avoid; } /* a line may continue in the next column between its rows (a wrapped line taller than a column used to jump whole and leave the column empty); a chord never leaves its word */
 
 @media (max-width: 760px) { .live-body .song-body { font-size: calc(1.3rem * var(--live-zoom)); } }
 

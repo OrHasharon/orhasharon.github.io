@@ -40,9 +40,12 @@ const HEB = /[֐-׿]/;
 // and the shin/sin dot on a letter that isn't ש (moved to a nearby ש that lacks one, otherwise dropped).
 // same, for a line with [chord] markers: fix the lyrics as one piece, then put each chord back before the same letter
 function fixNiqqudLine(line) {
-  // a word broken by an old import ("אֲדֹנֵינ וּ"): no Hebrew word ends in a non-final כ מ נ פ צ, so a lone letter
-  // after one is the rest of that word — glue it back
-  line = line.replace(/([כמנפצ][֑-ׇ]*) ([א-ת][֑-ׇ]*)(?=[\s,.;:!?\-\[\]()]|$)/g, "$1$2");
+  // a word broken by an old import ("אֲדֹנֵינ וּ"): no Hebrew word ends in a non-final כ מ נ פ צ, so what follows
+  // one ("וּ", "וֹשׁ") is the rest of that word — glue it back
+  line = line.replace(/(?<=[א-ת][֑-ׇ]*)([כמנפצ][֑-ׇ]*) ([א-ת][֑-ׇא-ת]*)(?=(?:\[[^\]]*\])*(?:[\s,.;:!?\-()]|$))/g, "$1$2")
+    // ("ע\"פ" and letters spelled out one by one, "כ ב ו ד", are left alone: the letter must close a word of 2+ letters)
+    // a lone "וּ" / "וֹ" is never a word: it is the end of the word before it ("וַתְּחַסְּרֵה וּ")
+    .replace(/([א-ת][֑-ׇ]*) (ו[ֹּ])(?=(?:\[[^\]]*\])*(?:[\s,.;:!?\-()]|$))/g, "$1$2");
   if (!line.includes("[")) return fixNiqqud(line);
   const MARK = /[֑-ׇ]/;
   const chords = []; let plain = "", bases = 0;
