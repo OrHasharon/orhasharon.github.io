@@ -154,6 +154,9 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
 }
 
 // strip invisible direction marks / odd spaces that PDFs leave in
+// a song's title as shown on its page, the screen, slides and the PDF: without the bracket that only tells apart songs with
+// the same name in search ("אדני אדונינו (יהוה אדנינו מה אדיר שמך)" -> "אדני אדונינו")
+const showTitle = (t) => (t || "").replace(/\s*\([^()]*\)\s*$/, "").trim() || t || "";
 const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/[\u00A0\u2000-\u200A\u202F]/g, " ");
 // a chord row as a PDF or Word file may store it: fraction / division slashes ("A4⁄7"), small or full-width digits
 // and letters, invisible marks, "A4 / 7" with spaces — made plain before deciding whether the row is chords

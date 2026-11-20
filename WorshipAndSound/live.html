@@ -33,7 +33,7 @@
     const SB = "https://pualpwrkztjzhgpaqudm.supabase.co", KEY = "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9";
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   </script>
-  <script src="chords.js?v=8"></script>
+  <script src="chords.js?v=9"></script>
   <script>
     // Guest view of a live set: no account, sees only this set, follows the leader (songs come from the leader's phone).
     const sb = window.supabase.createClient(SB, KEY, { db: { schema: "or_hasharon_worship" } });
@@ -68,7 +68,7 @@
         <div class="live-bar">
           <div class="live-row">
             <span class="live-pos">${g.idx + 1}/${g.songs.length}</span>
-            <strong class="live-title">${esc(s.title)}</strong>
+            <strong class="live-title">${esc(showTitle(s.title))}</strong>
             <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${g.myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}${g.shifts[s.id] && base ? `<small class="live-shifted"> · מקורי <b dir="ltr">${esc(base)}</b></small>` : ""}</span>
           </div>
           ${s.notes ? `<div class="live-note">📝 ${esc(s.notes)}</div>` : ""}
@@ -86,11 +86,11 @@
         </div>
         ${g.leader && !g.leaderHere ? `<div class="live-away">המוביל/ה לא מחובר/ת כרגע · נשארים על השיר האחרון. כשהמוביל/ה יחזור/תחזור, הדף יתעדכן לבד.</div>` : ""}
         ${!g.leader ? `<div class="live-away">הסט עוד לא התחיל · אפשר לדפדף בשירים. כשמוביל/ת ההלל יתחיל/תתחיל, הדף יעבור לשיר הנוכחי לבד.</div>` : ""}
-        ${!g.follow && leadSong ? `<div class="live-away">המוביל/ה בשיר: <b>${esc(leadSong.title)}</b> <button class="tool" data-g="follow">חזרה למעקב</button></div>` : ""}
-        <div class="live-body"><div class="chordpro song-body">${(songMeta(s.content).screen || "") === "quiet" && !lyricStanzas(s.content).length ? `<p class="quiet-item">🍞 ${esc(s.title)} · שקט</p>` : renderChordPro(s.content, shift, { chords: g.chords, key: base })}</div></div>
+        ${!g.follow && leadSong ? `<div class="live-away">המוביל/ה בשיר: <b>${esc(showTitle(leadSong.title))}</b> <button class="tool" data-g="follow">חזרה למעקב</button></div>` : ""}
+        <div class="live-body"><div class="chordpro song-body">${(songMeta(s.content).screen || "") === "quiet" && !lyricStanzas(s.content).length ? `<p class="quiet-item">🍞 ${esc(showTitle(s.title))} · שקט</p>` : renderChordPro(s.content, shift, { chords: g.chords, key: base })}</div></div>
         <div class="live-nav">
           <button class="tool" data-g="prev" ${g.idx ? "" : "disabled"}>→ הקודם</button>
-          <span class="live-next">${next ? `הבא: ${esc(next.title)}` : "שיר אחרון"}</span>
+          <span class="live-next">${next ? `הבא: ${esc(showTitle(next.title))}` : "שיר אחרון"}</span>
           <button class="tool" data-g="next" ${next ? "" : "disabled"}>הבא ←</button>
         </div>`;
       if (keep) el.querySelector(".live-body").scrollTop = keep;

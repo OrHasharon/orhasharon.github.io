@@ -223,7 +223,7 @@ async function buildPptx(iso) {
     if (!stanzas.length) {
       out.push(await clone(TPL.song, (xml) => {
         const [titleSp, lyricSp] = shapes(xml).filter((sp) => /<a:t>/.test(sp));
-        const x = xml.replace(titleSp, setParagraphs(titleSp, [it.songs.title], (ps) => ps[0]));
+        const x = xml.replace(titleSp, setParagraphs(titleSp, [showTitle(it.songs.title)], (ps) => ps[0]));
         return lyricSp ? x.replace(lyricSp, setParagraphs(lyricSp, [""], (ps) => ps[0])) : x;
       }));
     }
@@ -232,7 +232,7 @@ async function buildPptx(iso) {
       for (const part of chunks(st.lines, 4)) {
         out.push(await clone(TPL.song, (xml) => {
           const [titleSp, lyricSp] = shapes(xml).filter((sp) => /<a:t>/.test(sp));
-          let x = xml.replace(titleSp, setParagraphs(titleSp, [it.songs.title], (ps) => ps[0]));
+          let x = xml.replace(titleSp, setParagraphs(titleSp, [showTitle(it.songs.title)], (ps) => ps[0]));
           // David 54 like the template; long lines shrink so each line stays on one line (876pt box, ~0.5em per letter)
           const longest = Math.max(...part.map((l) => l.replace(/[֑-ׇ]/g, "").length));
           const size = Math.max(30, Math.min(54, Math.floor(876 / (0.5 * longest))));
@@ -487,7 +487,7 @@ function printSongs(iso) {
     const key = s.song_key || firstChord(s.content);
     const info = [key && `סולם <b dir="ltr">${esc(key)}</b>`, Number(meta.capo) && `קאפו ${Number(meta.capo)}`].filter(Boolean).join(" · ");
     return `<section class="pb-song">
-      <div class="pb-head"><span class="pb-num">${k + 1}</span><h2 class="song-title">${esc(s.title)}</h2></div>
+      <div class="pb-head"><span class="pb-num">${k + 1}</span><h2 class="song-title">${esc(showTitle(s.title))}</h2></div>
       ${meta.artist ? `<p class="song-artist">${esc(meta.artist)}</p>` : ""}
       ${info ? `<p class="pb-info">${info}</p>` : ""}
       ${it.notes ? `<p class="pb-note">📝 ${esc(it.notes)}</p>` : ""}
@@ -564,7 +564,7 @@ function renderLive() {
     <div class="live-bar">
       <div class="live-row">
         <span class="live-pos">${live.idx + 1}/${items.length}</span>
-        <strong class="live-title">${esc(song.title)}</strong>
+        <strong class="live-title">${esc(showTitle(song.title))}</strong>
         <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}${live.shift[it.id] && base ? `<small class="live-shifted"> · מקורי <b dir="ltr">${esc(base)}</b></small>` : ""}</span>
         <button class="tool live-exit" data-live="exit" aria-label="יציאה ממצב הלל" title="יציאה">✕</button>
       </div>
@@ -583,10 +583,10 @@ function renderLive() {
       </div>` : ""}
     </div>
     ${shiftWarnHtml(items)}${syncPeopleHtml()}${syncAwayHtml()}
-    <div class="live-body"><div class="chordpro song-body">${quietItem(song) ? `<p class="quiet-item">🍞 ${esc(song.title)} · שקט</p>` : renderChordPro(song.content, shift, { chords: live.chords, key: base })}</div></div>
+    <div class="live-body"><div class="chordpro song-body">${quietItem(song) ? `<p class="quiet-item">🍞 ${esc(showTitle(song.title))} · שקט</p>` : renderChordPro(song.content, shift, { chords: live.chords, key: base })}</div></div>
     <div class="live-nav">
       <button class="tool" data-live="prev" ${live.idx ? "" : "disabled"}>→ הקודם</button>
-      <span class="live-next">${next ? `הבא: ${esc(next.songs.title)}` : "שיר אחרון"}</span>
+      <span class="live-next">${next ? `הבא: ${esc(showTitle(next.songs.title))}` : "שיר אחרון"}</span>
       <button class="tool" data-live="next" ${next ? "" : "disabled"}>הבא ←</button>
     </div>`;
   fitLive(el);

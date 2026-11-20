@@ -60,10 +60,10 @@ function meetingOptions() {
 function slidesFor(song) {
   if (!song) return [];
   const meta = songMeta(song.content || "");
-  if ((meta.screen || "").toLowerCase() === "quiet") return [{ title: song.title, quiet: true }];
+  if ((meta.screen || "").toLowerCase() === "quiet") return [{ title: showTitle(song.title), quiet: true }];
   const out = [];
   for (const st of slideStanzas(song.content || "", song.title)) for (const lines of chunks(st.lines, 4)) out.push({ lines });
-  return out.length ? out : [{ title: song.title }];
+  return out.length ? out : [{ title: showTitle(song.title) }];
 }
 function build() {
   S.idx = Math.max(0, Math.min(S.idx, S.songs.length - 1));
@@ -182,7 +182,7 @@ function tplParas(el, entry) {
   if (el.role === "reading_ref") return [like(0, entry.ref ?? wk("readingRef"))];
   if (el.role === "reading_body") return (entry.lines || []).map((t) => like(0, t));
   if (el.role === "prayers") return (entry.lines || []).map((t) => { const p = el.paras[0]; return { ...p, runs: prayerRuns(t, { ...p.style, c: "#F5F7FA" }) }; });
-  if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: entry.song.title }] }];
+  if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: showTitle(entry.song.title) }] }];
   if (el.role === "lyrics" && entry.song) {
     // David 54 like the template; long lines shrink so each stays on one line (the same rule as the PowerPoint export)
     const longest = Math.max(1, ...entry.lines.map((l) => l.replace(/[֑-ׇ]/g, "").length));
@@ -360,7 +360,7 @@ function show() {
     html = `<div>${esc(sl.title)}</div>`;
   } else if (sl?.lines) {
     html = sl.lines.map((l) => `<div>${esc(l)}</div>`).join("");
-    cornerText = S.slide === 0 ? song.title : "";
+    cornerText = S.slide === 0 ? showTitle(song.title) : "";
   }
   el.classList.add("out");
   setTimeout(() => {

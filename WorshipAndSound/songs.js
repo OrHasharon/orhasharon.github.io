@@ -1137,7 +1137,7 @@ function renderSongView(el) {
   el.innerHTML = `<div class="song-view${songsState.present ? " present" : ""}" style="--song-scale:${songScale}">
     <div class="song-top">
       <button class="link-btn no-print" data-song-back>→ לכל השירים</button>
-      <h2 class="song-title">${esc(s.title)}</h2>${s.source ? `<p class="song-src-line no-print">📄 מהקובץ <b dir="auto">${esc(sourceOf(s))}</b></p>` : ""}
+      <h2 class="song-title">${esc(showTitle(s.title))}</h2>${s.source ? `<p class="song-src-line no-print">📄 מהקובץ <b dir="auto">${esc(sourceOf(s))}</b></p>` : ""}
       ${meta.artist ? `<p class="song-artist">${esc(meta.artist)}</p>` : ""}
     </div>
     <div class="song-toolbar no-print">
