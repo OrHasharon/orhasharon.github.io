@@ -27,6 +27,50 @@ function deckPlan(items, contentOf) {
   return plan;
 }
 
+// The lyrics' size on a song slide (the template's box: 876pt wide, 356pt high, David 54): as big as fits. A long line
+// wraps onto a second row (the box wraps) instead of shrinking every line; the size goes down only when the rows
+// don't fit the box's height. ~0.5em per letter (niqqud takes no room). Shared by the PowerPoint and the screen.
+function lyricFontSize(lines, { width = 876, height = 356, max = 54, min = 30, gap = 8 } = {}) {
+  for (let s = max; s > min; s -= 2) {
+    const perRow = width / (0.5 * s);
+    const rows = lines.reduce((n, l) => n + Math.max(1, Math.ceil(l.replace(/[\u0591-\u05C7]/g, "").length / perRow)), 0);
+    if (rows * s * 1.2 + Math.max(0, lines.length - 1) * gap <= height) return s;
+  }
+  return min;
+}
+// The Lord's Supper verse on its slide (the template's box: 288pt wide, 392pt high, 36pt): one slide when it fits
+// (down to 28pt); a long passage is split over several slides at 30pt, between sentences, so none of it runs off.
+function communionPages(text) {
+  const plain = (t) => t.replace(/[\u0591-\u05C7]/g, "");
+  const lines = (text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const fits = (ls, s) => {
+    const per = 288 / (0.5 * s);
+    const rows = ls.reduce((n, l) => n + Math.max(1, Math.ceil(plain(l).length / per)), 0);
+    return (rows + 1) * s * 1.37 <= 392; // + the source line
+  };
+  for (let s = 36; s >= 28; s -= 2) if (fits(lines, s)) return { size: s, pages: [lines] };
+  const s = 30, per = 288 / (0.5 * s), rows = Math.floor(392 / (s * 1.37)) - 1;
+  const all = lines.join(" "), ratio = all.length / Math.max(1, plain(all).length); // niqqud makes the text longer, not wider
+  return { size: s, pages: readingPages(lines.join("\n"), Math.floor(per * rows * 0.85 * ratio)) };
+}
+
+// a song slide's lines and size: a line too long for one row at that size is cut at the comma nearest its middle
+// ("בניסיון להביט על חיי מעיניו," / "לזכור שהכל לטובת אוהביו"), so it doesn't wrap at a random word
+function lyricLayout(lines) {
+  const len = (l) => l.replace(/[\u0591-\u05C7]/g, "").length;
+  let size = lyricFontSize(lines);
+  const perRow = 876 / (0.5 * size);
+  const out = lines.flatMap((l) => {
+    if (len(l) <= perRow) return [l];
+    const cuts = [...l.matchAll(/[,;:.]\s+/g)].map((m) => m.index + 1);
+    if (!cuts.length) return [l];
+    const mid = l.length / 2, at = cuts.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))[0];
+    return [l.slice(0, at).trim(), l.slice(at).trim()].filter(Boolean);
+  });
+  if (out.length !== lines.length) size = lyricFontSize(out);
+  return { lines: out, size };
+}
+
 // The week's parasha as the site stores it (meeting_texts): parasha_refs = "תורה: …" / "הפטרה: …" / "ברית חדשה: …"
 // lines; the verses to show = reading, a JSON list of passages [{ref, text}] (older rows: reading_ref + plain text).
 const REF_LABELS = { torah: "תורה", haftara: "הפטרה", brit: "ברית חדשה" };

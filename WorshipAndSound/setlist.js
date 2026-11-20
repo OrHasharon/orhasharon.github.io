@@ -233,10 +233,9 @@ async function buildPptx(iso) {
         out.push(await clone(TPL.song, (xml) => {
           const [titleSp, lyricSp] = shapes(xml).filter((sp) => /<a:t>/.test(sp));
           let x = xml.replace(titleSp, setParagraphs(titleSp, [showTitle(it.songs.title)], (ps) => ps[0]));
-          // David 54 like the template; long lines shrink so each line stays on one line (876pt box, ~0.5em per letter)
-          const longest = Math.max(...part.map((l) => l.replace(/[֑-ׇ]/g, "").length));
-          const size = Math.max(30, Math.min(54, Math.floor(876 / (0.5 * longest))));
-          const lyr = setParagraphs(lyricSp, part, (ps) => ps[0]).replace(/sz="\d+"/g, `sz="${size * 100}"`);
+          // David 54 like the template; a long line wraps rather than shrinking the slide (lyricFontSize, deck.js)
+          const { lines: rows, size } = lyricLayout(part);
+          const lyr = setParagraphs(lyricSp, rows, (ps) => ps[0]).replace(/sz="\d+"/g, `sz="${size * 100}"`);
           return x.replace(lyricSp, lyr);
         }));
       }
@@ -300,11 +299,16 @@ async function buildPptx(iso) {
     }
     // the Lord's Supper verse typed in the site replaces the template's
     if (e.tpl === "communion_verse" && texts?.communion_verse) {
-      const verse = texts.communion_verse.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      order.push(await clone(TPL.communion_verse, (xml) => {
-        const sp = shapes(xml).find((s) => /<a:t>/.test(s));
-        return sp ? xml.replace(sp, setParagraphs(sp, [...verse, ...(texts.communion_ref ? [texts.communion_ref] : [])], (ps, t, n) => (n < verse.length ? ps[0] : ps[ps.length - 1]))) : xml;
-      }));
+      // a long passage goes over several slides (communionPages, deck.js), the source under each part
+      const { size, pages } = communionPages(texts.communion_verse);
+      for (const verse of pages) {
+        order.push(await clone(TPL.communion_verse, (xml) => {
+          const sp = shapes(xml).find((s) => /<a:t>/.test(s));
+          if (!sp) return xml;
+          const filled = setParagraphs(sp, [...verse, ...(texts.communion_ref ? [texts.communion_ref] : [])], (ps, t, n) => (n < verse.length ? ps[0] : ps[ps.length - 1]));
+          return xml.replace(sp, filled.replace(/sz="3600"/g, `sz="${size * 100}"`));
+        }));
+      }
       continue;
     }
     if (e.sermon || e.weekly) continue; // a PDF sermon and the opening verse live on the projection computer

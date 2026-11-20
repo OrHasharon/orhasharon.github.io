@@ -4,4 +4,7 @@
 alter table or_hasharon_worship.meeting_texts add column if not exists parasha_file_path text;
 alter table or_hasharon_worship.meeting_texts add column if not exists parasha_file_name text;
 alter table or_hasharon_worship.meeting_texts add column if not exists parasha_file_at timestamptz;
+-- (and who wrote the Supper verse, communion_by.sql)
+alter table or_hasharon_worship.meeting_texts add column if not exists communion_by text;
+alter table or_hasharon_worship.meeting_texts add column if not exists communion_at timestamptz;
 notify pgrst, 'reload schema';

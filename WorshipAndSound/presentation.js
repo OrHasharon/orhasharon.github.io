@@ -145,7 +145,9 @@ function ptTextsHtml(iso, can, open) {
   const v = (f) => esc(f.startsWith("communion") ? (c?.[f] || "") : (r[f] || ""));
   const refs = parashaRefs(r), passages = passagesOf(r);
   const hasParasha = !!(r.parasha || r.reading || r.parasha_refs || r.parasha_file_path);
-  const from = c ? ` <small>· ${c.meeting_date !== iso ? `ממשיך מ-${ptDay(c.meeting_date)} · ` : ""}${byLine(c)}</small>` : "";
+  // who wrote the verse = communion_by (set only when the verse itself changes); older rows don't know, so no name
+  const cBy = c?.communion_by ? `ע״י ${esc(whoName(c.communion_by))}${c.communion_at ? ` · ${ptWhen(c.communion_at)}` : ""}` : "";
+  const from = c && (cBy || c.meeting_date !== iso) ? ` <small>· ${c.meeting_date !== iso ? `ממשיך מ-${ptDay(c.meeting_date)}${cBy ? " · " : ""}` : ""}${cBy}</small>` : "";
   const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${r.parasha_file_path ? "מצגת: " + esc(r.parasha_file_name || "") : hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
   if (!can) {
     return `<details class="pt-section pt-pray" data-key="texts-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
@@ -158,7 +160,7 @@ function ptTextsHtml(iso, can, open) {
       <p class="hint">מופיע אחרי השיר האחרון ולפני ברכת הילדים. בלי שם פרשה ובלי פסוקים = אין שקופיות.</p>
       <div class="pt-label">📽️ או: מצגת לפרשה</div>
       ${r.parasha_file_path
-        ? `<p class="pt-sermon ok">${/\.pptx$/i.test(r.parasha_file_path) ? "📽️" : "📄"} ${esc(r.parasha_file_name || "")}${r.parasha_file_at ? ` <small>· הועלה ${ptWhen(r.parasha_file_at)}</small>` : ""}</p>
+        ? `<p class="pt-sermon ok">${/\.pptx$/i.test(r.parasha_file_path) ? "📽️" : "📄"} ${esc(r.parasha_file_name || "")}${r.parasha_file_at ? ` <small>· הועלה${r.parasha_file_by ? ` ע״י ${esc(whoName(r.parasha_file_by))}` : ""} ${ptWhen(r.parasha_file_at)}</small>` : ""}</p>
            <p class="hint">המצגת נכנסת כמו שהיא, במקום שקופיות הפרשה והפסוקים.${/\.pdf$/i.test(r.parasha_file_path) ? " קובץ PDF מוצג רק במסך ההקרנה (ב-PowerPoint להורדה נכנס רק קובץ PowerPoint)." : ""}</p>
            <div class="pt-pray-bar"><label class="btn ghost pt-upload">⬆️ החלפת המצגת<input type="file" accept="application/pdf,.pdf,${PPTX_TYPE},.pptx" data-pt-parasha-file="${iso}" hidden></label>
            <button class="btn ghost" type="button" data-pt="parasha-clear" data-iso="${iso}">הסרת המצגת</button></div>`
@@ -199,9 +201,19 @@ async function ptSaveTexts(iso, btn) {
   const passages = [...f.querySelectorAll(".pt-passage")].map((d) => ({ ref: d.querySelector('[name="p_ref"]').value.trim(), text: d.querySelector('[name="p_text"]').value.trim() })).filter((p) => p.ref || p.text);
   row.reading = passages.length ? JSON.stringify(passages) : "";
   row.reading_ref = passages[0]?.ref || "";
-  row.communion_verse = val("communion_verse"); row.communion_ref = val("communion_ref");
+  // the Supper verse is saved (and signed) only when it was changed here; otherwise it stays as it is — a verse
+  // carried on from an earlier meeting isn't copied into this one under the name of whoever saved the parasha
+  const prev = communionRow(iso);
+  const verse = val("communion_verse"), ref = val("communion_ref");
+  if (verse !== (prev?.communion_verse || "").trim() || ref !== (prev?.communion_ref || "").trim()) {
+    Object.assign(row, { communion_verse: verse, communion_ref: ref, communion_by: myName(), communion_at: new Date().toISOString() });
+  }
   btn.disabled = true;
-  const { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
+  let { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
+  if (error && ["42703", "PGRST204"].includes(error.code) && "communion_by" in row) { // communion_by.sql hasn't run yet
+    delete row.communion_by; delete row.communion_at;
+    ({ error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" }));
+  }
   btn.disabled = false;
   if (error) { console.error(error); toast("השמירה נכשלה", { error: true }); return; }
   await ptLoad();
@@ -296,8 +308,9 @@ async function ptClear(iso) {
 // in place of the parasha + reading slides.
 async function ptParashaSet(iso, file) {
   const row = { meeting_date: iso, parasha_file_path: file?.path || null, parasha_file_name: file?.name || null,
-    parasha_file_at: file ? new Date().toISOString() : null, updated_at: new Date().toISOString(), updated_by: myName() };
-  const { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
+    parasha_file_at: file ? new Date().toISOString() : null, parasha_file_by: file ? myName() : null };
+  let { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
+  if (error && ["42703", "PGRST204"].includes(error.code)) { delete row.parasha_file_by; ({ error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" })); }
   if (error && ["42703", "PGRST204"].includes(error.code)) { toast("צריך להריץ ב-Supabase את parasha_deck.sql", { error: true }); return false; }
   if (error) { console.error(error); toast("השמירה נכשלה", { error: true }); return false; }
   return true;

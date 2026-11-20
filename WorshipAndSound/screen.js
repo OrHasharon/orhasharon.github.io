@@ -84,6 +84,8 @@ function buildDeck() {
     if (e.weekly === "parasha" && S.parashaDeck.length) { S.parashaDeck.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page, doc: "parasha" })); continue; }
     if (e.weekly === "reading" && S.parashaDeck.length) continue;
     if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
+    // the Supper verse typed in the site: a long passage over several slides (communionPages, deck.js)
+    if (e.tpl === "communion_verse" && S.dbCommunion) { const cp = communionPages(S.dbCommunion.verse); cp.pages.forEach((cv) => S.deckSlides.push({ key: e.tpl, cv, csz: cp.size })); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = slideStanzas(e.song.content || "", e.song.title).flatMap((st) => chunks(st.lines, 4));
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
@@ -178,7 +180,8 @@ function tplParas(el, entry) {
   const like = (i, text) => ({ ...(el.paras[i] || el.paras[0]), runs: text ? [{ ...(el.paras[i] || el.paras[0]).style, t: text }] : [] });
   if (entry.key === "communion_verse" && S.dbCommunion && el.paras?.some((p) => p.runs.some((r) => r.t))) {
     const c = S.dbCommunion, last = el.paras.length - 1;
-    return [...linesOf(c.verse).map((t) => like(0, t)), ...(c.ref ? [like(last, c.ref)] : [])];
+    const big = (p) => (entry.csz ? { ...p, runs: p.runs.map((r) => ({ ...r, sz: entry.csz })) } : p);
+    return [...(entry.cv || linesOf(c.verse)).map((t) => big(like(0, t))), ...(c.ref ? [like(last, c.ref)] : [])];
   }
   if (el.role === "verse") return [...linesOf(wk("verse")).map((t) => like(0, t)), ...(wk("verseRef") ? [like(1, wk("verseRef"))] : [])];
   if (el.role === "parasha_name") return [like(0, wk("parasha"))];
@@ -188,10 +191,9 @@ function tplParas(el, entry) {
   if (el.role === "prayers") return (entry.lines || []).map((t) => { const p = el.paras[0]; return { ...p, runs: prayerRuns(t, { ...p.style, c: "#F5F7FA" }) }; });
   if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: showTitle(entry.song.title) }] }];
   if (el.role === "lyrics" && entry.song) {
-    // David 54 like the template; long lines shrink so each stays on one line (the same rule as the PowerPoint export)
-    const longest = Math.max(1, ...entry.lines.map((l) => l.replace(/[֑-ׇ]/g, "").length));
-    const size = Math.max(30, Math.min(54, Math.floor(876 / (0.5 * longest))));
-    return entry.lines.map((t) => ({ ...el.paras[0], runs: [{ ...el.paras[0].style, sz: size, t }] }));
+    // David 54 like the template; a long line wraps rather than shrinking the slide (the PowerPoint's rule, deck.js)
+    const { lines: rows, size } = lyricLayout(entry.lines);
+    return rows.map((t) => ({ ...el.paras[0], runs: [{ ...el.paras[0].style, sz: size, t }] }));
   }
   if ((el.role === "groups" && S.groupLines?.length) || (el.role === "meetings" && S.meetLines.length)) {
     const lines = el.role === "groups" ? S.groupLines : S.meetLines;
