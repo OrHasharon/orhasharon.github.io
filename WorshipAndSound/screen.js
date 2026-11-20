@@ -20,6 +20,7 @@ const S = {
   bg: "tpl", size: 1, wake: null, opsTimer: null, ended: false,
   deck: null, deckSlides: [], pos: 0, meetings: [], groupLines: null, meetLines: [],
   sermon: [], // the preacher's PDF, one picture per page (kept on this computer, IndexedDB)
+  parashaDeck: [], parashaPath: "", // the week's parasha uploaded in the site as a PowerPoint / PDF (meeting_texts)
   week: {},   // this week's words: opening verse, parasha + reading, prayer requests (this computer only)
 };
 try { S.bg = localStorage.getItem("ws-screen-bg") || "tpl"; S.size = Number(localStorage.getItem("ws-screen-size")) || 1; } catch {}
@@ -79,6 +80,9 @@ function buildDeck() {
   S.deckSlides = [];
   for (const e of deckPlan(S.songs, (x) => x.content)) {
     if (e.sermon) { S.sermon.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page })); continue; }
+    // the week's parasha uploaded as a presentation: its own slides, as they are, instead of the parasha + reading slides
+    if (e.weekly === "parasha" && S.parashaDeck.length) { S.parashaDeck.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page, doc: "parasha" })); continue; }
+    if (e.weekly === "reading" && S.parashaDeck.length) continue;
     if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = slideStanzas(e.song.content || "", e.song.title).flatMap((st) => chunks(st.lines, 4));
@@ -316,6 +320,7 @@ async function loadDbTexts() {
       const ps = passagesOf(own);
       S.dbPassages = ps.length ? ps : null;
     }
+    await loadParashaDeck(own?.parasha_file_path || "");
     const c = data.find((r) => (r.communion_verse || "").trim());
     S.dbCommunion = c ? { verse: c.communion_verse, ref: c.communion_ref || "" } : null;
     buildDeck(); show();
@@ -343,7 +348,7 @@ function show() {
     const cur = entry?.song;
     if (cur) { const k = S.songs.findIndex((x) => x.id === cur.id); if (k >= 0) S.idx = k; }
     el.classList.add("out");
-    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); if (entry?.key === "pptx") renderPptxSlide(entry.page); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
+    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); if (entry?.key === "pptx") renderPptxSlide(entry.page, entry.doc || "sermon"); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
     renderOps();
     return;
   }
@@ -481,33 +486,38 @@ function loadPptxJs() {
   if (window.pptxPreview) return Promise.resolve();
   return new Promise((ok, bad) => { const sc = document.createElement("script"); sc.src = PPTX_JS; sc.onload = ok; sc.onerror = bad; document.head.append(sc); });
 }
-const PPT = { buf: null, pv: null, host: null, w: 0, h: 0 };
-async function pptxPreviewer(W, H) {
+// one previewer per uploaded PowerPoint: "sermon" (the message) and "parasha" (the week's parasha deck)
+const PPTS = {};
+const pptOf = (doc) => (PPTS[doc] ||= { buf: null, pv: null, host: null, w: 0, h: 0 });
+async function pptxPreviewer(W, H, doc = "sermon") {
   await loadPptxJs();
-  if (PPT.pv && PPT.w === Math.round(W) && PPT.h === Math.round(H)) return PPT.pv;
-  try { PPT.pv?.destroy(); } catch {}
-  PPT.host = document.createElement("div"); PPT.host.className = "pptx-host";
-  PPT.w = Math.round(W); PPT.h = Math.round(H);
-  PPT.pv = pptxPreview.init(PPT.host, { width: PPT.w, height: PPT.h, mode: "slide" });
-  await PPT.pv.load(PPT.buf.slice(0));
-  return PPT.pv;
+  const P = pptOf(doc);
+  if (P.pv && P.w === Math.round(W) && P.h === Math.round(H)) return P.pv;
+  try { P.pv?.destroy(); } catch {}
+  P.host = document.createElement("div"); P.host.className = "pptx-host";
+  P.w = Math.round(W); P.h = Math.round(H);
+  P.pv = pptxPreview.init(P.host, { width: P.w, height: P.h, mode: "slide" });
+  await P.pv.load(P.buf.slice(0));
+  return P.pv;
 }
-async function pptxToPages(buf) {
-  PPT.buf = buf.slice(0); PPT.pv = null;
-  const pv = await pptxPreviewer(1280, 720);
+async function pptxToPages(buf, doc = "sermon") {
+  const P = pptOf(doc);
+  try { P.pv?.destroy(); } catch {}
+  P.buf = buf.slice(0); P.pv = null;
+  const pv = await pptxPreviewer(1280, 720, doc);
   return Array.from({ length: pv.slideCount }, () => "pptx");
 }
-async function renderPptxSlide(page) {
+async function renderPptxSlide(page, doc = "sermon") {
   const slot = document.querySelector("#slide .pptx-slot");
-  if (!slot || !PPT.buf) return;
+  if (!slot || !pptOf(doc).buf) return;
   try {
-    const pv = await pptxPreviewer(slot.clientWidth, slot.clientHeight);
+    const pv = await pptxPreviewer(slot.clientWidth, slot.clientHeight, doc);
     if (!slot.isConnected) return;
-    slot.append(PPT.host);
+    slot.append(pptOf(doc).host);
     pv.renderSingleSlide(page);
   } catch (err) { console.error(err); slot.textContent = "לא הצלחתי להציג את השקופית"; }
 }
-const sermonPages = (buf, name) => isPptxName(name) ? pptxToPages(buf) : pdfToPages(buf);
+const sermonPages = (buf, name) => isPptxName(name) ? pptxToPages(buf, "sermon") : pdfToPages(buf);
 
 async function setSermon(file) {
   if (!file || !(isPptxName(file.name) || /pdf$/i.test(file.type || file.name))) { flash("צריך קובץ PowerPoint (‎.pptx) או PDF"); return; }
@@ -566,6 +576,33 @@ async function remoteSermon() {
   finally { remoteSermon.busy = false; }
 }
 setInterval(remoteSermon, 120000);
+
+// the week's parasha uploaded in the site (presentation tab → meeting_texts.parasha_file_path, file in the sermons
+// bucket): drawn as it is, in place of the parasha + reading slides. Checked again every 2 minutes.
+async function loadParashaDeck(path) {
+  if (path === S.parashaPath) return false;
+  try {
+    let pages = [];
+    if (path) {
+      const res = await fetch(sb.storage.from("sermons").getPublicUrl(path).data.publicUrl);
+      if (!res.ok) return false;
+      const buf = await res.arrayBuffer();
+      pages = isPptxName(path) ? await pptxToPages(buf, "parasha") : await pdfToPages(buf);
+    }
+    S.parashaDeck = pages; S.parashaPath = path;
+    return true;
+  } catch (err) { console.error(err); return false; }
+}
+async function remoteParasha() {
+  if (!S.date || remoteParasha.busy) return;
+  remoteParasha.busy = true;
+  try {
+    const { data, error } = await sb.from("meeting_texts").select("parasha_file_path").eq("meeting_date", S.date).limit(1);
+    if (error) return; // parasha_deck.sql hasn't run yet
+    if (await loadParashaDeck(data?.[0]?.parasha_file_path || "")) { buildDeck(); show(); flash(S.parashaDeck.length ? `מצגת הפרשה נטענה · ${S.parashaDeck.length} שקופיות` : "מצגת הפרשה הוסרה"); }
+  } finally { remoteParasha.busy = false; }
+}
+setInterval(remoteParasha, 120000);
 function pickSermon() {
   const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,.pdf,.pptx";
   inp.onchange = () => setSermon(inp.files[0]); inp.click();

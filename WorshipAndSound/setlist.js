@@ -279,6 +279,16 @@ async function buildPptx(iso) {
       } catch (err) { console.error(err); toast("לא הצלחתי להכניס את מצגת הדרשה", { error: true }); }
       continue;
     }
+    // the week's parasha uploaded as a presentation: its slides as they are, in place of the parasha + reading slides
+    if ((e.weekly === "parasha" || e.weekly === "reading") && texts?.parasha_file_path) {
+      if (e.weekly === "parasha" && typeof parashaPptxFor === "function") {
+        try {
+          const s = await parashaPptxFor(iso);
+          if (s) { const r = await importPptxSlides(zip, s.buf, "par"); order.push(...r.slides); masters = masters.concat(r.masters); }
+        } catch (err) { console.error(err); toast("לא הצלחתי להכניס את מצגת הפרשה", { error: true }); }
+      }
+      continue; // (a PDF parasha, like a PDF sermon, lives on the projection screen only)
+    }
     // the week's parasha + reading (typed in the site, presentation.js): only when there is one
     if ((e.weekly === "parasha" || e.weekly === "reading") && texts) {
       const two = (xml) => { const sps = shapes(xml).filter((sp) => /<p:txBody>/.test(sp)); return [sps.find((sp) => /name="Title/.test(sp)) || sps[0], sps.find((sp) => !/name="Title/.test(sp)) || sps[1]]; };

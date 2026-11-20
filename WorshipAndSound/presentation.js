@@ -60,8 +60,11 @@ const ptWhen = (ts) => new Date(ts).toLocaleString("he-IL", { day: "2-digit", mo
 
 // whichever tab shows these cards right now
 function ptRefresh() {
+  // sections that were open (prayers, parasha) stay open after the redraw
+  const open = new Set([...document.querySelectorAll("details[data-key][open]")].map((d) => d.dataset.key));
   if (state.tab === "deck") renderPresTab();
   else if (state.tab === "next" && typeof renderNextTab === "function") renderNextTab();
+  document.querySelectorAll("details[data-key]").forEach((d) => { if (open.has(d.dataset.key)) d.open = true; });
 }
 
 function renderPresTab() {
@@ -121,7 +124,7 @@ function ptPrayersHtml(iso, can, open) {
        <div class="pt-pray-bar"><button class="btn" data-pt="pray-save" data-iso="${iso}">שמירה</button>
        <small class="hint">שורה לכל בקשה · שורה שמתחילה ב-<b>-</b> היא תת-סעיף · <b>*כוכביות*</b> סביב שמות = בכתום במצגת. נשאר גם לאסיפות הבאות עד שמעדכנים.</small></div>`
     : lines.length ? `<ul class="pt-pray-list">${lines.map((l) => `<li${/^-/.test(l) ? ' class="sub"' : ""}>${esc(l.replace(/^-\s*/, "")).replace(/\*([^*]+)\*/g, "<b>$1</b>")}</li>`).join("")}</ul>` : `<p class="pt-empty">אין בקשות.</p>`;
-  return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>${body}</details>`;
+  return `<details class="pt-section pt-pray" data-key="pray-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>${body}</details>`;
 }
 
 // ---------- the week's parasha + the Lord's Supper verse (table meeting_texts, meeting_texts.sql) ----------
@@ -132,7 +135,7 @@ const communionRow = (iso) => [...PT.texts].reverse().find((r) => r.meeting_date
 async function meetingTextsFor(iso) {
   if (!PT.loaded) await ptLoad().catch(() => {});
   const r = textsRow(iso) || {}, c = communionRow(iso) || {};
-  return { parasha: r.parasha || "", parasha_refs: r.parasha_refs || "", passages: passagesOf(r),
+  return { parasha: r.parasha || "", parasha_refs: r.parasha_refs || "", passages: passagesOf(r), parasha_file_path: r.parasha_file_path || "",
     communion_verse: c.communion_verse || "", communion_ref: c.communion_ref || "" };
 }
 
@@ -141,18 +144,27 @@ function ptTextsHtml(iso, can, open) {
   const r = textsRow(iso) || {}, c = communionRow(iso);
   const v = (f) => esc(f.startsWith("communion") ? (c?.[f] || "") : (r[f] || ""));
   const refs = parashaRefs(r), passages = passagesOf(r);
-  const hasParasha = !!(r.parasha || r.reading || r.parasha_refs);
+  const hasParasha = !!(r.parasha || r.reading || r.parasha_refs || r.parasha_file_path);
   const from = c ? ` <small>· ${c.meeting_date !== iso ? `ממשיך מ-${ptDay(c.meeting_date)} · ` : ""}${byLine(c)}</small>` : "";
-  const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
+  const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${r.parasha_file_path ? "מצגת: " + esc(r.parasha_file_name || "") : hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
   if (!can) {
-    return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
-      ${hasParasha ? `<p><b>${esc(r.parasha || "")}</b> ${esc(r.parasha_refs || "").replace(/\n/g, " · ")}</p>` : ""}
+    return `<details class="pt-section pt-pray" data-key="texts-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
+      ${r.parasha_file_path ? `<p>📽️ ${esc(r.parasha_file_name || "")}</p>` : hasParasha ? `<p><b>${esc(r.parasha || "")}</b> ${esc(r.parasha_refs || "").replace(/\n/g, " · ")}</p>` : ""}
       ${c ? `<p>🍞 ${esc(c.communion_verse)} <small>${esc(c.communion_ref || "")}</small></p>` : ""}</details>`;
   }
-  return `<details class="pt-section pt-pray"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
+  return `<details class="pt-section pt-pray" data-key="texts-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
     <div class="pt-form" data-pt-texts="${iso}">
       ${textsRow(iso)?.updated_at ? `<p class="pt-by">עודכן ${byLine(textsRow(iso))}</p>` : ""}
       <p class="hint">מופיע אחרי השיר האחרון ולפני ברכת הילדים. בלי שם פרשה ובלי פסוקים = אין שקופיות.</p>
+      <div class="pt-label">📽️ או: מצגת לפרשה</div>
+      ${r.parasha_file_path
+        ? `<p class="pt-sermon ok">${/\.pptx$/i.test(r.parasha_file_path) ? "📽️" : "📄"} ${esc(r.parasha_file_name || "")}${r.parasha_file_at ? ` <small>· הועלה ${ptWhen(r.parasha_file_at)}</small>` : ""}</p>
+           <p class="hint">המצגת נכנסת כמו שהיא, במקום שקופיות הפרשה והפסוקים.${/\.pdf$/i.test(r.parasha_file_path) ? " קובץ PDF מוצג רק במסך ההקרנה (ב-PowerPoint להורדה נכנס רק קובץ PowerPoint)." : ""}</p>
+           <div class="pt-pray-bar"><label class="btn ghost pt-upload">⬆️ החלפת המצגת<input type="file" accept="application/pdf,.pdf,${PPTX_TYPE},.pptx" data-pt-parasha-file="${iso}" hidden></label>
+           <button class="btn ghost" type="button" data-pt="parasha-clear" data-iso="${iso}">הסרת המצגת</button></div>`
+        : `<div class="pt-pray-bar"><label class="btn ghost pt-upload">⬆️ העלאת מצגת לפרשה<input type="file" accept="application/pdf,.pdf,${PPTX_TYPE},.pptx" data-pt-parasha-file="${iso}" hidden></label>
+           <small class="hint">PowerPoint או PDF. נכנס כמו שהוא, במקום השקופיות של הטקסט שלמטה</small></div>`}
+      <div class="pt-parasha-text"${r.parasha_file_path ? " hidden" : ""}>
       <label>שם הפרשה<input name="parasha" value="${esc(r.parasha || "")}" placeholder="למשל: פרשת חיי שרה"></label>
       <label>קטע מהתורה<input name="torah" value="${esc(refs.torah)}" placeholder="למשל: בראשית כ״ג 1 – כ״ה 18"></label>
       <label><span>הפטרה <small>(לא חובה)</small></span><input name="haftara" value="${esc(refs.haftara)}" placeholder="למשל: מלכים א׳ א׳ 1-31"></label>
@@ -160,6 +172,7 @@ function ptTextsHtml(iso, can, open) {
       <div class="pt-label">פסוקים להצגה</div>
       <div class="pt-passages">${(passages.length ? passages : [{ ref: "", text: "" }]).map(passageHtml).join("")}</div>
       <button class="btn ghost pt-add" type="button" data-pt="passage-add">➕ קטע</button>
+      </div>
       <div class="pt-label">🍞 סעודת האדון${from}</div>
       <label>הפסוק<textarea name="communion_verse" rows="4" placeholder="ריק = הפסוק הקבוע של המצגת">${v("communion_verse")}</textarea></label>
       <label>מקור<input name="communion_ref" value="${v("communion_ref")}" placeholder="למשל: (קור״א י״א 26)"></label>
@@ -278,6 +291,49 @@ async function ptClear(iso) {
   ptRefresh();
 }
 
+// ---------- the week's parasha as an uploaded presentation (meeting_texts.parasha_file_*, parasha_deck.sql) ----------
+// Stored in the sermons bucket, in the meeting's speaker folder; it goes into the deck as it is (like the sermon),
+// in place of the parasha + reading slides.
+async function ptParashaSet(iso, file) {
+  const row = { meeting_date: iso, parasha_file_path: file?.path || null, parasha_file_name: file?.name || null,
+    parasha_file_at: file ? new Date().toISOString() : null, updated_at: new Date().toISOString(), updated_by: myName() };
+  const { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
+  if (error && ["42703", "PGRST204"].includes(error.code)) { toast("צריך להריץ ב-Supabase את parasha_deck.sql", { error: true }); return false; }
+  if (error) { console.error(error); toast("השמירה נכשלה", { error: true }); return false; }
+  return true;
+}
+async function ptParashaUpload(iso, file) {
+  if (!file || PT.busy) return;
+  const kind = ptKindOf(file);
+  if (!kind) { toast("צריך קובץ PowerPoint (.pptx) או PDF", { error: true }); return; }
+  if (file.size > PT_MAX) { toast("הקובץ גדול מ-50MB", { error: true }); return; }
+  PT.busy = true;
+  toast("מעלה את מצגת הפרשה…");
+  try {
+    const token = PT.info[iso]?.token || (await ptToken(iso));
+    if (!token) return;
+    const path = `${token}/${Date.now()}-parasha.${kind}`;
+    const up = await sb.storage.from("sermons").upload(path, file, { contentType: kind === "pptx" ? PPTX_TYPE : "application/pdf", upsert: false });
+    if (up.error) throw up.error;
+    if (await ptParashaSet(iso, { path, name: file.name })) { await ptLoad(); toast("מצגת הפרשה הועלתה ✓"); }
+  } catch (err) { console.error(err); toast("ההעלאה נכשלה", { error: true }); }
+  finally { PT.busy = false; ptRefresh(); }
+}
+async function ptParashaClear(iso) {
+  if (!confirm("להסיר את מצגת הפרשה? (השקופיות של הטקסט יחזרו)")) return;
+  if (await ptParashaSet(iso, null)) { await ptLoad(); toast("מצגת הפרשה הוסרה"); }
+  ptRefresh();
+}
+// the parasha deck for the downloaded PowerPoint, if it is a .pptx: { buf, name } or null
+async function parashaPptxFor(iso) {
+  if (!PT.loaded) await ptLoad().catch(() => {});
+  const r = textsRow(iso);
+  if (!r?.parasha_file_path || !/\.pptx$/i.test(r.parasha_file_path)) return null;
+  const res = await fetch(sb.storage.from("sermons").getPublicUrl(r.parasha_file_path).data.publicUrl);
+  if (!res.ok) throw new Error("parasha fetch " + res.status);
+  return { buf: await res.arrayBuffer(), name: r.parasha_file_name };
+}
+
 // ---------- the speaker's PowerPoint inside the downloaded deck (setlist.js buildPptx) ----------
 // The meeting's sermon file, if it is a .pptx: { buf, name } or null
 async function sermonPptxFor(iso) {
@@ -393,6 +449,7 @@ document.addEventListener("click", async (e) => {
   if (a === "clear") { ptClear(iso); return; }
   if (a === "pray-save") { ptSavePrayers(iso, b); return; }
   if (a === "texts-save") { ptSaveTexts(iso, b); return; }
+  if (a === "parasha-clear") { ptParashaClear(iso); return; }
   if (a === "passage-add") { const list = b.parentElement.querySelector(".pt-passages"); list.insertAdjacentHTML("beforeend", passageHtml({}, list.children.length)); list.lastElementChild.querySelector("input").focus(); return; }
   if (a === "passage-del") { b.closest(".pt-passage").remove(); return; }
   if (a === "pptx") {
@@ -405,4 +462,6 @@ document.addEventListener("click", (e) => { if (e.target.id === "pt-dialog") e.t
 document.addEventListener("change", (e) => {
   const f = e.target.closest?.("[data-pt-file]");
   if (f) { ptUpload(f.dataset.ptFile, f.files[0]); f.value = ""; }
+  const pf = e.target.closest?.("[data-pt-parasha-file]");
+  if (pf) { ptParashaUpload(pf.dataset.ptParashaFile, pf.files[0]); pf.value = ""; }
 });
