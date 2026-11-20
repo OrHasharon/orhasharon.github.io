@@ -564,12 +564,12 @@ h1, .verse, .team-section h2, .summary h2, .section-title, .song-head h2, .song-
 .ic-guitar    { color: #e8964a; }      /* גיטרה / בס / חשמלית */
 .ic-piano     { color: #4fa3e0; }      /* קלידים / פסנתר */
 .ic-drum      { color: #9b7be0; }      /* תופים / קחון */
-.ic-music-2   { color: #e6c13d; }      /* כינור / סקסופון */
+.ic-music-2, .ic-violin, .ic-saxophone { color: #e6c13d; } /* כינור / סקסופון */
 [data-theme="light"] .ic-mic-vocal { color: #a82556; }
 [data-theme="light"] .ic-guitar    { color: #934a0b; }
 [data-theme="light"] .ic-piano     { color: #1a5d93; }
 [data-theme="light"] .ic-drum      { color: #6440b8; }
-[data-theme="light"] .ic-music-2   { color: #735800; }
+[data-theme="light"] .ic-music-2, [data-theme="light"] .ic-violin, [data-theme="light"] .ic-saxophone   { color: #735800; }
 /* the instrument label next to a name — "(🎸 אקוסטית)" — brackets and all in the instrument's colour */
 .inst.inst-vocal  { color: #e8618c; } .inst.inst-guitar { color: #e8964a; } .inst.inst-keys { color: #4fa3e0; }
 .inst.inst-drum   { color: #9b7be0; } .inst.inst-other  { color: #e6c13d; }
