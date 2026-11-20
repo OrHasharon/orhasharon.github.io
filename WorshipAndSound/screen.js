@@ -84,8 +84,8 @@ function buildDeck() {
     if (e.weekly === "parasha" && S.parashaDeck.length) { S.parashaDeck.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page, doc: "parasha" })); continue; }
     if (e.weekly === "reading" && S.parashaDeck.length) continue;
     if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
-    // the Supper verse typed in the site: a long passage over several slides (communionPages, deck.js)
-    if (e.tpl === "communion_verse" && S.dbCommunion) { const cp = communionPages(S.dbCommunion.verse); cp.pages.forEach((cv) => S.deckSlides.push({ key: e.tpl, cv, csz: cp.size })); continue; }
+    // the Supper verse typed in the site: on the reading slide (just the verses, the source small at the top, no picture)
+    if (e.tpl === "communion_verse" && S.dbCommunion) { splitReading(S.dbCommunion.verse).forEach((lines) => S.deckSlides.push({ key: "reading", lines, ref: S.dbCommunion.ref || "", small: true })); continue; }
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = slideStanzas(e.song.content || "", e.song.title).flatMap((st) => chunks(st.lines, 4));
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
@@ -180,13 +180,12 @@ function tplParas(el, entry) {
   const like = (i, text) => ({ ...(el.paras[i] || el.paras[0]), runs: text ? [{ ...(el.paras[i] || el.paras[0]).style, t: text }] : [] });
   if (entry.key === "communion_verse" && S.dbCommunion && el.paras?.some((p) => p.runs.some((r) => r.t))) {
     const c = S.dbCommunion, last = el.paras.length - 1;
-    const big = (p) => (entry.csz ? { ...p, runs: p.runs.map((r) => ({ ...r, sz: entry.csz })) } : p);
-    return [...(entry.cv || linesOf(c.verse)).map((t) => big(like(0, t))), ...(c.ref ? [like(last, c.ref)] : [])];
+    return [...linesOf(c.verse).map((t) => like(0, t)), ...(c.ref ? [like(last, c.ref)] : [])];
   }
   if (el.role === "verse") return [...linesOf(wk("verse")).map((t) => like(0, t)), ...(wk("verseRef") ? [like(1, wk("verseRef"))] : [])];
   if (el.role === "parasha_name") return [like(0, wk("parasha"))];
   if (el.role === "parasha_refs") return linesOf(wk("parashaRefs")).map((t) => like(0, t));
-  if (el.role === "reading_ref") return [like(0, entry.ref ?? wk("readingRef"))];
+  if (el.role === "reading_ref") { const p = like(0, entry.ref ?? wk("readingRef")); return [entry.small ? { ...p, runs: p.runs.map((r) => ({ ...r, sz: 24 })) } : p]; }
   if (el.role === "reading_body") return (entry.lines || []).map((t) => like(0, t));
   if (el.role === "prayers") return (entry.lines || []).map((t) => { const p = el.paras[0]; return { ...p, runs: prayerRuns(t, { ...p.style, c: "#F5F7FA" }) }; });
   if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: showTitle(entry.song.title) }] }];
@@ -350,7 +349,7 @@ function show() {
     const cur = entry?.song;
     if (cur) { const k = S.songs.findIndex((x) => x.id === cur.id); if (k >= 0) S.idx = k; }
     el.classList.add("out");
-    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); if (entry?.key === "pptx") renderPptxSlide(entry.page, entry.doc || "sermon"); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
+    setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); document.fonts?.ready.then(fitTpl); setTimeout(fitTpl, 700); /* again once the fonts have loaded: a late font makes the text bigger */ if (entry?.key === "pptx") renderPptxSlide(entry.page, entry.doc || "sermon"); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
     renderOps();
     return;
   }

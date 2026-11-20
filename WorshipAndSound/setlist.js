@@ -299,14 +299,14 @@ async function buildPptx(iso) {
     }
     // the Lord's Supper verse typed in the site replaces the template's
     if (e.tpl === "communion_verse" && texts?.communion_verse) {
-      // a long passage goes over several slides (communionPages, deck.js), the source under each part
-      const { size, pages } = communionPages(texts.communion_verse);
-      for (const verse of pages) {
-        order.push(await clone(TPL.communion_verse, (xml) => {
-          const sp = shapes(xml).find((s) => /<a:t>/.test(s));
-          if (!sp) return xml;
-          const filled = setParagraphs(sp, [...verse, ...(texts.communion_ref ? [texts.communion_ref] : [])], (ps, t, n) => (n < verse.length ? ps[0] : ps[ps.length - 1]));
-          return xml.replace(sp, filled.replace(/sz="3600"/g, `sz="${size * 100}"`));
+      // on the template's reading slide, as Uriya asked: just the verses across the slide, the source small at the top,
+      // no picture; a long passage goes over several slides (readingPages, deck.js)
+      const two = (xml) => { const sps = shapes(xml).filter((sp) => /<p:txBody>/.test(sp)); return [sps.find((sp) => /name="Title/.test(sp)) || sps[0], sps.find((sp) => !/name="Title/.test(sp)) || sps[1]]; };
+      for (const page of readingPages(texts.communion_verse)) {
+        order.push(await clone(TPL.reading, (xml) => {
+          const [t, bd] = two(xml);
+          let x = t ? xml.replace(t, setParagraphs(t, [texts.communion_ref || ""], (ps) => ps[0]).replace(/sz="\d+"/g, 'sz="2400"')) : xml;
+          return bd ? x.replace(bd, setParagraphs(bd, page, (ps) => ps[0])) : x;
         }));
       }
       continue;

@@ -156,7 +156,6 @@ function ptTextsHtml(iso, can, open) {
   }
   return `<details class="pt-section pt-pray" data-key="texts-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
     <div class="pt-form" data-pt-texts="${iso}">
-      ${textsRow(iso)?.updated_at ? `<p class="pt-by">עודכן ${byLine(textsRow(iso))}</p>` : ""}
       <p class="hint">מופיע אחרי השיר האחרון ולפני ברכת הילדים. בלי שם פרשה ובלי פסוקים = אין שקופיות.</p>
       <div class="pt-label">📽️ או: מצגת לפרשה</div>
       ${r.parasha_file_path
@@ -167,6 +166,7 @@ function ptTextsHtml(iso, can, open) {
         : `<div class="pt-pray-bar"><label class="btn ghost pt-upload">⬆️ העלאת מצגת לפרשה<input type="file" accept="application/pdf,.pdf,${PPTX_TYPE},.pptx" data-pt-parasha-file="${iso}" hidden></label>
            <small class="hint">PowerPoint או PDF. נכנס כמו שהוא, במקום השקופיות של הטקסט שלמטה</small></div>`}
       <div class="pt-parasha-text"${r.parasha_file_path ? " hidden" : ""}>
+      ${(r.parasha || r.parasha_refs || r.reading) && r.updated_by ? `<p class="pt-by">הטקסט של הפרשה עודכן ${byLine(r)}</p>` : ""}
       <label>שם הפרשה<input name="parasha" value="${esc(r.parasha || "")}" placeholder="למשל: פרשת חיי שרה"></label>
       <label>קטע מהתורה<input name="torah" value="${esc(refs.torah)}" placeholder="למשל: בראשית כ״ג 1 – כ״ה 18"></label>
       <label><span>הפטרה <small>(לא חובה)</small></span><input name="haftara" value="${esc(refs.haftara)}" placeholder="למשל: מלכים א׳ א׳ 1-31"></label>
@@ -195,12 +195,16 @@ async function ptSaveTexts(iso, btn) {
   const f = document.querySelector(`[data-pt-texts="${iso}"]`);
   if (!f) return;
   const val = (n) => f.querySelector(`[name="${n}"]`).value.trim();
-  const row = { meeting_date: iso, updated_at: new Date().toISOString(), updated_by: myName() };
+  const row = { meeting_date: iso };
   row.parasha = val("parasha");
   row.parasha_refs = Object.keys(REF_LABELS).filter((k) => val(k)).map((k) => `${REF_LABELS[k]}: ${val(k)}`).join("\n");
   const passages = [...f.querySelectorAll(".pt-passage")].map((d) => ({ ref: d.querySelector('[name="p_ref"]').value.trim(), text: d.querySelector('[name="p_text"]').value.trim() })).filter((p) => p.ref || p.text);
   row.reading = passages.length ? JSON.stringify(passages) : "";
   row.reading_ref = passages[0]?.ref || "";
+  const was = textsRow(iso) || {};
+  if (["parasha", "parasha_refs", "reading", "reading_ref"].some((k) => (row[k] || "") !== (was[k] || ""))) {
+    Object.assign(row, { updated_at: new Date().toISOString(), updated_by: myName() });
+  }
   // the Supper verse is saved (and signed) only when it was changed here; otherwise it stays as it is — a verse
   // carried on from an earlier meeting isn't copied into this one under the name of whoever saved the parasha
   const prev = communionRow(iso);
