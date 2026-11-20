@@ -19,12 +19,16 @@ function setlistButton(iso) {
   return `<button class="setlist-btn${n ? " has" : ""}" data-open-setlist="${iso}">🎵 סשן הלל${n ? ` (${n})` : ""}</button>${lead}`;
 }
 
-// ---------- who may change a session: that meeting's worship leader only, admins too (the DB enforces the same, setlist_leader.sql) ----------
+// ---------- who leads a session: that meeting's worship leader (the DB enforces the same, setlist_leader.sql) ----------
 function canEditSetlist(iso) {
   if (typeof user === "undefined" || !user) return true; // open mode without sign-in
   const leaders = state.signups.filter((s) => s.meeting_date === iso && s.role === "leader");
   if (!leaders.length) return true; // no worship leader yet: the whole team can (setlist_no_leader.sql)
   return myMemberId != null && leaders.some((s) => s.member_id === myMemberId);
+}
+// changing the songs of a session: the leader as above, and admins always (setlist_admin.sql)
+function canEditSongs(iso) {
+  return (typeof isAdmin !== "undefined" && isAdmin) || canEditSetlist(iso);
 }
 function leaderOnly(iso) {
   const ld = state.signups.find((s) => s.meeting_date === iso && s.role === "leader");
@@ -59,8 +63,8 @@ function renderSetlistDialog() {
           </span>
         </div>
         <input class="sl-note" data-sl-note="${it.id}" value="${esc(it.notes || "")}" placeholder="הערה (למשל: פזמון פעמיים, מעבר ל-D)">
-      </li>`).join("")}</ol>` : `<p class="status">עדיין אין שירים בסשן.${canEditSetlist(iso) ? " מחפשים שיר כאן למטה ומוסיפים בלחיצה." : ""}</p>`}
-    ${canEditSetlist(iso) ? `<div class="sl-add-box">
+      </li>`).join("")}</ol>` : `<p class="status">עדיין אין שירים בסשן.${canEditSongs(iso) ? " מחפשים שיר כאן למטה ומוסיפים בלחיצה." : ""}</p>`}
+    ${canEditSongs(iso) ? `<div class="sl-add-box">
       <label class="field">הוספת שיר לסט<input id="sl-search" type="search" placeholder="חיפוש לפי שם השיר" autocomplete="off" value="${esc(setlist.query || "")}"></label>
       <div id="sl-hits"></div>
     </div>` : ""}
@@ -68,7 +72,7 @@ function renderSetlistDialog() {
       <button class="btn" data-sl-live ${items.length ? "" : "disabled"}>▶ מצב הלל (מסך מלא)</button>
       ${LIVE_SYNC_ON && (isAdmin || canEditSetlist(iso)) ? `<button class="btn ghost" data-sl-team>📣 לינק לסט החי לצוות</button>` : ""}
       <button class="btn ghost" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
-      ${canEditSetlist(iso) ? `<button class="btn ghost" data-sl-supper>🍞 + סעודת האדון</button>` : ""}
+      ${canEditSongs(iso) ? `<button class="btn ghost" data-sl-supper>🍞 + סעודת האדון</button>` : ""}
       <button class="btn ghost" data-sl-screen ${items.length ? "" : "disabled"} title="פותחים פעם אחת במחשב ההקרנה ושומרים כסימנייה">🖥️ מסך הקרנה</button>
       <button class="btn ghost" data-sl-pdf ${items.length ? "" : "disabled"}>📄 הורדת PDF</button>
       <a id="sl-download" class="link-btn" hidden></a>
@@ -346,7 +350,7 @@ document.addEventListener("click", async (e) => {
   const quick = t.closest("[data-sl-quickadd]");
   if (quick) {
     const iso = setlist.openDate;
-    if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
+    if (!canEditSongs(iso)) { leaderOnly(iso); return; }
     if (quick.disabled) return;
     quick.disabled = true;
     await loadSetlist();
@@ -367,7 +371,7 @@ document.addEventListener("click", async (e) => {
   const supper = t.closest("[data-sl-supper]");
   if (supper) {
     const iso = setlist.openDate;
-    if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
+    if (!canEditSongs(iso)) { leaderOnly(iso); return; }
     if (setlist.busy) return;
     setlist.busy = true; supper.disabled = true;
     try { await addSupper(iso); } finally { setlist.busy = false; supper.disabled = false; }
@@ -377,7 +381,7 @@ document.addEventListener("click", async (e) => {
   if (add) {
     const iso = document.getElementById("sl-date").value;
     const notes = document.getElementById("sl-new-note").value.trim() || null;
-    if (!canEditSetlist(iso)) { leaderOnly(iso); return; }
+    if (!canEditSongs(iso)) { leaderOnly(iso); return; }
     if (add.disabled) return;
     add.disabled = true;
     await loadSetlist();
@@ -390,7 +394,7 @@ document.addEventListener("click", async (e) => {
   }
   const mv = t.closest("[data-sl-move]");
   if (mv) {
-    if (!canEditSetlist(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
+    if (!canEditSongs(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
     if (setlist.busy) return;
     setlist.busy = true;
     try { await moveItem(Number(mv.dataset.slMove), Number(mv.dataset.dir)); } finally { setlist.busy = false; }
@@ -398,7 +402,7 @@ document.addEventListener("click", async (e) => {
   }
   const rm = t.closest("[data-sl-remove]");
   if (rm) {
-    if (!canEditSetlist(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
+    if (!canEditSongs(setlist.openDate)) { leaderOnly(setlist.openDate); return; }
     if (setlist.busy) return;
     setlist.busy = true; rm.disabled = true;
     try { await removeItem(Number(rm.dataset.slRemove)); } finally { setlist.busy = false; }
@@ -506,7 +510,7 @@ document.addEventListener("change", async (e) => {
   const n = e.target.closest("[data-sl-note]");
   if (!n) return;
   const it = setlist.items.find((i) => i.id === Number(n.dataset.slNote));
-  if (!canEditSetlist(setlist.openDate)) { n.value = it?.notes || ""; leaderOnly(setlist.openDate); return; }
+  if (!canEditSongs(setlist.openDate)) { n.value = it?.notes || ""; leaderOnly(setlist.openDate); return; }
   const { data, error } = await sb.from("setlist_items").update({ notes: n.value.trim() || null }).eq("id", Number(n.dataset.slNote)).select("id");
   if (!error && !data?.length) { n.value = it?.notes || ""; leaderOnly(setlist.openDate); return; }
   toast(error ? "שמירת ההערה נכשלה" : "ההערה נשמרה");

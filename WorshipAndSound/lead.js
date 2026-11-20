@@ -110,7 +110,7 @@ document.addEventListener("click", async (e) => {
   const add = t.closest("[data-lead-add]");
   if (add) {
     const date = lead.date;
-    if (!canEditSetlist(date)) { leaderOnly(date); return; }
+    if (!canEditSongs(date)) { leaderOnly(date); return; }
     if (add.disabled) return;
     add.disabled = true;
     await loadSetlist();
