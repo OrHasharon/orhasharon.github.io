@@ -125,9 +125,9 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
     // direction comes from the lyrics, not the (Latin) chords
     const lyricsOnly = line.replace(/\[[^\]]*\]/g, "");
     const dir = HEB.test(lyricsOnly) ? "rtl" : "ltr";
-    if (!line.includes("[") && isChordLine(cleanStr(line))) {
+    if (!line.includes("[") && isChordLine(chordStr(line))) {
       if (!chords) return "";
-      const row = cleanStr(line).replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift, flats) : tok));
+      const row = chordStr(line).replace(/\S+/g, (tok) => (CHORD_RE.test(tok) ? transposeChord(tok, shift, flats) : tok));
       return `<div class="cp-line cp-bare-chords" dir="${songDir}">${esc(row)}</div>`;
     }
     if (!line.includes("[")) return `<div class="cp-line" dir="${dir}">${esc(fixNiqqud(line))}</div>`;
@@ -155,6 +155,10 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
 
 // strip invisible direction marks / odd spaces that PDFs leave in
 const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/[\u00A0\u2000-\u200A\u202F]/g, " ");
+// a chord row as a PDF or Word file may store it: fraction / division slashes ("A4⁄7"), small or full-width digits
+// and letters, invisible marks, "A4 / 7" with spaces — made plain before deciding whether the row is chords
+const chordStr = (t) => cleanStr(t).normalize("NFKC").replace(/[⁄∕⧸／]/g, "/").replace(/\p{Cf}/gu, "")
+  .replace(/([A-G][^\s/]*)\s+\/\s+(\d)/g, "$1/$2");
 
 // ---------- lyrics → slides (PowerPoint + projection screen) ----------
 // lines that are never lyrics on a slide: credits and settings ("מילים ולחן: …", "נכתב ע״י …", "מפתח: E | קצב: 127bpm"),
@@ -162,7 +166,7 @@ const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2
 const SECTION_TEXT = /^(פזמון|פזמון\s*[אב]['׳]?|בית(\s*[א-ת0-9]['׳]?)?|גשר|מעבר|סיום|פתיחה|הקדמה|קודה|סולו|פרי\s*קורוס|אינטרו|intro|outro|chorus|pre-?chorus|verse(\s*\d+)?|bridge|tag|ending)\s*[:.]?$/i;
 const CREDITS = /^(מילים|לחן|מילים\s*ולחן|מילים\s*ו?לחן|נכתב|כתב|תרגום|עיבוד|ביצוע|מבצע|מפתח|סולם|קצב|מפעם|טמפו|key|capo|tempo|words|music|lyrics|written)(?=[\s:,.\-–]|$)|ע["״']י|bpm|קאפו\s*\d|capo\s*\d/i; // (\b doesn't work with Hebrew letters)
 function isSlideLine(line) {
-  const t = line.replace(/[֑-ׇ]/g, "").trim();
+  const t = chordStr(line.replace(/[֑-ׇ]/g, "")).trim();
   if (SECTION_TEXT.test(t) || CREDITS.test(t)) return false;
   const toks = t.split(/\s+/).filter((w) => !/^[|/\\\-–—.:,()]+$/.test(w));
   if (toks.length && toks.every((w) => CHORD_RE.test(w.replace(/[()|,]/g, "")) || /^או$/.test(w))) return false; // "Gm", "A | D"
