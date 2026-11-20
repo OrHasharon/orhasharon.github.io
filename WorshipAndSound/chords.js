@@ -1,7 +1,7 @@
 // Chord sheets (ChordPro "[Am]lyrics"): detect, transpose, clean niqqud, render. Pure functions shared by
 // index.html (songs.js / setlist.js) and the guest page live.html. Uses esc() from the page.
 
-const CHORD_RE = /^[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/[A-Ga-g][#b]?)?$/;
+const CHORD_RE = /^[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M)?\d*(?:(?:sus|add|maj|b|#|-|\+)\d+)*(?:\/\d+)?(?:\/[A-Ga-g][#b]?)?$/; // "A4/7" = sus4 then 7
 const FILLER_RE = /^(?:\||\/|-|–|x\d+|\(|\)|\.+)$/i;
 const isChordLine = (text) => {
   const toks = text.trim().split(/\s+/).map((t) => (/^[()]?[A-G]/.test(t) ? t.replace(/^[()]+|[()]+$/g, "") : t)).filter(Boolean);
@@ -166,6 +166,8 @@ function isSlideLine(line) {
   if (SECTION_TEXT.test(t) || CREDITS.test(t)) return false;
   const toks = t.split(/\s+/).filter((w) => !/^[|/\\\-–—.:,()]+$/.test(w));
   if (toks.length && toks.every((w) => CHORD_RE.test(w.replace(/[()|,]/g, "")) || /^או$/.test(w))) return false; // "Gm", "A | D"
+  // a chord row the songbook wrote loosely ("C#m/Bm E/D", "C4#", "Em(D)G"): no Hebrew, every word starts with a chord letter
+  if (!/[א-ת]/.test(t) && toks.length && toks.every((w) => /^\(?[A-G][A-Za-z0-9#b/()+\-]*$/.test(w))) return false;
   return true;
 }
 
@@ -178,14 +180,22 @@ function lyricStanzas(content) {
     const label = t.match(/^\{(.+)\}$/);
     if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
     // repeat marks ("X2", "2X", "(x3)", "\u00D72") are for the band, not for the screen
-    const line = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\(?\s*(?:[xX\u00D7]\s*\d|\d\s*[xX\u00D7])\s*\)?/g, "").replace(/\s{2,}/g, " ").trim();
+    const noChords = fixNiqqudLine(raw).replace(/\[[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
+    const line = noChords.replace(/\(?\s*(?:[xX\u00D7]\s*\d|\d\s*[xX\u00D7])\s*\)?/g, "").replace(/\s{2,}/g, " ").trim();
+    const repeated = line !== noChords;
     if (!line) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); continue; }
     if (!/[\u05D0-\u05EAa-zA-Z]{2}/.test(line.replace(/[\u0591-\u05C7]/g, ""))) continue; // chord-only rows (niqqud ignored)
     if (!isSlideLine(line)) {
       // a section mark written as text ("\u05E4\u05D6\u05DE\u05D5\u05DF X2", "\u05D1\u05D9\u05EA \u05D1'", "\u05D2\u05E9\u05E8:") still separates the sections
-      if (SECTION_TEXT.test(line) && stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] });
+      // and names the next one (so a "\u05E4\u05D6\u05DE\u05D5\u05DF" mark tells which section is the chorus)
+      const mark = line.replace(/[\u0591-\u05C7]/g, "").trim();
+      if (SECTION_TEXT.test(mark)) {
+        if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] });
+        stanzas[stanzas.length - 1].label = mark.replace(/[:.]$/, "");
+      }
       continue;
     }
+    if (repeated) stanzas[stanzas.length - 1].repeat = true;
     stanzas[stanzas.length - 1].lines.push(line);
   }
   return stanzas.filter((s) => s.lines.length);
@@ -193,13 +203,50 @@ function lyricStanzas(content) {
 
 // sections for the slides: one-line sections in a row are one chorus written with a blank line between its lines
 // ("אהלל אותך לנצח" / "אהלל ואשבח") — join them (up to 4 lines) so the chorus isn't split into one-line slides
-function slideStanzas(content) {
+function slideStanzas(content, title = "") {
   const out = [];
   for (const st of lyricStanzas(content)) {
     const last = out[out.length - 1];
-    if (last && st.lines.length === 1 && !st.label && last.single && last.lines.length < 4) { last.lines.push(st.lines[0]); continue; }
+    if (last && st.lines.length === 1 && !st.label && last.single && last.lines.length < 4) { last.lines.push(st.lines[0]); last.repeat ||= st.repeat; continue; }
     out.push({ ...st, lines: [...st.lines], single: st.lines.length === 1 });
   }
+  return withChorus(out, title);
+}
+
+// On the slides the chorus comes back after every verse, even when the songbook writes it only once.
+// Which section is the chorus: one labeled {פזמון} / "פזמון" / {chorus}; else the one section that holds the song's
+// title ("אדוני אדוננו", "הללויה כי מלך אלוהנו"); else a first section marked to be sung twice (X2).
+// A song that already writes its chorus out again is left as it is.
+const CHORUS_LABEL = /^(פזמון|chorus|refrain)/i;
+const looseText = (t) => t.replace(/\([^)]*\)/g, " ").replace(/[֑-ׇ]/g, "")
+  .replace(/[ךםןףץ]/g, (c) => "כמנפצ"["ךםןףץ".indexOf(c)]).replace(/[וי]/g, "") // spelling: אדני = אדוני, אלהינו = אלוהנו
+  .replace(/[^א-תa-zA-Z0-9]+/g, " ").toLowerCase().trim();
+function chorusIndex(st, title) {
+  const labeled = st.findIndex((x) => CHORUS_LABEL.test((x.label || "").trim()));
+  if (labeled >= 0) return labeled;
+  if (st.some((x) => (x.label || "").trim())) return -1; // the sections are named and none of them is a chorus
+  const t = looseText(title || "");
+  if (t.replace(/ /g, "").length >= 6) {
+    const hits = st.map((x, i) => (looseText(x.lines.join(" ")).includes(t) ? i : -1)).filter((i) => i >= 0);
+    // a hymn named after its first verse ("על גבעה רחוקה", "רק בישוע תקוותי"): all sections the same length, none marked
+    // to repeat — that first section is a verse, not a chorus
+    const hymn = st.length >= 3 && st[0].lines.length >= 3 && st.every((x) => x.lines.length === st[0].lines.length && !x.repeat);
+    if (hits.length === 1) return hits[0] === 0 && hymn ? -1 : hits[0];
+    if (hits.length > 1) return -1;
+  }
+  return st[0]?.repeat && st.length >= 3 ? 0 : -1;
+}
+function withChorus(st, title) {
+  if (st.length < 2) return st;
+  const c = chorusIndex(st, title);
+  if (c < 0) return st;
+  const key = (x) => looseText(x.lines.join(" ")), ck = key(st[c]);
+  if (st.some((x, i) => i !== c && key(x) === ck)) return st; // the chorus is already written out again
+  const out = [];
+  st.forEach((x, i) => {
+    out.push(x);
+    if (i !== c && i + 1 !== c) out.push({ ...st[c], lines: [...st[c].lines], again: true });
+  });
   return out;
 }
 

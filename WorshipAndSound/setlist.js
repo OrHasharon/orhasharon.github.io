@@ -215,7 +215,7 @@ async function buildPptx(iso) {
   }
   const songSlides = async (it) => {
     const out = [];
-    const stanzas = slideStanzas(it.songs.content);
+    const stanzas = slideStanzas(it.songs.content, it.songs.title);
     if (!stanzas.length) {
       out.push(await clone(TPL.song, (xml) => {
         const [titleSp, lyricSp] = shapes(xml).filter((sp) => /<a:t>/.test(sp));
