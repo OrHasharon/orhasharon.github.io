@@ -44,6 +44,7 @@
     <p class="when" id="when">טוען…</p>
     <div class="up-card" id="card" hidden>
       <p class="up-now" id="now"></p>
+      <label class="up-name">השם שלך <input id="who" autocomplete="name" placeholder="למשל: נועם הנדרן" style="font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.06); color: inherit; width: 100%; box-sizing: border-box; margin: 4px 0 12px;"></label>
       <label class="up-drop" id="drop">
         <span class="big">בחירת מצגת הדרשה</span>
         <small>או גרירה של הקובץ לכאן</small>
@@ -86,8 +87,12 @@
       $("card").hidden = false;
     }
 
+    try { const n = localStorage.getItem("ws-speaker-name"); if (n) document.getElementById("who").value = n; } catch {}
     async function upload(file) {
       if (busy || !file) return;
+      const who = ($("who").value || "").trim();
+      if (!who) { say("כתבו את השם שלכם למעלה, ואז בחרו את הקובץ שוב.", "err"); $("who").focus(); $("file").value = ""; return; }
+      try { localStorage.setItem("ws-speaker-name", who); } catch {}
       const kind = /\.pptx$/i.test(file.name) ? "pptx" : /pdf$/i.test(file.type || file.name) ? "pdf" : "";
       if (!kind) { say("צריך קובץ PowerPoint (‎.pptx) או PDF.", "err"); return; }
       if (file.size > MAX) { say(`הקובץ גדול מדי (${Math.round(file.size / 1048576)}MB). עד 50MB. ב-PowerPoint: קובץ ← דחיסת תמונות, ואז לנסות שוב.`, "err"); return; }
@@ -97,7 +102,8 @@
         const path = `${t}/${Date.now()}-sermon.${kind}`;
         const up = await sb.storage.from("sermons").upload(path, file, { contentType: kind === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/pdf", upsert: false });
         if (up.error) throw up.error;
-        const at = await sb.rpc("sermon_attach", { t, path, fname: file.name });
+        let at = await sb.rpc("sermon_attach", { t, path, fname: file.name, by: who });
+        if (at.error && at.error.code === "PGRST202") at = await sb.rpc("sermon_attach", { t, path, fname: file.name }); // sermon_by.sql not run yet
         if (at.error) throw at.error;
         showNow(file.name, new Date().toISOString());
         say("מצגת הדרשה הועלתה ✓ · היא נכנסת לבד למצגת האסיפה. תודה!", "done");

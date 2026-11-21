@@ -17,7 +17,7 @@ async function ptLoad() {
   if (!setlist.ready) await loadSetlist();
   const gone = (error) => !!error && ["PGRST205", "42P01", "PGRST202", "42883"].includes(error.code);
   const [s, p, x] = await Promise.all([
-    sb.from("sermon_links").select("meeting_date, token, file_path, file_name, uploaded_at"),
+    sb.from("sermon_links").select("*"), // (uploaded_by once sermon_by.sql has run)
     sb.from("prayer_requests").select("meeting_date, body, updated_at, updated_by").order("meeting_date"),
     sb.from("meeting_texts").select("*").order("meeting_date"),
   ]);
@@ -100,7 +100,7 @@ function ptCard(m, { next = false } = {}) {
     ? `<ol class="pt-songs">${items.map((i) => `<li>${quietItem(i.songs) ? "🍞 " : ""}${esc(i.songs.title)}</li>`).join("")}</ol>`
     : `<p class="pt-empty">אין עדיין שירים בסשן${can ? ` · <button class="link-btn" data-pt="session" data-iso="${iso}">פתיחת הסשן</button>` : ""}</p>`;
   const sermon = PT.missing ? "" : info?.file_name
-    ? `<p class="pt-sermon ok">${/\.pptx$/i.test(info.file_path || info.file_name) ? "📽️" : "📄"} ${esc(info.file_name)} <small>· הועלה ${ptWhen(info.uploaded_at)}</small></p>`
+    ? `<p class="pt-sermon ok">${/\.pptx$/i.test(info.file_path || info.file_name) ? "📽️" : "📄"} ${esc(info.file_name)} <small>· הועלה${info.uploaded_by ? ` ע״י ${esc(whoName(info.uploaded_by))}` : ""} ${ptWhen(info.uploaded_at)}</small></p>`
     : `<p class="pt-sermon missing">📽️ עוד לא הועלתה מצגת דרשה</p>`;
   const armed = PT.clearArm?.iso === iso;
   const accept = `application/pdf,.pdf${PT.prayMissing ? "" : `,${PPTX_TYPE},.pptx`}`;
@@ -294,9 +294,10 @@ async function ptUpload(iso, file) {
     const path = `${token}/${Date.now()}-sermon.${kind}`;
     const up = await sb.storage.from("sermons").upload(path, file, { contentType: kind === "pptx" ? PPTX_TYPE : "application/pdf", upsert: false });
     if (up.error) throw up.error;
-    const at = await sb.rpc("sermon_attach", { t: token, path, fname: file.name });
+    let at = await sb.rpc("sermon_attach", { t: token, path, fname: file.name, by: myName() });
+    if (at.error && at.error.code === "PGRST202") at = await sb.rpc("sermon_attach", { t: token, path, fname: file.name }); // sermon_by.sql not run yet
     if (at.error) throw at.error;
-    PT.info[iso] = { ...PT.info[iso], file_path: path, file_name: file.name, uploaded_at: new Date().toISOString() };
+    PT.info[iso] = { ...PT.info[iso], file_path: path, file_name: file.name, uploaded_at: new Date().toISOString(), uploaded_by: myName() };
     toast("מצגת הדרשה הועלתה ✓");
   } catch (err) { console.error(err); toast("ההעלאה נכשלה", { error: true }); }
   finally { PT.busy = false; ptRefresh(); }
