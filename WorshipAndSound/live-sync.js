@@ -73,14 +73,13 @@ function syncStart(date) {
         if (sync.iLead) broadcastState();          // back after a dropped connection
         else {
           send("hello", {});                       // ask whoever leads for where we are
-          // the session's leader leads the moment they open the live view — only on the first connect, and only if
-          // nobody answers within a moment (an admin who took over, or the leader's other device, keeps leading;
-          // a reconnect never takes the lead back)
+          // the session's leader leads the moment they open the live view — only on the first connect (a reconnect
+          // never takes the lead back). Nobody leads → take it. Someone else leads (e.g. an admin who opened first) →
+          // the worship leader ASSIGNED to this meeting takes it anyway (Uriya, 21.11: Hagit came and couldn't lead);
+          // their own other device keeps leading.
           if (!sync.joined && canEditSetlist(date)) {
             clearTimeout(sync.leadTimer);
-            sync.leadTimer = setTimeout(() => {
-              if (sync.ch === ch && !sync.iLead && !(sync.remote && sync.people[leaderKey(sync.leader)])) claimLead();
-            }, 1500);
+            sync.leadTimer = setTimeout(() => { if (sync.ch === ch && shouldAutoLead(date)) claimLead(); }, 1500);
           }
         }
         sync.joined = true;
@@ -93,6 +92,18 @@ function syncStart(date) {
 function send(event, payload, channel = sync.ch) {
   if (!channel) return;
   channel.send({ type: "broadcast", event, payload }).catch?.(() => {});
+}
+
+// on opening the live view: take the lead now?
+function isSessionLeader(date) {
+  return typeof myMemberId !== "undefined" && myMemberId != null &&
+    (state.signups || []).some((s) => s.meeting_date === date && s.role === "leader" && s.member_id === myMemberId);
+}
+function shouldAutoLead(date) {
+  if (sync.iLead) return false;
+  const someoneLeads = !!(sync.remote && sync.people[leaderKey(sync.leader)]);
+  if (!someoneLeads) return true;
+  return isSessionLeader(date) && (sync.leader?.name || "") !== myName(); // not my own other phone
 }
 
 function claimLead() {
