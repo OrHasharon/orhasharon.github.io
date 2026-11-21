@@ -187,7 +187,7 @@ function tplParas(el, entry) {
   if (el.role === "verse") return [...linesOf(wk("verse")).map((t) => like(0, t)), ...(wk("verseRef") ? [like(1, wk("verseRef"))] : [])];
   if (el.role === "parasha_name") return [like(0, wk("parasha"))];
   if (el.role === "parasha_refs") return linesOf(wk("parashaRefs")).map((t) => like(0, t));
-  if (el.role === "reading_ref") { const p = like(0, entry.ref ?? wk("readingRef")); return [entry.supper ? { ...p, algn: "l", rtl: false, runs: p.runs.map((r) => ({ ...r, sz: 20, i: true })) } : p]; }
+  if (el.role === "reading_ref") { const p = like(0, entry.ref ?? wk("readingRef")); return [entry.supper ? { ...p, algn: "r", rtl: true, runs: p.runs.map((r) => ({ ...r, sz: 26, b: true, i: false, c: "#d8be83", f: "Arial" })) } : p]; }
   if (el.role === "reading_body") return (entry.lines || []).map((t) => { const p = like(0, t); return entry.supper ? { ...p, algn: "r", runs: p.runs.map((r) => ({ ...r, sz: entry.supper })) } : p; });
   if (el.role === "prayers") return (entry.lines || []).map((t) => { const p = el.paras[0]; return { ...p, runs: prayerRuns(t, { ...p.style, c: "#F5F7FA" }) }; });
   if (el.role === "title" && entry.song) return [{ ...el.paras[0], runs: [{ ...el.paras[0].style, t: showTitle(entry.song.title) }] }];
@@ -231,7 +231,8 @@ function tplHtml(entry) {
   if (entry.key === "pdf") return `<div class="tpl" style="width:${W}px;height:${H}px"><img class="pdf-page" alt="" src="${entry.src}"></div>`;
   if (entry.key === "pptx") return `<div class="tpl" style="width:${W}px;height:${H}px"><div class="pptx-slot" style="width:${W}px;height:${H}px"></div></div>`;
   if (!slide) return `<div class="tpl" style="width:${W}px;height:${H}px"></div>`;
-  const px = (b) => `left:${b[0] * W}px;top:${b[1] * H}px;width:${b[2] * W}px;height:${b[3] * H}px`;
+  const px0 = (b) => `left:${b[0] * W}px;top:${b[1] * H}px;width:${b[2] * W}px;height:${b[3] * H}px`;
+  const px = (b) => (entry.supper && b === slide.els.find((e) => e.role === "reading_ref")?.box ? px0([0.3125, 0.02778, 0.64583, 0.07407]) : px0(b));
   let html = "";
   if (ownVerse) html += `<img class="pdf-page" alt="" src="deck/static/communion_verse_bg.jpg?v=${STATIC_V}">`;
   else if (d.bg?.grad) { // DrawingML 0° = left→right; CSS 90deg = left→right

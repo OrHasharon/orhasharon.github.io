@@ -49,7 +49,8 @@ function supperSlides(verse, ref) {
   const plain = text.replace(/[\u0591-\u05C7]/g, "");
   const perRow = 800 / (0.5 * SUPPER_SIZE), rows = Math.floor(398 / (SUPPER_SIZE * 1.4));
   const max = Math.floor(perRow * rows * 0.8 * (text.length / Math.max(1, plain.length)));
-  return { pages: readingPages(text, max), ref: (ref || "").trim().replace(/^\(\s*|\s*\)$/g, ""), size: SUPPER_SIZE };
+  // the source as Uriya wrote it on his slide: "קולוסים ב 9-15" — no brackets, no colon
+  return { pages: readingPages(text, max), ref: (ref || "").trim().replace(/^\(\s*|\s*\)$/g, "").replace(/\s*:\s*/g, " "), size: SUPPER_SIZE };
 }
 
 // a song slide's lines and size: a line too long for one row at that size is cut at the comma nearest its middle

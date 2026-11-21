@@ -316,7 +316,10 @@ async function buildPptx(iso) {
       for (const page of sup.pages) {
         order.push(await clone(TPL.reading, (xml) => {
           const [t, bd] = two(xml);
-          let x = t ? xml.replace(t, left(setParagraphs(t, [sup.ref], (ps) => ps[0]).replace(/sz="\d+"/g, 'sz="2000"'))) : xml;
+          // the source like a song's title (Uriya's edit): top right, gold Arial 26 bold, 300,15 / 620x40 pt
+          const gold = (sp) => right(sp.replace(/<a:off x="\d+" y="\d+"\/>/, '<a:off x="3810000" y="190500"/>').replace(/<a:ext cx="\d+" cy="\d+"\/>/, '<a:ext cx="7874000" cy="508000"/>')
+            .replace(/<a:rPr\b([^>]*?)(\/>|>[\s\S]*?<\/a:rPr>)/g, (m, at) => `<a:rPr${at.replace(/\s(sz|b|i)="[^"]*"/g, "").replace(/\/$/, "")} sz="2600" b="1"><a:solidFill><a:srgbClr val="D8BE83"/></a:solidFill><a:latin typeface="Arial"/><a:cs typeface="Arial"/></a:rPr>`));
+          let x = t ? xml.replace(t, gold(setParagraphs(t, [sup.ref], (ps) => ps[0]))) : xml;
           return bd ? x.replace(bd, right(setParagraphs(bd, [page.join(" ")], (ps) => ps[0]).replace(/sz="\d+"/g, `sz="${sup.size * 100}"`))) : x;
         }));
       }
@@ -361,7 +364,7 @@ async function buildPptx(iso) {
   ct = ct.replace("</Types>", newParts.map((p) => `<Override PartName="/${p}" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join("") + "</Types>");
   zip.file("[Content_Types].xml", ct);
 
-  const name = `סשן הלל ${iso.split("-").reverse().join("-")}.pptx`;
+  const name = `${iso} OrHasharon.pptx`; // Uriya: "YYYY-MM-DD OrHasharon"
   const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", compression: "DEFLATE" });
   const url = URL.createObjectURL(blob);
   const a = document.getElementById("sl-download");
