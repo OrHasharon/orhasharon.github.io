@@ -27,6 +27,18 @@ async function ptLoad() {
   PT.prayMissing = gone(p.error);
   PT.info = {};
   for (const r of s.data || []) PT.info[r.meeting_date] = r;
+  // the table can't be read (no select grant: sermon_read.sql) — ask the way the projection screen does, by each
+  // upcoming meeting's date code (sermon_for), so the card and the PowerPoint still get the speaker's file
+  if (s.error && !PT.missing && typeof guestCodeFor === "function") {
+    const dates = upcomingMeetings(state.meetings || []).slice(0, 6).map((m) => m.iso);
+    await Promise.all(dates.map(async (iso) => {
+      try {
+        const { data, error } = await sb.rpc("sermon_for", { c: await guestCodeFor(iso) });
+        const r = !error && data?.[0];
+        if (r?.path) PT.info[iso] = { meeting_date: iso, file_path: r.path, file_name: r.file_name, uploaded_at: r.uploaded_at };
+      } catch {}
+    }));
+  }
   PT.prayers = p.data || [];
   PT.loaded = true; PT.at = Date.now();
 }
