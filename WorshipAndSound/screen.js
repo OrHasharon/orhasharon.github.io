@@ -25,6 +25,51 @@ const S = {
 };
 try { S.bg = localStorage.getItem("ws-screen-bg") || "tpl"; S.size = Number(localStorage.getItem("ws-screen-size")) || 1; } catch {}
 
+// ---------- control & viewers ----------
+// screen.html controls; screenread.html (window.SCREEN_READONLY) only watches: no keys, no clicks, no toolbar — it shows
+// whatever slide the controlling screen shows, sent over the realtime channel "ws-screen-view-<date code>".
+const READONLY = !!window.SCREEN_READONLY;
+// a slide's identity, the same on every computer that loaded the same meeting (the position alone could differ)
+const slideSig = (d) => d ? [d.key, d.song?.id ?? "", d.page ?? "", d.doc ?? "", (d.lines || []).join("|").slice(0, 60), d.ref ?? ""].join("~") : "";
+function viewState() {
+  return { bg: S.bg, mode: S.mode, pos: S.pos, sig: slideSig(S.deckSlides[S.pos]), idx: S.idx, slide: S.slide, songId: S.songs[S.idx]?.id ?? null, size: S.size, ts: Date.now() };
+}
+function sendView() {
+  if (READONLY || !S.viewCh || !S.viewOnline) return;
+  S.viewCh.send({ type: "broadcast", event: "view", payload: viewState() });
+}
+function applyView(v) {
+  if (!READONLY || !v || !(v.ts > (S.viewTs || 0))) return;
+  S.viewTs = v.ts; S.lastView = v;
+  if (v.bg && v.bg !== S.bg) S.bg = v.bg;
+  if (v.size) S.size = v.size;
+  S.mode = v.mode || "lyrics";
+  if (tplMode()) {
+    // the same slide can appear twice (the Supper picture before and after the verses): take the one nearest the
+    // controller's position; not found here at all (e.g. a file only on that computer) — the same position
+    let k = -1;
+    S.deckSlides.forEach((d, i) => { if (slideSig(d) === v.sig && (k < 0 || Math.abs(i - v.pos) < Math.abs(k - v.pos))) k = i; });
+    if (k < 0) k = Math.max(0, Math.min(v.pos || 0, S.deckSlides.length - 1));
+    S.pos = k;
+  } else {
+    const j = S.songs.findIndex((s) => s.id === v.songId);
+    S.idx = j >= 0 ? j : Math.max(0, Math.min(v.idx || 0, S.songs.length - 1));
+    build(); S.slide = Math.max(0, Math.min(v.slide || 0, S.slides.length - 1));
+  }
+  show();
+}
+function joinView() {
+  S.viewCh = sb.channel("ws-screen-view-" + S.code, { config: { broadcast: { self: false } } });
+  if (READONLY) S.viewCh.on("broadcast", { event: "view" }, ({ payload }) => applyView(payload));
+  else S.viewCh.on("broadcast", { event: "need" }, () => sendView()); // a viewer that just opened asks where we are
+  S.viewCh.subscribe((status) => {
+    S.viewOnline = status === "SUBSCRIBED";
+    if (S.viewOnline) { if (READONLY) S.viewCh.send({ type: "broadcast", event: "need", payload: {} }); else sendView(); }
+  });
+}
+// a viewer that loaded its data after the last message: put it where the controller is
+const reapplyView = () => { if (READONLY && S.lastView) { const v = S.lastView; S.viewTs = 0; applyView(v); } };
+
 // ---------- which meeting ----------
 async function pickMeeting() {
   const q = new URLSearchParams(location.search).get("d");
@@ -352,10 +397,12 @@ function show() {
     const cur = entry?.song;
     if (cur) { const k = S.songs.findIndex((x) => x.id === cur.id); if (k >= 0) S.idx = k; }
     el.classList.add("out");
+    sendView();
     setTimeout(() => { el.classList.remove("title"); el.style.removeProperty("--size"); el.innerHTML = entry ? tplHtml(entry) : ""; fitTpl(); document.fonts?.ready.then(fitTpl); setTimeout(fitTpl, 700); /* again once the fonts have loaded: a late font makes the text bigger */ if (entry?.key === "pptx") renderPptxSlide(entry.page, entry.doc || "sermon"); el.classList.remove("out"); }, el.innerHTML ? 180 : 0);
     renderOps();
     return;
   }
+  sendView();
   const song = S.songs[S.idx], sl = S.slides[S.slide];
   const quiet = S.mode === "lyrics" && sl?.quiet;
   stage.className = `stage bg-${quiet ? "quiet" : S.bg}${S.mode === "blank" ? " blank" : ""}${S.mode === "nobg" ? " nobg" : ""}`;
@@ -433,6 +480,7 @@ function setSize(d) { S.size = Math.min(1.6, Math.max(0.6, +(S.size + d).toFixed
 function fullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen?.().catch(() => {}); }
 
 document.addEventListener("keydown", (e) => {
+  if (READONLY) { if (e.key === "f" || e.key === "F" || e.key === "כ") fullscreen(); return; } // a viewer only goes full screen
   if (e.target.closest?.("select, input, textarea, dialog")) return;
   const k = e.key;
   if (k === "F5") { e.preventDefault(); S.mode = "lyrics"; show(); return; }
@@ -448,7 +496,7 @@ document.addEventListener("keydown", (e) => {
   else if (/^[1-4]$/.test(k)) setBg(BGS[Number(k) - 1][0]);
 });
 // no clicker: tap the left half for next, the right half for previous (Hebrew reads right to left)
-$("stage").addEventListener("click", (e) => { if (e.clientX < innerWidth / 2) next(); else prev(); });
+$("stage").addEventListener("click", (e) => { if (READONLY) return; if (e.clientX < innerWidth / 2) next(); else prev(); });
 
 // ---------- the sermon: the preacher's PDF, shown right after the "דרשה" slide ----------
 // Saved as PDF from PowerPoint ("שמירה בשם → PDF"). Each page becomes a picture once; the file is kept in this
@@ -632,6 +680,7 @@ function flash(text) {
 // ---------- operator bar (appears on mouse / touch, hides after 3 seconds) ----------
 function renderOps() {
   const ops = $("ops");
+  if (READONLY) { ops.innerHTML = ""; ops.hidden = true; return; } // a viewer has no controls
   const who = S.leaderHere && S.leader ? `👑 ${esc(S.leader.name || "")} מוביל/ה` : S.songs.length ? "אין מוביל/ה מחובר/ת · הלחצן שולט" : "ממתינים למוביל/ה";
   const src = S.leaderHere ? "" : S.setSource === "db" ? ` · ${S.songs.length} שירים מהסשן` : S.songs.length ? "" :
     ` · <a class="ops-link" href="./" target="_blank">כדי לראות את השירים לפני השידור בלייב — להתחבר לאתר פעם אחת במחשב הזה</a>`;
@@ -701,6 +750,7 @@ function onSongs(list) {
   show();
 }
 function onState(p) {
+  if (READONLY) return; // a viewer follows the controlling screen only
   if (!p?.leader || !(p.leader.ts > 0) || p.leader.ts > Date.now() + 60000) return;
   const lk = (l) => l.id || l.email;
   if (S.leader && (lk(p.leader) !== lk(S.leader) || p.leader.ts !== S.leader.ts)) { if (p.leader.ts < S.leader.ts) return; S.seq = -1; }
@@ -777,6 +827,7 @@ window.addEventListener("resize", () => (tplMode() ? show() : fit()));
   buildDeck(); show();
   if (await pickMeeting()) {
     try { const v = sessionStorage.getItem("ws-screen-pos-" + S.date); if (v !== null) S.wantPos = Number(v); } catch {}
-    loadWeek(); buildDeck(); show(); join(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); loadDbPrayers(); loadDbTexts(); preloadStatic(); }
-  wakeOn(); show(); wakeOps();
+    loadWeek(); buildDeck(); show(); join(); joinView(); preload(); restoreSermon().then(remoteSermon); loadTail().then(() => tplMode() && show()); loadDbPrayers(); loadDbTexts(); preloadStatic(); }
+  wakeOn(); show(); if (!READONLY) wakeOps();
+  if (READONLY) setInterval(reapplyView, 3000); // data that arrives later (sermon, texts, set) can shift the deck
 })();
