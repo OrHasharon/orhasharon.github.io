@@ -226,6 +226,8 @@ function slideStanzas(content, title = "") {
     if (last && st.lines.length === 1 && !st.label && last.single && last.lines.length < 4) { last.lines.push(st.lines[0]); last.repeat ||= st.repeat; continue; }
     out.push({ ...st, lines: [...st.lines], single: st.lines.length === 1 });
   }
+  // on the slides a line never ends with a comma (Uriya) — an ellipsis stays
+  for (const st of out) st.lines = st.lines.map((l) => l.replace(/(?<!\.)[,;.،]\s*$/, ""));
   return withChorus(out, title);
 }
 

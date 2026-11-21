@@ -209,8 +209,8 @@ function tplParas(el, entry) {
 
 // Slides with no changing words are shown as PowerPoint's own picture of them (deck/static, exported from
 // template.pptx), so soft edges, brush-shaped pictures and fonts look exactly like the community's presentation.
-const STATIC = ["welcome", "blank", "communion", "communion_verse", "blessing", "sermon_title", "testimonies", "tithes", "closing"];
-const STATIC_V = 1; // bump after re-exporting deck/static
+const STATIC = ["welcome", "blank", "communion", "communion_verse", "blessing", "sermon_title", "testimonies", "tithes", "closing", "parasha_title"];
+const STATIC_V = 2; // bump after re-exporting deck/static
 function preloadStatic() { for (const k of STATIC) { const i = new Image(); i.src = `deck/static/${k}.jpg?v=${STATIC_V}`; } }
 
 // a prayer-request line: "-" at the start = a sub-bullet, *stars* = the orange words (names), like the PowerPoint slide

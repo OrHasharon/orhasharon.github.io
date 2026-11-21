@@ -16,13 +16,15 @@ function deckPlan(items, contentOf) {
   const q = items.findIndex(quiet);
   const before = q >= 0 ? items.slice(0, q) : items.slice(0, Math.max(0, items.length - 1));
   const after = q >= 0 ? items.slice(q + 1) : items.slice(-1);
+  // the order of Uriya's own edit of the 21.11 deck: blank slides only between songs (and after the last song before
+  // the Supper); the Supper picture, its verses, the Supper picture again; the fixed "פרשת השבוע" slide before the parasha;
+  // no blanks around the parasha, the blessing or the sermon
   const plan = [{ tpl: "welcome" }, { weekly: "verse" }, { tpl: "blank" }];
-  const songs = (list) => list.forEach((it) => plan.push({ song: it }, { tpl: "blank" }));
-  songs(before);
-  plan.push({ tpl: "communion", item: q >= 0 ? items[q] : undefined }, { tpl: "blank" }, { tpl: "communion_verse" }, { tpl: "blank" });
-  songs(after);
-  plan.push({ weekly: "parasha" }, { weekly: "reading" }, { tpl: "blessing" }, { tpl: "blank" }, { tpl: "sermon_title" },
-    { sermon: true }, { tpl: "blank" }, { tpl: "testimonies" }, { weekly: "prayers" }, { tpl: "groups" }, { tpl: "meetings" },
+  before.forEach((it) => plan.push({ song: it }, { tpl: "blank" }));
+  plan.push({ tpl: "communion", item: q >= 0 ? items[q] : undefined }, { tpl: "communion_verse" }, { tpl: "communion", again: true });
+  after.forEach((it, k) => { if (k) plan.push({ tpl: "blank" }); plan.push({ song: it }); });
+  plan.push({ tpl: "parasha_title" }, { weekly: "parasha" }, { weekly: "reading" }, { tpl: "blessing" }, { tpl: "sermon_title" },
+    { sermon: true }, { tpl: "testimonies" }, { weekly: "prayers" }, { tpl: "groups" }, { tpl: "meetings" },
     { tpl: "tithes" }, { tpl: "closing" });
   return plan;
 }
@@ -38,12 +40,12 @@ function lyricFontSize(lines, { width = 876, height = 356, max = 44, min = 30, g
   }
   return min;
 }
-// The Lord's Supper verse (Uriya's example): just the verses — the verse numbers ("9הֵן", "10וְאַתֶּם") are dropped —
+// The Lord's Supper verse (Uriya's example): the verses with their numbers ("9 הֵן"; Uriya: without them you can't follow),
 // big, right-aligned across the slide, a long passage over several slides; the source small at the top left, no brackets.
 // The reading slide's body: 800pt wide, 398pt high.
 const SUPPER_SIZE = 36;
 function supperSlides(verse, ref) {
-  const text = (verse || "").replace(/(^|[\s;:.,(])\d{1,3}(?=[\u05D0-\u05EA])/g, "$1").replace(/[ \t]{2,}/g, " ").trim();
+  const text = (verse || "").replace(/(^|[\s;:.,(])(\d{1,3})(?=[\u05D0-\u05EA])/g, "$1$2 ").replace(/[ \t]{2,}/g, " ").trim();
   const plain = text.replace(/[\u0591-\u05C7]/g, "");
   const perRow = 800 / (0.5 * SUPPER_SIZE), rows = Math.floor(398 / (SUPPER_SIZE * 1.4));
   const max = Math.floor(perRow * rows * 0.8 * (text.length / Math.max(1, plain.length)));
@@ -52,6 +54,7 @@ function supperSlides(verse, ref) {
 
 // a song slide's lines and size: a line too long for one row at that size is cut at the comma nearest its middle
 // ("בניסיון להביט על חיי מעיניו," / "לזכור שהכל לטובת אוהביו"), so it doesn't wrap at a random word
+const endClean = (l) => l.replace(/(?<!\.)[,;.،]\s*$/, ""); // songs: no comma at the end of a line (an ellipsis stays)
 function lyricLayout(lines) {
   const len = (l) => l.replace(/[\u0591-\u05C7]/g, "").length;
   let size = lyricFontSize(lines);
@@ -64,7 +67,7 @@ function lyricLayout(lines) {
     return [l.slice(0, at).trim(), l.slice(at).trim()].filter(Boolean);
   });
   if (out.length !== lines.length) size = lyricFontSize(out);
-  return { lines: out, size };
+  return { lines: out.map(endClean), size };
 }
 
 // does a .pptx open with a slide whose whole text matches re (niqqud and spaces ignored)?

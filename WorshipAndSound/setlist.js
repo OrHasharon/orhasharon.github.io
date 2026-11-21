@@ -325,6 +325,14 @@ async function buildPptx(iso) {
     if (e.sermon || e.weekly) continue; // a PDF sermon and the opening verse live on the projection computer
     if (e.song) order.push(...(await songSlides(e.song)));
     else if (e.tpl === "blank") order.push(blanks++ ? await clone(TPL.blank) : tplSlides[TPL.blank]); // each slide once in a .pptx
+    else if (e.tpl === "parasha_title") {
+      // Uriya's fixed "פרשת השבוע" slide (from his 21.11 deck), as it is
+      try {
+        const r = await importPptxSlides(zip, await (await fetch("deck/parasha_title.pptx")).arrayBuffer(), "ptl");
+        order.push(...r.slides); masters = masters.concat(r.masters);
+      } catch (err) { console.error(err); }
+    }
+    else if (e.again) order.push(await clone(TPL[e.tpl])); // the same template slide a second time (the Supper picture)
     else order.push(tplSlides[TPL[e.tpl]]);
   }
 
