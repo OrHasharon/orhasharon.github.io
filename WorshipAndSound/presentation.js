@@ -386,7 +386,7 @@ async function sermonPptxFor(iso) {
 }
 
 // Copy every slide of another .pptx into `zip` as it is: its own layouts, master, theme, pictures, video and
-// animations come along (PowerPoint's "keep source formatting"). Speaker notes and comments are left out.
+// animations come along (PowerPoint's "keep source formatting"), and the speaker notes. Comments are left out.
 // Returns the new slide paths (in order) and the copied masters, which buildPptx lists in presentation.xml.
 async function importPptxSlides(zip, buf, prefix = "srm") {
   const src = await JSZip.loadAsync(buf);
@@ -397,6 +397,10 @@ async function importPptxSlides(zip, buf, prefix = "srm") {
   const relTarget = (rid) => { for (const m of prels.matchAll(/<Relationship\b[^>]*>/g)) if (attr(m[0], "Id") === rid) return attr(m[0], "Target"); };
   const slidePaths = [...pres.matchAll(/<p:sldId [^>]*?r:id="([^"]+)"/g)].map((m) => resolvePart("ppt/presentation.xml", relTarget(m[1])));
   const map = new Map(), added = [];
+  // speaker notes come along too (as is): each notes page is linked to this deck's own notes master (a deck has one)
+  const destRels = (await zip.file("ppt/_rels/presentation.xml.rels")?.async("string")) || "";
+  const nmTag = [...destRels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((t) => /\/notesMaster"/.test(t));
+  const destNotesMaster = nmTag ? resolvePart("ppt/presentation.xml", attr(nmTag, "Target")) : null;
 
   function resolvePart(from, target) {
     if (target.startsWith("/")) return target.slice(1);
@@ -425,7 +429,9 @@ async function importPptxSlides(zip, buf, prefix = "srm") {
       for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) {
         const tag = m[0], type = attr(tag, "Type") || "", target = attr(tag, "Target") || "";
         if (attr(tag, "TargetMode") === "External") continue;
-        if (/\/(notesSlide|comments|commentAuthors)$/.test(type) || /comment/i.test(type)) { out = out.replace(tag, ""); continue; }
+        if (/\/(comments|commentAuthors)$/.test(type) || /comment/i.test(type)) { out = out.replace(tag, ""); continue; }
+        if (/\/notesSlide$/.test(type) && !destNotesMaster) { out = out.replace(tag, ""); continue; }
+        if (/\/notesMaster$/.test(type) && destNotesMaster) { out = out.replace(tag, tag.replace(`Target="${target}"`, `Target="${relative(np, destNotesMaster)}"`)); continue; }
         const to = await copy(resolvePart(p, target));
         out = out.replace(tag, tag.replace(`Target="${target}"`, `Target="${relative(np, to)}"`));
       }
