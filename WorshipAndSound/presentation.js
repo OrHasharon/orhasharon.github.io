@@ -161,19 +161,38 @@ async function meetingTextsFor(iso) {
 
 function ptTextsHtml(iso, can, open) {
   if (PT.textsMissing) return "";
-  const r = textsRow(iso) || {}, c = communionRow(iso);
-  const v = (f) => esc(f.startsWith("communion") ? (c?.[f] || "") : (r[f] || ""));
-  const refs = parashaRefs(r), passages = passagesOf(r);
-  const hasParasha = !!(r.parasha || r.reading || r.parasha_refs || r.parasha_file_path);
-  // who wrote the verse = communion_by (set only when the verse itself changes); older rows don't know, so no name
-  // (a verse saved before 20.11.2026 has no record of its writer: say so rather than show nothing)
+  return ptSupperHtml(iso, can, open) + ptParashaHtml(iso, can, open);
+}
+
+// the Lord's Supper verse (carries on to later meetings until changed)
+function ptSupperHtml(iso, can, open) {
+  const c = communionRow(iso);
+  // who wrote the verse = communion_by (set only when the verse itself changes); a verse saved before 20.11.2026 has
+  // no record of its writer: say so rather than show nothing
   const cBy = !c ? "" : c.communion_by ? `ע״י ${esc(whoName(c.communion_by))}${c.communion_at ? ` · ${ptWhen(c.communion_at)}` : ""}` : "לא נרשם מי כתב ומתי";
   const from = c ? ` <small>· ${c.meeting_date !== iso ? `ממשיך מ-${ptDay(c.meeting_date)} · ` : ""}${cBy}</small>` : "";
-  const summary = `📖 פרשת השבוע וסעודת האדון <small>· ${r.parasha_file_path ? "מצגת: " + esc(r.parasha_file_name || "") : hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}${c ? " · יש פסוק לסעודה" : ""}</small>`;
+  const summary = `🍞 סעודת האדון <small>· ${c ? (c.communion_ref ? esc(c.communion_ref) : "יש פסוק") : "הפסוק הקבוע של המצגת"}</small>${c ? from : ""}`;
+  if (!can) {
+    return `<details class="pt-section pt-pray" data-key="supper-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
+      ${c ? `<p>${esc(c.communion_verse)} <small>${esc(c.communion_ref || "")}</small></p>` : `<p class="pt-empty">הפסוק הקבוע של המצגת.</p>`}</details>`;
+  }
+  return `<details class="pt-section pt-pray" data-key="supper-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
+    <div class="pt-form" data-pt-supper="${iso}">
+      <label>הפסוק<textarea name="communion_verse" rows="4" placeholder="ריק = הפסוק הקבוע של המצגת">${esc(c?.communion_verse || "")}</textarea></label>
+      <label>מקור<input name="communion_ref" value="${esc(c?.communion_ref || "")}" placeholder="למשל: (קור״א י״א 26)"></label>
+      <div class="pt-pray-bar"><button class="btn" data-pt="supper-save" data-iso="${iso}">שמירה</button></div>
+    </div></details>`;
+}
+
+// the week's parasha: typed text or an uploaded presentation (as it is)
+function ptParashaHtml(iso, can, open) {
+  const r = textsRow(iso) || {};
+  const refs = parashaRefs(r), passages = passagesOf(r);
+  const hasParasha = !!(r.parasha || r.reading || r.parasha_refs || r.parasha_file_path);
+  const summary = `📖 פרשת השבוע <small>· ${r.parasha_file_path ? "מצגת: " + esc(r.parasha_file_name || "") : hasParasha ? esc(r.parasha || "יש קריאה") : "אין פרשה"}</small>`;
   if (!can) {
     return `<details class="pt-section pt-pray" data-key="texts-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
-      ${r.parasha_file_path ? `<p>📽️ ${esc(r.parasha_file_name || "")}</p>` : hasParasha ? `<p><b>${esc(r.parasha || "")}</b> ${esc(r.parasha_refs || "").replace(/\n/g, " · ")}</p>` : ""}
-      ${c ? `<p>🍞 ${esc(c.communion_verse)} <small>${esc(c.communion_ref || "")}</small></p>` : ""}</details>`;
+      ${r.parasha_file_path ? `<p>📽️ ${esc(r.parasha_file_name || "")}</p>` : hasParasha ? `<p><b>${esc(r.parasha || "")}</b> ${esc(r.parasha_refs || "").replace(/\n/g, " · ")}</p>` : `<p class="pt-empty">אין פרשה.</p>`}</details>`;
   }
   return `<details class="pt-section pt-pray" data-key="texts-${iso}"${open ? " open" : ""}><summary class="pt-label">${summary}</summary>
     <div class="pt-form" data-pt-texts="${iso}">
@@ -195,11 +214,8 @@ function ptTextsHtml(iso, can, open) {
       <div class="pt-label">פסוקים להצגה</div>
       <div class="pt-passages">${(passages.length ? passages : [{ ref: "", text: "" }]).map(passageHtml).join("")}</div>
       <button class="btn ghost pt-add" type="button" data-pt="passage-add">➕ קטע</button>
-      </div>
-      <div class="pt-label">🍞 סעודת האדון${from}</div>
-      <label>הפסוק<textarea name="communion_verse" rows="4" placeholder="ריק = הפסוק הקבוע של המצגת">${v("communion_verse")}</textarea></label>
-      <label>מקור<input name="communion_ref" value="${v("communion_ref")}" placeholder="למשל: (קור״א י״א 26)"></label>
       <div class="pt-pray-bar"><button class="btn" data-pt="texts-save" data-iso="${iso}">שמירה</button></div>
+      </div>
     </div></details>`;
 }
 
@@ -226,13 +242,21 @@ async function ptSaveTexts(iso, btn) {
   if (["parasha", "parasha_refs", "reading", "reading_ref"].some((k) => (row[k] || "") !== (was[k] || ""))) {
     Object.assign(row, { updated_at: new Date().toISOString(), updated_by: myName() });
   }
-  // the Supper verse is saved (and signed) only when it was changed here; otherwise it stays as it is — a verse
-  // carried on from an earlier meeting isn't copied into this one under the name of whoever saved the parasha
+  await ptSaveRow(row, btn);
+}
+
+// the Supper verse, saved (and signed) only when it was changed — a verse carried on from an earlier meeting isn't
+// copied into this one under someone else's name
+async function ptSaveSupper(iso, btn) {
+  const f = document.querySelector(`[data-pt-supper="${iso}"]`);
+  if (!f) return;
+  const verse = f.querySelector('[name="communion_verse"]').value.trim(), ref = f.querySelector('[name="communion_ref"]').value.trim();
   const prev = communionRow(iso);
-  const verse = val("communion_verse"), ref = val("communion_ref");
-  if (verse !== (prev?.communion_verse || "").trim() || ref !== (prev?.communion_ref || "").trim()) {
-    Object.assign(row, { communion_verse: verse, communion_ref: ref, communion_by: myName(), communion_at: new Date().toISOString() });
-  }
+  if (verse === (prev?.communion_verse || "").trim() && ref === (prev?.communion_ref || "").trim()) { toast("אין שינוי בפסוק"); return; }
+  await ptSaveRow({ meeting_date: iso, communion_verse: verse, communion_ref: ref, communion_by: myName(), communion_at: new Date().toISOString() }, btn);
+}
+
+async function ptSaveRow(row, btn) {
   btn.disabled = true;
   let { error } = await sb.from("meeting_texts").upsert(row, { onConflict: "meeting_date" });
   if (error && ["42703", "PGRST204"].includes(error.code) && "communion_by" in row) { // communion_by.sql hasn't run yet
@@ -499,6 +523,7 @@ document.addEventListener("click", async (e) => {
   if (a === "clear") { ptClear(iso); return; }
   if (a === "pray-save") { ptSavePrayers(iso, b); return; }
   if (a === "texts-save") { ptSaveTexts(iso, b); return; }
+  if (a === "supper-save") { ptSaveSupper(iso, b); return; }
   if (a === "parasha-clear") { ptParashaClear(iso); return; }
   if (a === "passage-add") { const list = b.parentElement.querySelector(".pt-passages"); list.insertAdjacentHTML("beforeend", passageHtml({}, list.children.length)); list.lastElementChild.querySelector("input").focus(); return; }
   if (a === "passage-del") { b.closest(".pt-passage").remove(); return; }
