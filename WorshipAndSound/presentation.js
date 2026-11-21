@@ -128,7 +128,6 @@ function ptCard(m, { next = false } = {}) {
       ${manage}
       <button class="btn ghost" data-pt="pptx" data-iso="${iso}" ${items.length ? "" : "disabled"}>📽️ הורדת מצגת</button>
       <button class="btn ghost" data-pt="screen" data-iso="${iso}">🖥️ מסך הקרנה</button>
-      <button class="btn ghost" data-pt="viewlink" data-iso="${iso}" title="לינק לצפייה בלבד: מי שפותח רואה את מה שמוקרן, בלי אפשרות לשלוט">🔗 לינק לצפייה</button>
     </div>
     ${ptPrayersHtml(iso, can, next)}
     ${ptTextsHtml(iso, can, next)}
@@ -520,11 +519,6 @@ document.addEventListener("click", async (e) => {
   }
   if (a === "session") { openSetlist(iso); return; }
   if (a === "screen") { window.open("screen.html?d=" + iso, "_blank"); return; }
-  if (a === "viewlink") {
-    const url = location.origin + location.pathname.replace(/[^/]*$/, "") + "screenread.html?d=" + iso;
-    navigator.clipboard?.writeText(url).then(() => toast("הלינק לצפייה הועתק · אפשר להדביק ולשלוח"), () => prompt("הלינק לצפייה:", url));
-    return;
-  }
   if (a === "link") { if (PT.busy) return; PT.busy = true; try { await ptShowLink(iso); } finally { PT.busy = false; } return; }
   if (a === "clear") { ptClear(iso); return; }
   if (a === "pray-save") { ptSavePrayers(iso, b); return; }

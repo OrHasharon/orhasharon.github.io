@@ -74,7 +74,6 @@ function renderSetlistDialog() {
       <button class="btn ghost" data-sl-pptx ${items.length ? "" : "disabled"}>📽️ הורדת מצגת PowerPoint</button>
       ${canEditSongs(iso) ? `<button class="btn ghost" data-sl-supper>🍞 + סעודת האדון</button>` : ""}
       <button class="btn ghost" data-sl-screen ${items.length ? "" : "disabled"} title="פותחים פעם אחת במחשב ההקרנה ושומרים כסימנייה">🖥️ מסך הקרנה</button>
-      <button class="btn ghost" data-sl-viewlink title="לינק לצפייה בלבד: מי שפותח רואה את מה שמוקרן, בלי אפשרות לשלוט">🔗 לינק לצפייה</button>
       <button class="btn ghost" data-sl-pdf ${items.length ? "" : "disabled"}>📄 הורדת PDF</button>
       <a id="sl-download" class="link-btn" hidden></a>
     </div>
@@ -404,11 +403,6 @@ document.addEventListener("click", async (e) => {
   }
   // the projection screen: one fixed link for the HDMI computer (screen.html picks the upcoming meeting by itself)
   if (t.closest("[data-sl-screen]")) { window.open("screen.html", "_blank"); return; }
-  if (t.closest("[data-sl-viewlink]")) {
-    const url = location.origin + location.pathname.replace(/[^/]*$/, "") + "screenread.html?d=" + setlist.openDate;
-    navigator.clipboard?.writeText(url).then(() => toast("הלינק לצפייה הועתק · אפשר להדביק ולשלוח"), () => prompt("הלינק לצפייה:", url));
-    return;
-  }
   // "סעודת האדון": a special song ({screen: quiet} → title alone on the screen), created once, added at the end
   const supper = t.closest("[data-sl-supper]");
   if (supper) {

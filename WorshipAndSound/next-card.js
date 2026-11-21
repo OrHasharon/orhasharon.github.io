@@ -90,6 +90,7 @@ function nextMeetingCard(mt) {
           <button class="btn ghost" data-nc="screen" data-date="${iso}">🖥️ מסך הקרנה</button>
           <button class="btn ghost" data-nc="pptx" data-date="${iso}">📽️ הורדת מצגת</button>
           <button class="btn ghost" data-nc="pdf" data-date="${iso}">📄 הורדת PDF</button>
+          <button class="btn ghost" data-nc="viewlink" data-date="${iso}" title="לינק לצפייה בלבד: מי שפותח רואה את מה שמוקרן, בלי אפשרות לשלוט">🔗 לינק לצפייה</button>
         </div>
       </details>
       ${typeof LIVE_SYNC_ON !== "undefined" && LIVE_SYNC_ON && (isAdmin || mine)
@@ -134,6 +135,11 @@ document.addEventListener("click", async (e) => {
   if (act === "team") { showTeamLinkDialog(iso); return; }
   if (act === "pdf") { printSongs(iso); return; }
   if (act === "screen") { window.open("screen.html", "_blank"); return; }
+  if (act === "viewlink") {
+    const url = location.origin + location.pathname.replace(/[^/]*$/, "") + "screenread.html?d=" + iso;
+    navigator.clipboard?.writeText(url).then(() => toast("הלינק לצפייה הועתק · אפשר להדביק ולשלוח"), () => prompt("הלינק לצפייה:", url));
+    return;
+  }
   if (act === "pptx") {
     const label = b.innerHTML; b.disabled = true; b.textContent = "יוצר מצגת…";
     try { await buildPptx(iso); } catch (err) { console.error(err); toast("יצירת המצגת נכשלה"); }
