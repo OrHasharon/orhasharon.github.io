@@ -28,7 +28,7 @@ async function ptLoad() {
   PT.info = {};
   for (const r of s.data || []) PT.info[r.meeting_date] = r;
   PT.prayers = p.data || [];
-  PT.loaded = true;
+  PT.loaded = true; PT.at = Date.now();
 }
 
 // prayer requests carry on: a meeting shows the latest text saved for it or for an earlier meeting
@@ -85,7 +85,15 @@ function ptWarnings() {
 }
 
 // one meeting's presentation: songs (not in the "next" tab, the card above shows them), the sermon, prayer requests
+// what was uploaded meanwhile (the speaker's link, someone else's upload) shows up without a page refresh: the cards
+// reload their data in the background when it is more than a minute old
+function ptFreshen() {
+  if (!PT.loaded || PT.reloading || Date.now() - (PT.at || 0) < 60000) return;
+  PT.reloading = true;
+  ptLoad().catch(() => {}).finally(() => { PT.reloading = false; ptRefresh(); });
+}
 function ptCard(m, { next = false } = {}) {
+  ptFreshen();
   const iso = m.iso, items = itemsFor(iso).filter((i) => i.songs);
   const info = PT.info[iso], can = ptCanManage(iso);
   const songs = next ? "" : items.length
