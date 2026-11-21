@@ -79,13 +79,14 @@ function buildDeck() {
   const keep = S.deckSlides[S.pos];
   S.deckSlides = [];
   for (const e of deckPlan(S.songs, (x) => x.content)) {
-    if (e.sermon) { S.sermon.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page })); continue; }
+    if (e.sermon) { S.sermon.forEach((src, page) => { if (!S.sermonSkip?.has(page)) S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page }); }); continue; }
     // the week's parasha uploaded as a presentation: its own slides, as they are, instead of the parasha + reading slides
     if (e.weekly === "parasha" && S.parashaDeck.length) { S.parashaDeck.forEach((src, page) => S.deckSlides.push({ key: src === "pptx" ? "pptx" : "pdf", src, page, doc: "parasha" })); continue; }
     if (e.weekly === "reading" && S.parashaDeck.length) continue;
     if (e.weekly) { S.deckSlides.push(...weeklySlides(e.weekly)); continue; }
     // the Supper verse typed in the site: on the reading slide (just the verses, the source small at the top, no picture)
     if (e.tpl === "communion_verse" && S.dbCommunion) { const sup = supperSlides(S.dbCommunion.verse, S.dbCommunion.ref); sup.pages.forEach((lines) => S.deckSlides.push({ key: "reading", lines: [lines.join(" ")], ref: sup.ref, supper: sup.size })); continue; }
+    if (e.tpl === "sermon_title" && S.sermon.length && S.sermonHasTitle) continue; // the speaker's deck has its own
     if (!e.song) { S.deckSlides.push({ key: e.tpl, song: e.item || null }); continue; }
     const parts = slideStanzas(e.song.content || "", e.song.title).flatMap((st) => chunks(st.lines, 4));
     (parts.length ? parts : [[]]).forEach((lines, k) => S.deckSlides.push({ key: "song", song: e.song, lines, first: k === 0 }));
@@ -519,7 +520,13 @@ async function renderPptxSlide(page, doc = "sermon") {
     pv.renderSingleSlide(page);
   } catch (err) { console.error(err); slot.textContent = "לא הצלחתי להציג את השקופית"; }
 }
-const sermonPages = (buf, name) => isPptxName(name) ? pptxToPages(buf, "sermon") : pdfToPages(buf);
+// (also notes whether the speaker's deck opens with its own "דרשה" slide: then the template's one is left out, as in
+// the PowerPoint download)
+const sermonPages = async (buf, name) => {
+  S.sermonHasTitle = isPptxName(name) && window.JSZip ? await firstSlideIs(buf.slice(0), /^דרשה$/).catch(() => false) : false;
+  S.sermonSkip = isPptxName(name) && window.JSZip ? await emptySlideIndexes(buf.slice(0)).catch(() => new Set()) : new Set(); // empty slides left out
+  return isPptxName(name) ? pptxToPages(buf, "sermon") : pdfToPages(buf);
+};
 
 async function setSermon(file) {
   if (!file || !(isPptxName(file.name) || /pdf$/i.test(file.type || file.name))) { flash("צריך קובץ PowerPoint (‎.pptx) או PDF"); return; }

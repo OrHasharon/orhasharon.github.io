@@ -192,19 +192,6 @@ function prayerSlideXml(xml, lines) {
   return xml.replace(body, body.replace(txBody, head + out + "</p:txBody>"));
 }
 
-// does a .pptx open with a slide whose whole text matches re (niqqud and spaces ignored)?
-async function firstSlideIs(buf, re) {
-  const z = await JSZip.loadAsync(buf);
-  const pres = await z.file("ppt/presentation.xml").async("string"), rels = await z.file("ppt/_rels/presentation.xml.rels").async("string");
-  const rid = (pres.match(/<p:sldId\b[^>]*r:id="([^"]+)"/) || [])[1];
-  const rel = rid && [...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((r) => r.includes(`Id="${rid}"`));
-  const target = rel && (rel.match(/Target="([^"]+)"/) || [])[1];
-  if (!target) return false;
-  const xml = await z.file("ppt/" + target.replace(/^\/?(ppt\/)?/, ""))?.async("string");
-  const text = [...(xml || "").matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join("").replace(/[֑-ׇ\s‎‏]/g, "");
-  return re.test(text);
-}
-
 async function buildPptx(iso) {
   if (!window.JSZip) { toast("ספריית המצגות לא נטענה, נסו לרענן"); return; }
   const items = itemsFor(iso).filter((i) => i.songs);
@@ -295,7 +282,7 @@ async function buildPptx(iso) {
     if (e.sermon && typeof sermonPptxFor === "function") {
       try {
         const s = sermon;
-        if (s) { const r = await importPptxSlides(zip, s.buf); order.push(...r.slides); masters = masters.concat(r.masters); }
+        if (s) { const r = await importPptxSlides(zip, s.buf, "srm", { skipEmpty: true }); order.push(...r.slides); masters = masters.concat(r.masters); }
       } catch (err) { console.error(err); toast("לא הצלחתי להכניס את מצגת הדרשה", { error: true }); }
       continue;
     }

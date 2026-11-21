@@ -388,14 +388,19 @@ async function sermonPptxFor(iso) {
 // Copy every slide of another .pptx into `zip` as it is: its own layouts, master, theme, pictures, video and
 // animations come along (PowerPoint's "keep source formatting"), and the speaker notes. Comments are left out.
 // Returns the new slide paths (in order) and the copied masters, which buildPptx lists in presentation.xml.
-async function importPptxSlides(zip, buf, prefix = "srm") {
+async function importPptxSlides(zip, buf, prefix = "srm", { skipEmpty = false } = {}) {
   const src = await JSZip.loadAsync(buf);
   const rd = (p) => src.file(p) ? src.file(p).async("string") : Promise.resolve(null);
   const attr = (tag, a) => (tag.match(new RegExp(`\\b${a}="([^"]*)"`)) || [])[1];
   const pres = await rd("ppt/presentation.xml"), prels = await rd("ppt/_rels/presentation.xml.rels");
   const srcCt = await rd("[Content_Types].xml");
   const relTarget = (rid) => { for (const m of prels.matchAll(/<Relationship\b[^>]*>/g)) if (attr(m[0], "Id") === rid) return attr(m[0], "Target"); };
-  const slidePaths = [...pres.matchAll(/<p:sldId [^>]*?r:id="([^"]+)"/g)].map((m) => resolvePart("ppt/presentation.xml", relTarget(m[1])));
+  let slidePaths = [...pres.matchAll(/<p:sldId [^>]*?r:id="([^"]+)"/g)].map((m) => resolvePart("ppt/presentation.xml", relTarget(m[1])));
+  if (skipEmpty) { // the sermon: empty slides are left out (isEmptySlideXml, deck.js)
+    const keep = [];
+    for (const p of slidePaths) if (!isEmptySlideXml((await rd(p)) || "")) keep.push(p);
+    slidePaths = keep;
+  }
   const map = new Map(), added = [];
   // speaker notes come along too (as is): each notes page is linked to this deck's own notes master (a deck has one)
   const destRels = (await zip.file("ppt/_rels/presentation.xml.rels")?.async("string")) || "";

@@ -67,6 +67,48 @@ function lyricLayout(lines) {
   return { lines: out, size };
 }
 
+// does a .pptx open with a slide whose whole text matches re (niqqud and spaces ignored)?
+// (shared: the PowerPoint download and the projection screen; needs JSZip)
+async function firstSlideIs(buf, re) {
+  const z = await JSZip.loadAsync(buf);
+  const pres = await z.file("ppt/presentation.xml").async("string"), rels = await z.file("ppt/_rels/presentation.xml.rels").async("string");
+  const rid = (pres.match(/<p:sldId\b[^>]*r:id="([^"]+)"/) || [])[1];
+  const rel = rid && [...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((r) => r.includes(`Id="${rid}"`));
+  const target = rel && (rel.match(/Target="([^"]+)"/) || [])[1];
+  if (!target) return false;
+  const xml = await z.file("ppt/" + target.replace(/^\/?(ppt\/)?/, ""))?.async("string");
+  const text = [...(xml || "").matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join("").replace(/[֑-ׇ\s‎‏]/g, "");
+  return re.test(text);
+}
+
+// An empty slide in the speaker's deck (Uriya: "slides with nothing on them — leave them out"): no text, no picture,
+// no table/chart/video, no drawn shape — only empty placeholders (invisible in the slide show). A slide with a picture
+// or a coloured shape is kept.
+function isEmptySlideXml(xml) {
+  const tree = (xml.match(/<p:spTree>([\s\S]*)<\/p:spTree>/) || [])[1] || "";
+  if (/<a:t>[^<]*\S[^<]*<\/a:t>/.test(tree)) return false;                       // text
+  if (/<p:(pic|graphicFrame|cxnSp|grpSp|contentPart)\b|<a:blip\b|<p14:media|videoFile|audioFile/.test(tree)) return false;
+  for (const sp of tree.match(/<p:sp\b[\s\S]*?<\/p:sp>/g) || []) {
+    if (!/<p:ph\b/.test(sp)) return false;                                          // a drawn shape (not a placeholder)
+    if (/<p:spPr\b[\s\S]*?<a:(solidFill|gradFill|blipFill|pattFill)\b[\s\S]*?<\/p:spPr>/.test(sp)) return false; // a filled box
+  }
+  return true;
+}
+// which slides of a .pptx (by their order in the deck) are empty
+async function emptySlideIndexes(buf) {
+  const z = await JSZip.loadAsync(buf);
+  const pres = await z.file("ppt/presentation.xml").async("string"), rels = await z.file("ppt/_rels/presentation.xml.rels").async("string");
+  const ids = [...pres.matchAll(/<p:sldId\b[^>]*r:id="([^"]+)"/g)].map((m) => m[1]);
+  const out = new Set();
+  for (let i = 0; i < ids.length; i++) {
+    const tag = [...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((r) => r.includes(`Id="${ids[i]}"`));
+    const target = tag && (tag.match(/Target="([^"]+)"/) || [])[1];
+    const xml = target && (await z.file("ppt/" + target.replace(/^\/?(ppt\/)?/, ""))?.async("string"));
+    if (xml && isEmptySlideXml(xml)) out.add(i);
+  }
+  return out;
+}
+
 // The week's parasha as the site stores it (meeting_texts): parasha_refs = "תורה: …" / "הפטרה: …" / "ברית חדשה: …"
 // lines; the verses to show = reading, a JSON list of passages [{ref, text}] (older rows: reading_ref + plain text).
 const REF_LABELS = { torah: "תורה", haftara: "הפטרה", brit: "ברית חדשה" };
