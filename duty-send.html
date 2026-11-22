@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>תזכורות תורנות · קהילת אור השרון</title>
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <script src="theme.js?v=1"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=65">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <style>
+    .ds-meet { margin: 0 0 1.4rem; }
+    .ds-meet h2 { font-size: 1.1rem; margin: 0 0 .6rem; }
+    .ds-team { margin: 0 0 .9rem; }
+    .ds-team > strong { display: block; margin-bottom: .35rem; }
+    .ds-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .45rem 0; border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+    .ds-row span { min-width: 0; overflow-wrap: anywhere; }
+    .ds-row .btn { flex: none; white-space: nowrap; }
+    .ds-row.sent span::after { content: " ✓ נשלח"; color: #2e7d4f; font-weight: 600; }
+    .ds-row.sent .btn { opacity: .55; }
+    .ds-miss { color: #b3261e; margin: .2rem 0; }
+    .ds-hint { opacity: .75; font-size: .92rem; }
+  </style>
+</head>
+<body>
+  <main class="wrap swap-page">
+    <h1>תזכורות תורנות</h1>
+    <p class="ds-hint">לוחצים על כל שם → נפתח וואטסאפ עם ההודעה מוכנה → שולחים וחוזרים לכאן. ההודעה יוצאת מהוואטסאפ שלך.</p>
+    <div id="box" class="swap-card"><p class="adm-hint">טוען…</p></div>
+    <p class="swap-back"><a href="/">← לאתר הקהילה</a></p>
+  </main>
+  <script src="schedule.js?v=39"></script>
+  <script>
+    // Michal's weekly page: this week's duty teams + one WhatsApp button per person (wa.me, sent from her own phone).
+    // The link carries a private key (#k=…) checked by duty_job_teams (duty.sql); the key is remembered on this device.
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const box = document.getElementById("box");
+    const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+    const fromHash = new URLSearchParams(location.hash.slice(1)).get("k");
+    if (fromHash) { store.set("oh-duty-key", fromHash); history.replaceState(null, "", location.pathname); }
+    const key = fromHash || store.get("oh-duty-key") || "";
+    const waIntl = (p) => { const d = String(p || "").replace(/\D/g, ""); return d.startsWith("0") ? "972" + d.slice(1) : d; };
+    const sentKey = (m, p) => `oh-duty-sent:${m.iso}|${p}`;
+
+    async function start() {
+      if (!key) return (box.innerHTML = `<p>צריך להיכנס מהלינק האישי שקיבלת בוואטסאפ.</p>`);
+      let rows, ms;
+      try { [rows, ms] = await Promise.all([dutyRpc("duty_job_teams", { p_key: key }), loadMeetings()]); }
+      catch { return (box.innerHTML = `<p>לא הצלחתי לטעון. בדקי חיבור ונסי שוב.</p>`); }
+      if (!rows || !rows.length) return (box.innerHTML = `<p>הלינק לא פעיל. פני לליה.</p>`);
+      const phones = {};
+      for (const r of rows) (phones[r.team] = phones[r.team] || []).push(r);
+      // this week: the next 7 days; if nothing there, the next meeting with a duty
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
+      const withDuty = upcomingMeetings(ms).filter((m) => dutyTeams(m.duty).length);
+      let list = withDuty.filter((m) => m.date < weekEnd);
+      if (!list.length) list = withDuty.slice(0, 1);
+      if (!list.length) return (box.innerHTML = `<p>אין תורנות קרובה.</p>`);
+      box.innerHTML = list.map((m) => `<section class="ds-meet">
+          <h2>${esc(meetingKind(m))} · יום ${esc(m.day)} ${m.dateText.slice(0, 5)}${m.place ? ` · ${esc(m.place)}` : ""}</h2>
+          ${dutyTeams(m.duty).map((t) => `<div class="ds-team"><strong>${esc(t)}</strong>
+            ${(phones[t] || []).map((r) => {
+              const first = String(r.name || "").trim().split(/\s+/)[0] || "";
+              const href = `https://wa.me/${waIntl(r.phone)}?text=${encodeURIComponent(dutyReminderText(first, m))}`;
+              return `<div class="ds-row${store.get(sentKey(m, r.phone)) ? " sent" : ""}" data-sent="${esc(sentKey(m, r.phone))}">
+                <span>${esc(r.name || r.phone)}</span>
+                <a class="btn wa" target="_blank" rel="noopener" href="${href}">שליחה ל${esc(first || "תורן/ית")}</a></div>`;
+            }).join("") || `<p class="ds-miss">אין טלפון לצוות הזה — לעדכן את ליה</p>`}
+          </div>`).join("")}
+        </section>`).join("");
+    }
+    box.addEventListener("click", (e) => {
+      const a = e.target.closest(".ds-row .btn");
+      if (!a) return;
+      const row = a.closest(".ds-row");
+      store.set(row.dataset.sent, new Date().toISOString());
+      row.classList.add("sent");
+    });
+    start();
+  </script>
+</body>
+</html>

@@ -81,6 +81,16 @@ function dutyRpc(fn, body = {}) {
 }
 const dutyTeams = (duty) => String(duty || "").split(",").map((x) => x.trim()).filter((x) => x && x !== "כולם");
 
+// the weekly duty reminder (admin "תורניות" + duty-send.html) — keep the same as reminder() in my-aios duty_reminder.py
+function dutyReminderText(firstName, m) {
+  const kind = meetingKind(m);
+  return `היי${firstName ? " " + firstName : ""}! 🙏\n` +
+    `תזכורת: אתם בתורנות ב${kind} ביום ${m.day} ${m.dateText.slice(0, 5)}${m.place ? ` ב${m.place}` : ""}.\n` +
+    (kind === "אסיפה" ? `הגעה ב-10:30.\n` : "") +
+    `ההנחיות לתורנים:\nhttps://orhasharon.github.io/#guide\n` +
+    `לא יכולים להגיע? אפשר לבקש החלפה באתר, ב"שיבוץ מלא".\nתודה! 🙏`;
+}
+
 // all meetings, oldest first
 function loadMeetings() {
   return Promise.all([

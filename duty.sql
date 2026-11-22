@@ -40,7 +40,8 @@ create table if not exists or_hasharon_worship.duty_swaps (
   decided_at  timestamptz
 );
 create table if not exists or_hasharon_worship.duty_job_keys (hash text primary key);
-insert into or_hasharon_worship.duty_job_keys (hash) values ('90c379f05df34a2b59d211446a1666d1bd09986645366360bb3b56abb99efbd6')
+insert into or_hasharon_worship.duty_job_keys (hash) values ('90c379f05df34a2b59d211446a1666d1bd09986645366360bb3b56abb99efbd6'),
+  ('33886edc7644a69ed82bd15a100574e406a6b2fb9e4ce622a3ae5cc77a3a242e')   -- Michal's weekly send page (duty-send.html#k=…)
 on conflict do nothing;
 
 alter table or_hasharon_worship.duty_teams enable row level security;

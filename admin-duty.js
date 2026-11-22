@@ -6,16 +6,7 @@
 
 const dutyAdm = { loaded: false, missing: false, teams: {}, swaps: [], meetings: [], open: null };
 
-// the reminder text — keep the same as REMINDER in duty_reminder.py
-function dutyReminderText(firstName, m) {
-  const dd = m.dateText.slice(0, 5);
-  const kind = meetingKind(m);
-  return `היי${firstName ? " " + firstName : ""}! 🙏\n` +
-    `תזכורת: אתם בתורנות ב${kind} ביום ${m.day} ${dd}${m.place ? ` ב${m.place}` : ""}.\n` +
-    (kind === "אסיפה" ? `הגעה ב-10:30.\n` : "") +
-    `ההנחיות לתורנים:\nhttps://orhasharon.github.io/#guide\n` +
-    `לא יכולים להגיע? אפשר לבקש החלפה באתר, ב"שיבוץ מלא".\nתודה! 🙏`;
-}
+// dutyReminderText(firstName, meeting) lives in schedule.js (shared with duty-send.html)
 
 async function dutyLoad() {
   if (!siteAcc.loaded) await loadSiteAccess();
@@ -92,7 +83,7 @@ function renderDuty() {
     <small>${{ pending: "ממתינה לאישור", approved: "אושרה ✓", declined: "נדחתה", cancelled: "בוטלה" }[s.status]} · ${esc(s.req_name || "")}</small>
     ${s.status === "approved" || s.status === "pending" ? `<button class="link-btn" data-duty-cancel="${s.id}">ביטול</button>` : ""}</li>`;
   el.innerHTML = `<h2>תורנות</h2>
-    <p class="adm-hint">תזכורת בוואטסאפ יוצאת לבד <b>כל יום ראשון ב-10:00</b> לתורנים של השבוע (מהוואטסאפ של ליה). לכל צוות צריך לשייך את הטלפונים שלו — פעם אחת.</p>
+    <p class="adm-hint">כל יום ראשון ב-10:00 מיכל מקבלת בוואטסאפ לינק לעמוד שליחה, ומשם שולחת לתורנים של השבוע מהוואטסאפ שלה, בלחיצה לכל אחד. לכל צוות צריך לשייך את הטלפונים שלו — פעם אחת.</p>
     ${unmapped.length ? `<p class="sa-alert" role="alert">⚠ בלי טלפון (לא יקבלו תזכורת ולא יוכלו להתחלף): ${unmapped.map(esc).join(", ")}</p>` : ""}
     <h3>צוותים וטלפונים</h3>
     <ul class="duty-teams">${names.map(teamRow).join("") || `<li>אין שיבוצים קרובים</li>`}</ul>
