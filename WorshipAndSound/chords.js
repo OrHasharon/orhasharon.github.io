@@ -111,7 +111,7 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
   const flats = shift ? prefersFlats(key || songMeta(content).key || firstChord(content), shift) : undefined;
   const songDir = HEB.test(content) ? "rtl" : "ltr";
   return content.split("\n").map((raw) => {
-    const line = /^\s*\{.*\}\s*$/.test(raw) ? raw : fixNiqqudLine(raw);
+    const line = /^\s*\{.*\}\s*$/.test(raw) ? raw : withVav(fixNiqqudLine(raw));
     const t = line.trim();
     if (!t) return `<div class="cp-line cp-empty"></div>`;
     if (META_RE.test(t)) return "";
@@ -165,7 +165,12 @@ function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
 // strip invisible direction marks / odd spaces that PDFs leave in
 // a song's title as shown on its page, the screen, slides and the PDF: without the bracket that only tells apart songs with
 // the same name in search ("אדני אדונינו (יהוה אדנינו מה אדיר שמך)" -> "אדני אדונינו")
-const showTitle = (t) => (t || "").replace(/\s*\([^()]*\)\s*$/, "").trim() || t || "";
+// "אדני" is shown as "אדוני" (Uriya), in lyrics, slides and titles — the saved song stays as it is. With niqqud the
+// holam moves onto the new vav (אֲדֹנָי → אֲדוֹנָי); a prefix (ו ב ל מ ה ש כ) and a chord inside the word are kept.
+const ADONAI_RE = new RegExp(
+  "(?<![\\u05D0-\\u05EA\\u0591-\\u05C7])((?:[ובלמהשכ][\\u0591-\\u05C7]*)?א[\\u0591-\\u05C7]*(?:\\[[^\\]]*\\])?)ד([\\u0591-\\u05C7]*)((?:\\[[^\\]]*\\])?)(נ[\\u0591-\\u05C7]*(?:\\[[^\\]]*\\])?י[\\u0591-\\u05C7]*)(?![\\u05D0-\\u05EA\\u0591-\\u05C7])", "g");
+const withVav = (t) => (t || "").replace(ADONAI_RE, (m, pre, dm, ch, rest) => pre + "ד" + dm.replace("\u05B9", "") + "ו" + (dm.includes("\u05B9") ? "\u05B9" : "") + ch + rest);
+const showTitle = (t) => withVav((t || "").replace(/\s*\([^()]*\)\s*$/, "").trim() || t || "");
 const cleanStr = (t) => (t || "").replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/[\u00A0\u2000-\u200A\u202F]/g, " ");
 // a chord row as a PDF or Word file may store it: fraction / division slashes ("A4⁄7"), small or full-width digits
 // and letters, invisible marks, "A4 / 7" with spaces — made plain before deciding whether the row is chords
@@ -190,7 +195,8 @@ function isSlideLine(line) {
 // stanzas of clean lyric lines, each tagged with its section label ({פזמון}) if any
 function lyricStanzas(content) {
   const stanzas = [{ label: "", lines: [] }];
-  for (const raw of content.split("\n")) {
+  for (const raw0 of content.split("\n")) {
+    const raw = /^\s*\{.*\}\s*$/.test(raw0) ? raw0 : withVav(raw0);
     const t = raw.trim();
     if (/^\{\s*(capo|artist|key|screen|c|comment)\s*:/i.test(t)) continue; // settings and notes are not on the slides
     const label = t.match(/^\{(.+)\}$/);
