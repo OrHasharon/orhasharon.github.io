@@ -51,8 +51,10 @@ function renderDuty() {
     el.innerHTML = `<h2>תורנות</h2><p class="db-warning">כדי לשייך טלפונים לצוותים, לשלוח תזכורות ולאפשר החלפות, צריך להריץ ב-Supabase את <b dir="ltr">duty.sql</b>.</p>`;
     return;
   }
-  const names = [...new Set(dutyAdm.meetings.flatMap((m) => dutyTeams(m.duty)))];
-  const unmapped = names.filter((n) => !(dutyAdm.teams[n] || []).length);
+  const inRoster = new Set(dutyAdm.meetings.flatMap((m) => dutyTeams(m.duty)));
+  // teams in the coming roster first, then teams saved here that aren't scheduled yet (e.g. a new team)
+  const names = [...inRoster, ...Object.keys(dutyAdm.teams).filter((n) => !inRoster.has(n)).sort((a, b) => a.localeCompare(b, "he"))];
+  const unmapped = [...inRoster].filter((n) => !(dutyAdm.teams[n] || []).length);
   const teamRow = (n) => {
     const saved = dutyAdm.teams[n] || [];
     const sug = saved.length ? [] : dutySuggest(n);
@@ -62,7 +64,7 @@ function renderDuty() {
       : `<span class="duty-miss">"${esc(tok)}" לא נמצא/ה ברשימה</span>`).join("");
     const one = sug.length && sug.every((x) => x.hits.length === 1);
     return `<li class="duty-team${saved.length ? "" : " unmapped"}">
-      <strong>${esc(n)}</strong>
+      <strong>${esc(n)}${inRoster.has(n) ? "" : ` <small class="adm-hint">(עוד לא משובץ/ת)</small> <button class="link-btn" data-duty-drop="${esc(n)}">מחיקת הצוות</button>`}</strong>
       <span class="duty-phones">${saved.map((p) => `<span class="duty-chip">${esc(dutyName(p))} <small dir="ltr">${fmtPhone(p)}</small> <button class="link-btn" data-duty-del="${esc(n)}" data-phone="${p}" aria-label="הסרה">✕</button></span>`).join("")}
         ${sugHtml}${one ? `<button class="adm-btn duty-all" data-duty-all="${esc(n)}">אישור ההתאמה</button>` : ""}</span>
       <select data-duty-pick="${esc(n)}" aria-label="הוספת טלפון ל${esc(n)}"><option value="">+ הוספה מהרשימה…</option>${(siteAcc.phones || []).map((p) => `<option value="${p.phone}">${esc(p.name || "")} · ${fmtPhone(p.phone)}</option>`).join("")}</select>
@@ -87,6 +89,11 @@ function renderDuty() {
     ${unmapped.length ? `<p class="sa-alert" role="alert">⚠ בלי טלפון (לא יקבלו תזכורת ולא יוכלו להתחלף): ${unmapped.map(esc).join(", ")}</p>` : ""}
     <h3>צוותים וטלפונים</h3>
     <ul class="duty-teams">${names.map(teamRow).join("") || `<li>אין שיבוצים קרובים</li>`}</ul>
+    <form class="duty-new" data-duty-new>
+      <input name="team" maxlength="60" required placeholder="שם צוות חדש, למשל: דוד ושרה" aria-label="שם צוות חדש">
+      <button class="adm-btn">+ הוספת צוות</button>
+    </form>
+    <p class="adm-hint">אחרי ההוספה משייכים לצוות טלפונים, והוא מופיע לבחירה בשיבוץ של מיכל.</p>
     <h3>התזכורת הקרובה</h3>
     ${sample ? `<pre class="duty-sample">${esc(sample)}</pre>` : ""}
     ${preview || `<p class="adm-hint">אין תורנות קרובה.</p>`}
@@ -105,11 +112,27 @@ document.addEventListener("click", async (e) => {
   if (add) { const n = add.dataset.dutyAdd; dutySave(n, [...new Set([...(dutyAdm.teams[n] || []), add.dataset.phone])]); }
   else if (del) { const n = del.dataset.dutyDel; dutySave(n, (dutyAdm.teams[n] || []).filter((p) => p !== del.dataset.phone)); }
   else if (all) { const n = all.dataset.dutyAll; dutySave(n, [...new Set(dutySuggest(n).map((x) => x.hits[0].phone))]); }
+  else if (e.target.closest("[data-duty-drop]")) {
+    const n = e.target.closest("[data-duty-drop]").dataset.dutyDrop;
+    if (!confirm(`למחוק את הצוות "${n}"?`)) return;
+    const { error } = await sb.from("duty_teams").delete().eq("name", n);
+    if (error) { toast("המחיקה נכשלה"); return; }
+    delete dutyAdm.teams[n]; renderDuty(); toast("נמחק");
+  }
   else if (cancel) {
     if (!confirm("לבטל את ההחלפה? השיבוץ באתר יחזור למה שהיה.")) return;
     const { error } = await sb.from("duty_swaps").update({ status: "cancelled", decided_at: new Date().toISOString() }).eq("id", Number(cancel.dataset.dutyCancel));
     toast(error ? "הביטול נכשל" : "בוטל"); dutyAdm.loaded = false; renderDuty();
   }
+});
+document.addEventListener("submit", (e) => {
+  const f = e.target.closest("[data-duty-new]");
+  if (!f) return;
+  e.preventDefault();
+  const n = f.team.value.replace(/\s+/g, " ").trim().replace(/,/g, " ");   // a comma separates teams in the roster
+  if (!n) return;
+  if (dutyAdm.teams[n]) { toast("הצוות כבר קיים"); return; }
+  dutySave(n, []);
 });
 document.addEventListener("change", (e) => {
   const s = e.target.closest("[data-duty-pick]");

@@ -91,14 +91,42 @@ function dutyReminderText(firstName, m) {
     `לא יכולים להגיע? אפשר לבקש החלפה באתר, ב"שיבוץ מלא".\nתודה! 🙏`;
 }
 
+const HE_DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+const withDates = (m) => ({ ...m, iso: isoDate(m.date),
+  dateText: `${String(m.date.getDate()).padStart(2, "0")}/${String(m.date.getMonth() + 1).padStart(2, "0")}/${m.date.getFullYear()}` });
+
+// the roster Michal edits (duty.sql → duty_roster): wins over the sheet + duty.json, adds dates, hides deleted ones.
+// null = keep what the sheet says; "" = clear (kind "" → by the day). Until duty.sql runs the call fails and nothing changes.
+function applyRoster(ms, rows) {
+  const by = new Map(ms.map((m) => [m.iso, m]));
+  for (const r of rows) {
+    if (r.deleted) { by.delete(r.meeting_date); continue; }
+    let m = by.get(r.meeting_date);
+    if (!m) {
+      const [y, mo, d] = r.meeting_date.split("-").map(Number);
+      const date = new Date(y, mo - 1, d);
+      m = withDates({ duty: "", notes: "", place: "", day: HE_DAYS[date.getDay()], date });
+      by.set(m.iso, m);
+    }
+    if (r.day) m.day = r.day;
+    if (r.place != null) m.place = r.place;
+    if (r.duty != null) m.duty = r.duty;
+    if (r.notes != null) m.notes = r.notes;
+    if (r.kind != null) { if (r.kind) m.kind = r.kind; else delete m.kind; }
+    m.edited = true;
+  }
+  return [...by.values()].sort((a, b) => a.date - b.date);
+}
+
 // all meetings, oldest first
 function loadMeetings() {
   return Promise.all([
     fetch(SCHEDULE_CSV).then((r) => r.text()).catch(() => ""),
     fetch(DUTY_JSON, { cache: "no-cache" }).then((r) => r.json()).catch(() => ({ meetings: [] })),
     dutyRpc("duty_overrides").catch(() => []),
-  ]).then(([text, roster, swaps]) => {
-    const ms = mergeMeetings(parseSheet(text), roster.meetings || []);
+    dutyRpc("duty_roster").catch(() => []),
+  ]).then(([text, roster, swaps, edits]) => {
+    const ms = applyRoster(mergeMeetings(parseSheet(text), roster.meetings || []), Array.isArray(edits) ? edits : []);
     for (const o of Array.isArray(swaps) ? swaps : []) {
       const m = ms.find((x) => x.iso === o.meeting_date);
       if (m && o.duty) { m.dutyBase = m.duty; m.duty = o.duty; m.swapped = true; }

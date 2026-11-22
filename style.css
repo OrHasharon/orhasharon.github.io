@@ -474,3 +474,7 @@ button.duty-chip { cursor: pointer; }
 [data-theme="light"] .ws-link { border-color: var(--line); }
 [data-theme="light"] .ws-link:hover { background: rgba(0,0,0,.05); }
 .header-actions .ws-link { margin-inline-start: 0; }
+
+/* admin → תורניות: add a new team */
+.duty-new { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0 .3rem; }
+.duty-new input { flex: 1 1 12rem; min-width: 0; font: inherit; padding: .45rem .6rem; border-radius: .5rem; }
