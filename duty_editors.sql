@@ -42,3 +42,8 @@ create policy "admins edit swaps" on or_hasharon_worship.duty_swaps for update t
 drop policy if exists "duty editors read phones" on or_hasharon_worship.site_phones;
 create policy "duty editors read phones" on or_hasharon_worship.site_phones for select to authenticated
   using (or_hasharon_worship.is_duty_editor());
+
+-- the roster (duty.sql → duty_roster, the "שיבוצים" tab): admins and duty contributors
+drop policy if exists "admins roster" on or_hasharon_worship.duty_roster;
+create policy "admins roster" on or_hasharon_worship.duty_roster for all to authenticated
+  using (or_hasharon_worship.is_duty_editor()) with check (or_hasharon_worship.is_duty_editor());

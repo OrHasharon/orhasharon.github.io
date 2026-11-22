@@ -478,3 +478,44 @@ button.duty-chip { cursor: pointer; }
 /* admin → תורניות: add a new team */
 .duty-new { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0 .3rem; }
 .duty-new input { flex: 1 1 12rem; min-width: 0; font: inherit; padding: .45rem .6rem; border-radius: .5rem; }
+
+/* duty roster editor ("שיבוצים") — duty-roster.js, on duty-send.html and admin.html */
+.dr-bar { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1rem; }
+.dr-bar .btn { flex: 1 1 10rem; text-align: center; }
+.dr-hint { opacity: .75; font-size: .92rem; }
+.dr-under { margin-top: -.5rem; }
+.dr-card { padding: .8rem 0; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
+.dr-card h3 { font-size: 1rem; margin: 0 0 .45rem; display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+.dr-card h3 small { font-weight: 400; opacity: .75; }
+.dr-chips { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.dr-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .65rem; border-radius: 999px;
+  background: color-mix(in srgb, #e8c169 18%, transparent); border: 1px solid color-mix(in srgb, #e8c169 45%, transparent); }
+.dr-chip.nophone { background: color-mix(in srgb, #e5736b 15%, transparent); border-color: color-mix(in srgb, #e5736b 50%, transparent); }
+.dr-chip button, .dr-link { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0 .1rem; opacity: .8; }
+.dr-link { text-decoration: underline; font-size: .9rem; }
+.dr-chips select, .dr-form input, .dr-det input { font: inherit; padding: .4rem .5rem; border-radius: .5rem; max-width: 100%;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent); background: color-mix(in srgb, currentColor 6%, transparent); color: inherit; }
+.dr-chips select option { color: #14182a; }
+.dr-det { display: grid; gap: .5rem; margin-top: .6rem; padding: .6rem; border-radius: .6rem; background: color-mix(in srgb, currentColor 5%, transparent); }
+.dr-det label, .dr-form label { display: grid; gap: .2rem; font-size: .9rem; }
+.dr-det .row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.dr-form { display: grid; gap: .55rem; padding: .8rem; margin: 0 0 1rem; border-radius: .7rem; border: 1px dashed color-mix(in srgb, currentColor 30%, transparent); }
+.dr-form h3 { margin: 0; font-size: 1rem; }
+.dr-toast { position: fixed; inset-inline: 1rem; bottom: 1rem; margin: auto; max-width: 22rem; padding: .7rem 1rem; border-radius: .7rem; text-align: center;
+  background: #1f5f50; color: #fff; box-shadow: 0 6px 24px rgba(0,0,0,.35); z-index: 1000; }
+.dr-toast.err { background: #8c2b24; }
+#dr-print { display: none; }
+@media print {
+  body.dr-printing { background: #fff none !important; color: #111 !important; }
+  html:has(body.dr-printing) { background: #fff none !important; }
+  body.dr-printing::before, body.dr-printing::after { display: none !important; content: none !important; }
+  body.dr-printing > *:not(#dr-print) { display: none !important; }
+  body.dr-printing #dr-print { display: block; font-family: "Noto Sans Hebrew", sans-serif; background: #fff; color: #111; }
+  #dr-print h1 { font-size: 22pt; margin: 0 0 2mm; color: #14182a; }
+  #dr-print p { margin: 0 0 6mm; color: #555; }
+  #dr-print table { width: 100%; border-collapse: collapse; font-size: 12pt; }
+  #dr-print th { text-align: right; background: #14182a; color: #fff; padding: 3mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #dr-print td { padding: 3mm; border-bottom: 1px solid #ddd; vertical-align: top; background: #fff; color: #111; }
+  #dr-print tr:nth-child(even) td { background: #f6f3ea; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #dr-print .foot { margin-top: 6mm; font-size: 10pt; color: #666; }
+}

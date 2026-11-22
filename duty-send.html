@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=66">
+  <link rel="stylesheet" href="style.css?v=67">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <style>
     .ds-tabs { display: flex; gap: .4rem; margin: 0 0 1rem; }
@@ -27,46 +27,6 @@
     .ds-row.sent span::after { content: " ✓ נשלח"; color: #3fae6a; font-weight: 600; }
     .ds-row.sent .btn { opacity: .55; }
     .ds-miss { color: #e5736b; margin: .2rem 0; }
-    .ds-hint { opacity: .75; font-size: .92rem; }
-    /* roster editor */
-    .ds-bar { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1rem; }
-    .ds-bar .btn { flex: 1 1 10rem; text-align: center; }
-    .ds-card { padding: .8rem 0; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
-    .ds-card h3 { font-size: 1rem; margin: 0 0 .45rem; display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
-    .ds-card h3 small { font-weight: 400; opacity: .75; }
-    .ds-chips { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
-    .ds-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .65rem; border-radius: 999px;
-      background: color-mix(in srgb, #e8c169 18%, transparent); border: 1px solid color-mix(in srgb, #e8c169 45%, transparent); }
-    .ds-chip.nophone { background: color-mix(in srgb, #e5736b 15%, transparent); border-color: color-mix(in srgb, #e5736b 50%, transparent); }
-    .ds-chip button, .ds-link { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0 .1rem; opacity: .8; }
-    .ds-link { text-decoration: underline; font-size: .9rem; }
-    .ds-chips select, .ds-form input, .ds-form select, .ds-det input { font: inherit; padding: .4rem .5rem; border-radius: .5rem; max-width: 100%;
-      border: 1px solid color-mix(in srgb, currentColor 30%, transparent); background: color-mix(in srgb, currentColor 6%, transparent); color: inherit; }
-    .ds-chips select option, .ds-form select option { color: #14182a; }
-    .ds-det { display: grid; gap: .5rem; margin-top: .6rem; padding: .6rem; border-radius: .6rem; background: color-mix(in srgb, currentColor 5%, transparent); }
-    .ds-det label, .ds-form label { display: grid; gap: .2rem; font-size: .9rem; }
-    .ds-det .row { display: flex; gap: .5rem; flex-wrap: wrap; }
-    .ds-form { display: grid; gap: .55rem; padding: .8rem; margin: 0 0 1rem; border-radius: .7rem; border: 1px dashed color-mix(in srgb, currentColor 30%, transparent); }
-    .ds-form h3 { margin: 0; font-size: 1rem; }
-    .ds-toast { position: fixed; inset-inline: 1rem; bottom: 1rem; margin: auto; max-width: 22rem; padding: .7rem 1rem; border-radius: .7rem; text-align: center;
-      background: #1f5f50; color: #fff; box-shadow: 0 6px 24px rgba(0,0,0,.35); z-index: 1000; }
-    .ds-toast.err { background: #8c2b24; }
-    #print { display: none; }
-    @media print {
-      @page { size: A4; margin: 14mm; }
-      html, body { background: #fff none !important; color: #111 !important; }
-      html::before, html::after, body::before, body::after { display: none !important; content: none !important; }
-      #print, #print td { background: #fff; color: #111; }
-      body > *:not(#print) { display: none !important; }
-      #print { display: block; font-family: "Noto Sans Hebrew", sans-serif; }
-      #print h1 { font-size: 22pt; margin: 0 0 2mm; color: #14182a; }
-      #print p { margin: 0 0 6mm; color: #555; }
-      #print table { width: 100%; border-collapse: collapse; font-size: 12pt; }
-      #print th { text-align: right; background: #14182a; color: #fff; padding: 3mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      #print td { padding: 3mm; border-bottom: 1px solid #ddd; vertical-align: top; }
-      #print tr:nth-child(even) td { background: #f6f3ea; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      #print .foot { margin-top: 6mm; font-size: 10pt; color: #666; }
-    }
   </style>
 </head>
 <body>
@@ -77,7 +37,7 @@
       <button role="tab" data-tab="roster" aria-selected="false">שיבוצים</button>
     </nav>
     <section id="tab-send">
-      <p class="ds-hint">לוחצים על כל שם → נפתח וואטסאפ עם ההודעה מוכנה → שולחים וחוזרים לכאן. ההודעה יוצאת מהוואטסאפ שלך.</p>
+      <p class="dr-hint">לוחצים על כל שם → נפתח וואטסאפ עם ההודעה מוכנה → שולחים וחוזרים לכאן. ההודעה יוצאת מהוואטסאפ שלך.</p>
       <div id="box" class="swap-card"><p class="adm-hint">טוען…</p></div>
     </section>
     <section id="tab-roster" hidden>
@@ -85,13 +45,12 @@
     </section>
     <p class="swap-back"><a href="/">← לאתר הקהילה</a></p>
   </main>
-  <div id="print"></div>
-  <script src="schedule.js?v=40"></script>
+  <script src="schedule.js?v=41"></script>
+  <script src="duty-roster.js?v=1"></script>
   <script>
     // Michal's page (private link #k=…, checked by duty.sql). Two tabs:
     //  * תזכורות השבוע — this week's duty people, one wa.me button each (sent from her own phone);
-    //  * שיבוצים — edit the roster (duty_roster_save): teams per meeting, add / delete meetings, place, kind;
-    //    download the next 3 months as a PDF (print) or a 16:9 slide (PNG) for the community presentation.
+    //  * שיבוצים — the roster editor (duty-roster.js; the admins have the same one in admin.html).
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const $ = (id) => document.getElementById(id);
     const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
@@ -100,15 +59,8 @@
     const key = fromHash || store.get("oh-duty-key") || "";
     const waIntl = (p) => { const d = String(p || "").replace(/\D/g, ""); return d.startsWith("0") ? "972" + d.slice(1) : d; };
     const sentKey = (m, p) => `oh-duty-sent:${m.iso}|${p}`;
-    const S = { rows: [], teams: [], meetings: [], open: null, rosterOk: true };
+    const S = { rows: [], meetings: [] };
 
-    function toast(text, err) {
-      const t = document.createElement("div");
-      t.className = "ds-toast" + (err ? " err" : ""); t.textContent = text; t.setAttribute("role", "status");
-      document.body.append(t); setTimeout(() => t.remove(), err ? 4500 : 2200);
-    }
-
-    // ---------- tabs ----------
     function showTab(tab) {
       for (const t of ["send", "roster"]) $("tab-" + t).hidden = t !== tab;
       document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
@@ -116,28 +68,28 @@
     }
     document.addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); });
 
-    // ---------- load ----------
-    async function load() {
-      const [rows, teams, ms] = await Promise.all([
-        dutyRpc("duty_job_teams", { p_key: key }),
-        dutyRpc("duty_team_list", { p_key: key }).catch(() => null),
-        loadMeetings(),
-      ]);
-      S.rows = rows || [];
-      S.rosterOk = Array.isArray(teams);
-      S.teams = teams || [];
-      S.meetings = upcomingMeetings(ms);
-    }
     async function start() {
       showTab(store.get("oh-duty-tab") === "roster" ? "roster" : "send");
-      if (!key) { $("box").innerHTML = $("rbox").innerHTML = `<p>צריך להיכנס מהלינק האישי שקיבלת בוואטסאפ.</p>`; return; }
-      try { await load(); }
-      catch { $("box").innerHTML = $("rbox").innerHTML = `<p>לא הצלחתי לטעון. בדקי חיבור ונסי שוב.</p>`; return; }
-      if (!S.rows.length && !S.teams.length) { $("box").innerHTML = $("rbox").innerHTML = `<p>הלינק לא פעיל. פני לליה.</p>`; return; }
-      renderSend(); renderRoster();
+      const all = (html) => { $("box").innerHTML = $("rbox").innerHTML = html; };
+      if (!key) return all(`<p>צריך להיכנס מהלינק האישי שקיבלת בוואטסאפ.</p>`);
+      let teams;
+      try {
+        const [rows, ms, t] = await Promise.all([dutyRpc("duty_job_teams", { p_key: key }), loadMeetings(), dutyRpc("duty_team_list", { p_key: key }).catch(() => null)]);
+        S.rows = rows || []; S.meetings = upcomingMeetings(ms); teams = t;
+      } catch { return all(`<p>לא הצלחתי לטעון. בדקי חיבור ונסי שוב.</p>`); }
+      if (!S.rows.length && !(teams || []).length) return all(`<p>הלינק לא פעיל. פני לליה.</p>`);
+      renderSend();
+      const editor = dutyRosterEditor($("rbox"), {
+        save: (r) => dutyRpc("duty_roster_save", { p_key: key, p_date: r.meeting_date, p_day: r.day, p_place: r.place, p_kind: r.kind, p_duty: r.duty, p_deleted: r.deleted }),
+        teams: () => dutyRpc("duty_team_list", { p_key: key }),
+        teamsHint: `צוות חדש מקבל טלפונים בעמוד הניהול ("תורניות" → צוותים וטלפונים).`,
+        onSaved: (ms) => { S.meetings = ms; renderSend(); },
+      });
+      await editor.reload();
+      if (!Array.isArray(teams)) $("rbox").insertAdjacentHTML("afterbegin", `<p class="ds-miss">עריכת השיבוץ עוד לא פעילה — אוריה צריך להריץ את העדכון במסד. ההורדות כבר עובדות.</p>`);
     }
 
-    // ---------- tab 1: this week's reminders ----------
+    // this week's reminders
     function renderSend() {
       const phones = {};
       for (const r of S.rows) (phones[r.team] = phones[r.team] || []).push(r);
@@ -167,181 +119,6 @@
       store.set(row.dataset.sent, new Date().toISOString());
       row.classList.add("sent");
     });
-
-    // ---------- tab 2: the roster ----------
-    const phoneCount = (t) => (S.teams.find((x) => x.name === t) || {}).phones || 0;
-    const places = () => [...new Set(S.meetings.map((m) => m.place).filter(Boolean))];
-    const in3Months = () => { const end = new Date(); end.setHours(0, 0, 0, 0); end.setMonth(end.getMonth() + 3); return S.meetings.filter((m) => m.date <= end); };
-
-    function renderRoster() {
-      if (!S.rosterOk) { $("rbox").innerHTML = `<p class="ds-miss">עריכת השיבוץ עוד לא פעילה — אוריה צריך להריץ את העדכון במסד. אפשר להוריד את השיבוץ הנוכחי:</p>` + exportBar(); return; }
-      const teamOpts = S.teams.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}${t.phones ? "" : " (בלי טלפון)"}</option>`).join("");
-      const card = (m) => {
-        const teams = String(m.duty || "").split(",").map((x) => x.trim()).filter(Boolean);
-        const open = S.open === m.iso;
-        return `<div class="ds-card" data-iso="${m.iso}">
-          <h3><span>${esc(meetingKind(m))} · יום ${esc(m.day)} ${m.dateText.slice(0, 5)}${m.swapped ? " 🔁" : ""}</span><small>${esc(m.place || "")}</small></h3>
-          <div class="ds-chips">
-            ${teams.map((t) => `<span class="ds-chip${t === "כולם" || phoneCount(t) ? "" : " nophone"}" title="${t === "כולם" || phoneCount(t) ? "" : "לצוות הזה אין טלפון — לא יקבל תזכורת"}">${esc(t)}
-              <button data-del-team="${esc(t)}" aria-label="הסרת ${esc(t)}">✕</button></span>`).join("") || `<span class="ds-hint">עוד אין תורנים</span>`}
-            <select data-add-team aria-label="הוספת צוות"><option value="">+ צוות</option>${teamOpts}<option value="כולם">כולם</option><option value="__new">✎ צוות חדש…</option></select>
-            <button class="ds-link" data-toggle>${open ? "סגירה" : "פרטים"}</button>
-          </div>
-          ${open ? `<div class="ds-det">
-            <div class="row">
-              <label>מקום<input data-f="place" list="ds-places" value="${esc(m.place || "")}" maxlength="120"></label>
-              <label>סוג המפגש (לא חובה)<input data-f="kind" value="${esc(m.kind || "")}" maxlength="80" placeholder="${esc(meetingKind({ day: m.day }))}"></label>
-            </div>
-            <div class="row"><button class="btn" data-save>שמירה</button><button class="btn ghost" data-remove>מחיקת המפגש</button></div>
-          </div>` : ""}
-        </div>`;
-      };
-      $("rbox").innerHTML = `
-        ${exportBar()}
-        <form class="ds-form" id="ds-add">
-          <h3>+ מפגש חדש</h3>
-          <label>תאריך<input type="date" name="date" required></label>
-          <label>מקום<input name="place" list="ds-places" maxlength="120" placeholder="כפר הבפטיסטים"></label>
-          <label>סוג המפגש (לא חובה)<input name="kind" maxlength="80" placeholder="לפי היום: שבת = אסיפה, שישי = קבלת שבת"></label>
-          <button class="btn">הוספת המפגש</button>
-        </form>
-        <datalist id="ds-places">${places().map((p) => `<option value="${esc(p)}">`).join("")}</datalist>
-        ${S.meetings.map(card).join("") || `<p>אין מפגשים קרובים.</p>`}
-        <p class="ds-hint">צוות באדום = אין לו טלפון, ולכן לא יקבל תזכורת. צוות חדש מקבל טלפונים בעמוד הניהול ("תורניות" → צוותים וטלפונים).</p>`;
-    }
-    const exportBar = () => `<div class="ds-bar">
-        <button class="btn" data-pdf>📄 הורדת PDF</button>
-        <button class="btn" data-slide>🖼️ שקופית למצגת</button>
-      </div><p class="ds-hint" style="margin-top:-.5rem">השיבוץ של שלושת החודשים הקרובים.</p>`;
-
-    async function save(m, fields = {}, deleted = false) {
-      const next = { ...m, ...fields };
-      try {
-        const r = await dutyRpc("duty_roster_save", { p_key: key, p_date: next.iso, p_day: next.day, p_place: next.place || "",
-          p_kind: next.kind || "", p_duty: next.duty || "", p_deleted: deleted });
-        if (r && r.error) { toast({ bad_key: "הלינק לא פעיל — פני לליה", bad_date: "תאריך לא תקין", too_long: "הטקסט ארוך מדי" }[r.error] || "השמירה נכשלה", true); return false; }
-      } catch { toast("השמירה נכשלה — בדקי חיבור", true); return false; }
-      const ms = await loadMeetings().catch(() => null);
-      if (ms) S.meetings = upcomingMeetings(ms);
-      renderRoster(); renderSend();
-      toast(deleted ? "המפגש נמחק" : "נשמר ✓");
-      return true;
-    }
-    const meetingOf = (el) => S.meetings.find((m) => m.iso === el.closest("[data-iso]").dataset.iso);
-    const setTeams = (m, teams) => save(m, { duty: [...new Set(teams)].join(", ") });
-
-    $("rbox").addEventListener("click", (e) => {
-      if (e.target.closest("[data-pdf]")) return downloadPdf();
-      if (e.target.closest("[data-slide]")) return downloadSlide();
-      const card = e.target.closest("[data-iso]");
-      if (!card) return;
-      const m = meetingOf(card);
-      const del = e.target.closest("[data-del-team]");
-      if (del) return setTeams(m, String(m.duty || "").split(",").map((x) => x.trim()).filter((t) => t && t !== del.dataset.delTeam));
-      if (e.target.closest("[data-toggle]")) { S.open = S.open === m.iso ? null : m.iso; return renderRoster(); }
-      if (e.target.closest("[data-save]")) {
-        const v = (f) => card.querySelector(`[data-f="${f}"]`).value.trim();
-        S.open = null; return save(m, { place: v("place"), kind: v("kind") });
-      }
-      if (e.target.closest("[data-remove]")) {
-        if (!confirm(`למחוק את המפגש של ${m.dateText.slice(0, 5)}? הוא יוסר מהאתר.`)) return;
-        S.open = null; return save(m, {}, true);
-      }
-    });
-    $("rbox").addEventListener("change", (e) => {
-      const s = e.target.closest("[data-add-team]");
-      if (!s || !s.value) return;
-      const m = meetingOf(s);
-      let t = s.value;
-      if (t === "__new") {
-        t = (prompt("שם הצוות החדש (למשל: דוד ושרה)") || "").replace(/,/g, " ").replace(/\s+/g, " ").trim();
-        if (!t) { s.value = ""; return; }
-      }
-      const cur = String(m.duty || "").split(",").map((x) => x.trim()).filter(Boolean);
-      setTeams(m, t === "כולם" ? ["כולם"] : [...cur.filter((x) => x !== "כולם"), t]);
-    });
-    $("rbox").addEventListener("submit", async (e) => {
-      if (e.target.id !== "ds-add") return;
-      e.preventDefault();
-      const f = e.target;
-      if (!f.date.value) return;
-      const [y, mo, d] = f.date.value.split("-").map(Number);
-      const date = new Date(y, mo - 1, d);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      if (date < today) { toast("התאריך כבר עבר", true); return; }
-      const iso = f.date.value;
-      const have = S.meetings.find((m) => m.iso === iso);
-      if (have) { toast("כבר יש מפגש בתאריך הזה — אפשר לערוך אותו ברשימה", true); return; }
-      const day = HE_DAYS[date.getDay()];
-      const ok = await save({ iso, day, place: f.place.value.trim() || (day === "שבת" ? "כפר הבפטיסטים" : ""), kind: f.kind.value.trim(), duty: "" });
-      if (ok) f.reset();
-    });
-
-    // ---------- exports: next 3 months ----------
-    const rangeText = (list) => list.length ? `${list[0].dateText.slice(0, 5)} – ${list[list.length - 1].dateText}` : "";
-    function downloadPdf() {
-      const list = in3Months();
-      if (!list.length) { toast("אין מפגשים בשלושת החודשים הקרובים", true); return; }
-      $("print").innerHTML = `<h1>שיבוץ תורנויות · קהילת אור השרון</h1><p>${rangeText(list)}</p>
-        <table><thead><tr><th>תאריך</th><th>יום</th><th>מפגש</th><th>מקום</th><th>תורנים</th></tr></thead><tbody>
-        ${list.map((m) => `<tr><td>${m.dateText.slice(0, 5)}</td><td>${esc(m.day)}</td><td>${esc(meetingKind(m))}</td><td>${esc(m.place || "")}</td><td>${esc(m.duty || "")}</td></tr>`).join("")}
-        </tbody></table>
-        <p class="foot">הנחיות לתורנים: orhasharon.github.io/#guide · לא יכולים להגיע? אפשר לבקש החלפה באתר, ב"שיבוץ מלא".</p>`;
-      const old = document.title;
-      document.title = `שיבוץ תורנויות ${list[0].iso}`;   // the suggested PDF file name
-      window.print();
-      setTimeout(() => (document.title = old), 1000);
-    }
-
-    async function downloadSlide() {
-      const list = in3Months();
-      if (!list.length) { toast("אין מפגשים בשלושת החודשים הקרובים", true); return; }
-      const W = 1920, H = 1080, c = document.createElement("canvas");
-      c.width = W; c.height = H;
-      const x = c.getContext("2d");
-      const F = '"Noto Sans Hebrew", sans-serif';
-      try { await Promise.all([document.fonts.load(`700 60px ${F}`), document.fonts.load(`400 40px ${F}`)]); } catch {}
-      const g = x.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, "#0b1020"); g.addColorStop(1, "#1b2442");
-      x.fillStyle = g; x.fillRect(0, 0, W, H);
-      x.direction = "rtl"; x.textAlign = "right"; x.textBaseline = "middle";
-      x.fillStyle = "#e8c169"; x.font = `700 72px ${F}`; x.fillText("שיבוץ תורנויות", W - 110, 120);
-      x.fillStyle = "rgba(255,255,255,.72)"; x.font = `400 36px ${F}`; x.fillText(`קהילת אור השרון · ${rangeText(list)}`, W - 110, 192);
-      try {
-        const logo = new Image(); logo.src = "logo.png";
-        await logo.decode();
-        const h = 110, w = h * logo.width / logo.height; x.drawImage(logo, 110, 100, w, h);
-      } catch {}
-      // columns from the right: date, day, meeting, place, teams
-      const cols = [W - 110, W - 290, W - 470, W - 760, W - 1090];
-      const top = 270, bottom = H - 110, rowH = Math.min(72, (bottom - top) / (list.length + 1));
-      const fs = Math.round(Math.min(34, rowH * 0.5));
-      x.fillStyle = "rgba(232,193,105,.9)"; x.font = `700 ${fs}px ${F}`;
-      ["תאריך", "יום", "מפגש", "מקום", "תורנים"].forEach((t, i) => x.fillText(t, cols[i], top + rowH / 2));
-      x.fillStyle = "rgba(232,193,105,.5)"; x.fillRect(110, top + rowH - 2, W - 220, 2);
-      const fit = (t, w) => { t = String(t || ""); if (x.measureText(t).width <= w) return t; while (t && x.measureText(t + "…").width > w) t = t.slice(0, -1); return t + "…"; };
-      list.forEach((m, i) => {
-        const y = top + rowH * (i + 1);
-        if (i % 2 === 0) { x.fillStyle = "rgba(255,255,255,.05)"; x.fillRect(110, y, W - 220, rowH); }
-        x.fillStyle = "#fff"; x.font = `700 ${fs}px ${F}`;
-        x.fillText(m.dateText.slice(0, 5), cols[0], y + rowH / 2);
-        x.font = `400 ${fs}px ${F}`;
-        x.fillText(fit(m.day, 160), cols[1], y + rowH / 2);
-        x.fillText(fit(meetingKind(m), 270), cols[2], y + rowH / 2);
-        x.fillText(fit(m.place, 310), cols[3], y + rowH / 2);
-        x.fillStyle = "#f3e3b8"; x.font = `600 ${fs}px ${F}`;
-        x.fillText(fit(m.duty, cols[4] - 120), cols[4], y + rowH / 2);
-      });
-      x.fillStyle = "rgba(255,255,255,.55)"; x.font = `400 28px ${F}`;
-      x.fillText("הנחיות לתורנים: orhasharon.github.io/#guide", W - 110, H - 60);
-      c.toBlob((b) => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(b); a.download = `shibutz-toranuyot-${list[0].iso}.png`;
-        document.body.append(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-        toast("השקופית ירדה ✓");
-      }, "image/png");
-    }
 
     start();
   </script>

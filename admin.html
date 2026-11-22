@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@500&family=Noto+Sans+Hebrew:wght@400..700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=66">
+  <link rel="stylesheet" href="style.css?v=67">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 </head>
 <body>
@@ -24,10 +24,11 @@
   </header>
   <main class="wrap adm">
     <p id="adm-status" class="adm-hint">טוען…</p>
-    <!-- after signing in: "משתמשים" (entries, site access, admins) and "תורניות" (duty reminders) -->
+    <!-- after signing in: "משתמשים" (entries, site access, admins) and "תורניות" (duty reminders) and "שיבוצים" (the roster editor, duty-roster.js) -->
     <nav class="tabs adm-tabs" role="tablist" hidden>
       <button role="tab" data-adm-tab="users" aria-selected="true">משתמשים</button>
       <button role="tab" data-adm-tab="duty" aria-selected="false">תורניות</button>
+      <button role="tab" data-adm-tab="roster" aria-selected="false">שיבוצים</button>
     </nav>
     <div id="sa-report" class="sa-report" hidden></div>
     <section id="sa-views" class="adm-box" hidden></section>
@@ -38,14 +39,16 @@
     </div>
     <section id="site-access" class="adm-box" hidden></section>
     <section id="adm-duty" class="adm-box" hidden></section>
+    <section id="adm-roster" class="adm-box" hidden></section>
     <section id="adm-admins" class="adm-box" hidden></section>
   </main>
   <div id="adm-toast" class="adm-toast" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="site-access.js?v=10"></script>
-  <script src="schedule.js?v=40"></script>
-  <script src="admin-duty.js?v=4"></script>
+  <script src="schedule.js?v=41"></script>
+  <script src="duty-roster.js?v=1"></script>
+  <script src="admin-duty.js?v=5"></script>
   <script>
     const sb = window.supabase.createClient("https://pualpwrkztjzhgpaqudm.supabase.co", "sb_publishable_TFMMqLxLWHatd3lXYrUlTQ_aO7MvaQ9", { db: { schema: "or_hasharon_worship" } });
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -139,12 +142,14 @@
     });
 
     // tabs: which sections each one shows (the last tab is remembered on this device)
-    const ADM_TABS = { users: ["sa-report", "sa-views", "site-access", "adm-admins"], duty: ["adm-duty"] };
+    const ADM_TABS = { users: ["sa-report", "sa-views", "site-access", "adm-admins"], duty: ["adm-duty"], roster: ["adm-roster"] };
     function showAdmTab(tab) {
       if (!ADM_TABS[tab]) tab = "users";
       for (const [k, ids] of Object.entries(ADM_TABS)) for (const id of ids) $(id).hidden = k !== tab;
       document.querySelectorAll("[data-adm-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.admTab === tab));
       store("oh-admin-tab", tab);
+      if (tab === "roster" && user) renderRosterAdmin();                     // the roster editor (admin-duty.js → duty-roster.js)
+      if (tab === "duty" && user && !dutyAdm.loaded) renderDuty();           // after a roster change
     }
     document.addEventListener("click", (e) => { const b = e.target.closest("[data-adm-tab]"); if (b) showAdmTab(b.dataset.admTab); });
 
@@ -227,10 +232,14 @@
       if (!error && !isAdmin) {
         const { data: duty } = await sb.rpc("is_duty_editor");
         if (duty === true) {
-          // duty contributor: only the "תורניות" tab (no entry to the site without a phone, no other admin parts)
+          // duty contributor: only the "תורניות" + "שיבוצים" tabs (no entry to the site without a phone, no other admin parts)
           $("adm-status").innerHTML = `מחובר/ת כ-<b dir="ltr">${esc(user.email)}</b> · תורנויות`;
           if (from === "site" || new URLSearchParams(location.search).has("login")) history.replaceState(null, "", "/admin.html");
-          await loadSiteAccess(); renderDuty(); showAdmTab("duty");
+          document.querySelector(".adm-tabs").hidden = false;
+          document.querySelector('[data-adm-tab="users"]').hidden = true;
+          await loadSiteAccess(); renderDuty();
+          let tab = "duty"; try { tab = localStorage.getItem("oh-admin-tab") === "roster" ? "roster" : "duty"; } catch {}
+          showAdmTab(tab);
           return;
         }
       }

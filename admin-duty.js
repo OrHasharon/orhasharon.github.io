@@ -139,3 +139,29 @@ document.addEventListener("change", (e) => {
   if (!s || !s.value) return;
   const n = s.dataset.dutyPick; dutySave(n, [...new Set([...(dutyAdm.teams[n] || []), s.value])]);
 });
+
+// "שיבוצים" tab: the same roster editor as Michal's page (duty-roster.js), saving straight to duty_roster
+// (RLS: admins + duty contributors — duty.sql / duty_editors.sql). Teams come from duty_teams.
+let rosterEd = null;
+function renderRosterAdmin() {
+  const el = $("adm-roster");
+  if (!rosterEd) {
+    el.innerHTML = `<h2>שיבוצים</h2>
+      <p class="adm-hint">השיבוץ שמופיע באתר. כל שינוי נשמר מיד ומופיע לכולם. מיכל עורכת את אותו שיבוץ מהלינק שלה.</p>
+      <div id="adm-roster-box"><p class="adm-hint">טוען…</p></div>`;
+    rosterEd = dutyRosterEditor($("adm-roster-box"), {
+      save: async (r) => {
+        const { error } = await sb.from("duty_roster").upsert({ ...r, updated_at: new Date().toISOString(), updated_by: (user && user.email) || "admin" });
+        return error ? { error: /duty_roster/.test(error.message || "") && /exist|find/i.test(error.message || "") ? "missing" : "save" } : {};
+      },
+      teams: async () => {
+        const { data, error } = await sb.from("duty_teams").select("name, phones");
+        if (error) throw error;
+        return (data || []).map((t) => ({ name: t.name, phones: (t.phones || []).length })).sort((a, b) => a.name.localeCompare(b.name, "he"));
+      },
+      teamsHint: `צוות חדש מקבל טלפונים בלשונית "תורניות" → צוותים וטלפונים.`,
+      onSaved: () => { dutyAdm.loaded = false; },   // the duty tab reloads with the new roster
+    });
+  }
+  rosterEd.reload();
+}
