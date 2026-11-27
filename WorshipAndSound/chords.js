@@ -138,6 +138,8 @@ const keyName = (k) => { if (!k) return k; const m = String(k).trim().match(/^([
 // as it is.
 const repairSig = (t) => t.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").replace(/[\s\u0591-\u05C7]/g, "") + "|" + [...t.matchAll(/\[([^\]]*)\]/g)].map((m) => m[1]).join(" ");
 let repairMap = null, repairing = false;
+// the first lyric line as bare letters (no chords, niqqud, spaces or punctuation)
+const firstLetters = (t) => (t.split("\n").map((l) => l.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").replace(/[^א-תa-zA-Z]/g, "")).find((l) => l) || "");
 function repaired(content) {
   if (repairing || typeof SONG_REPAIRS === "undefined" || !content || content.indexOf("\n") < 0) return content;
   if (!repairMap) {
@@ -149,7 +151,8 @@ function repaired(content) {
   let out = repairMap.get(s) || content;
   const order = repairMap.orders.get(s);
   if (order && !/^\s*\{\s*order\s*:/im.test(out)) out = `{order: ${order}}\n` + out;
-  const k = repairMap.marks.get(s);
+  // any copy of a known song (another file, another upload): matched by the letters of its first line
+  const k = repairMap.marks.get(s) ?? (typeof CHORUS_FIRST !== "undefined" ? CHORUS_FIRST.find((m) => m.first === firstLetters(content))?.k : undefined);
   if (k != null && !/^\s*\{\s*(פזמון|chorus|refrain)/im.test(out)) {
     repairing = true;
     try { out = setChorus(out, k); } finally { repairing = false; }
