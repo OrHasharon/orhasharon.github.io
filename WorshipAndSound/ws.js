@@ -471,26 +471,41 @@ document.addEventListener("change", async (e) => {
   const ph = e.target.closest("[data-u-phone]"), mm = e.target.closest("[data-u-member]");
   if (!ph && !mm) return;
   const email = (ph || mm).dataset[ph ? "uPhone" : "uMember"];
-  // a new name (not necessarily on the worship team — e.g. someone who brings the parasha or the sermon)
+  // a new name (not necessarily on the worship team — e.g. someone who brings the parasha or the sermon): a text box
+  // right in the row (a browser popup can be blocked)
   if (mm && mm.value === "__new") {
-    const name = (prompt("השם החדש (שם מלא):") || "").trim();
-    if (!name) { await loadUsers(); return; }
-    let m = state.members.find((x) => x.name.trim() === name);
-    if (!m) {
-      const { data, error } = await sb.from("members").insert({ name, notes: OUTSIDE, active: true }).select().single();
-      if (error || !data) { toast("לא הצלחתי להוסיף את השם", { error: true }); await loadUsers(); return; }
-      m = data; state.members.push(m); state.members.sort((a, b) => a.name.localeCompare(b.name, "he"));
-    }
-    mm.dataset.newId = m.id; // (the select doesn't have this option yet)
+    const td = mm.parentElement;
+    td.innerHTML = `<span class="u-newname"><input data-u-newname="${esc(email)}" placeholder="שם מלא" autocomplete="off">
+      <button class="btn" type="button" data-u-newname-save="${esc(email)}">הוספה</button></span>`;
+    td.querySelector("input").focus();
+    return;
   }
-  const pick = mm?.dataset.newId ? Number(mm.dataset.newId) : mm?.value ? Number(mm.value) : null;
-  const patch = ph ? { phone: ph.value.trim() || null } : { member_id: pick };
+  const patch = ph ? { phone: ph.value.trim() || null } : { member_id: mm.value ? Number(mm.value) : null };
   if (ph && patch.phone && waNumber(patch.phone).length < 11) { toast("מספר טלפון לא תקין"); return; }
   const { error } = await sb.from("allowed_users").update(patch).eq("email", email);
   toast(error ? "השמירה נכשלה" : "נשמר");
   await loadUsers();
   if (mm) render(); // the list shows the new name
 });
+
+// the new name typed in the users tab: add it (as a name outside the worship team) and link it to that user
+async function saveNewName(email) {
+  const input = document.querySelector(`[data-u-newname="${CSS.escape(email)}"]`);
+  const name = (input?.value || "").trim();
+  if (!name) { input?.focus(); return; }
+  let m = state.members.find((x) => x.name.trim() === name);
+  if (!m) {
+    const { data, error } = await sb.from("members").insert({ name, notes: OUTSIDE, active: true }).select().single();
+    if (error || !data) { toast("לא הצלחתי להוסיף את השם", { error: true }); return; }
+    m = data; state.members.push(m); state.members.sort((a, b) => a.name.localeCompare(b.name, "he"));
+  }
+  const { error } = await sb.from("allowed_users").update({ member_id: m.id }).eq("email", email);
+  toast(error ? "השמירה נכשלה" : `נוסף: ${name}`);
+  await loadUsers();
+  render();
+}
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-u-newname-save]"); if (b) saveNewName(b.dataset.uNewnameSave); });
+document.addEventListener("keydown", (e) => { const i = e.target.closest?.("[data-u-newname]"); if (i && e.key === "Enter") { e.preventDefault(); saveNewName(i.dataset.uNewname); } });
 
 // ---------- shell ----------
 function render() {
