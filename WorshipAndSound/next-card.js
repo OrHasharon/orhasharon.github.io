@@ -69,7 +69,7 @@ function nextMeetingCard(mt) {
     <div class="nc-block">
       <div class="nc-label">🎵 שירים${has ? ` (${songs.length})` : ""}</div>
       ${songs === null ? `<p class="nc-muted">טוען…</p>`
-        : has ? `<ol class="nc-songs">${songs.map((i) => `<li>${esc(i.songs.title)}${i.songs.song_key ? ` <small dir="ltr">${esc(i.songs.song_key)}</small>` : ""}</li>`).join("")}</ol>`
+        : has ? `<ol class="nc-songs">${songs.map((i) => `<li>${esc(i.songs.title)}${i.songs.song_key ? ` <small dir="ltr">${esc(keyName(i.songs.song_key))}</small>` : ""}</li>`).join("")}</ol>`
         : `<p class="nc-muted">עדיין לא נבחרו שירים.</p>`}
     </div>`;
   // empty set: one clear way forward instead of three greyed-out buttons

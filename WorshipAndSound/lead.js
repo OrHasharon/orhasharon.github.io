@@ -60,7 +60,7 @@ function renderLeadScreen() {
       <p class="hint">את/ה מחובר/ת בתור <b dir="ltr">${esc(user?.email || "")}</b>${leaderName ? "" : ", ועדיין לא שובץ/ה מוביל/ה למפגש הזה"}.</p>`;
   } else {
     const list = items.length
-      ? `<ol class="lead-songs">${items.map((i) => `<li>${esc(i.songs.title)}${i.songs.song_key ? ` <small dir="ltr">${esc(i.songs.song_key)}</small>` : ""}${i.notes ? ` <small>📝 ${esc(i.notes)}</small>` : ""}</li>`).join("")}</ol>`
+      ? `<ol class="lead-songs">${items.map((i) => `<li>${esc(i.songs.title)}${i.songs.song_key ? ` <small dir="ltr">${esc(keyName(i.songs.song_key))}</small>` : ""}${i.notes ? ` <small>📝 ${esc(i.notes)}</small>` : ""}</li>`).join("")}</ol>`
       : `<p class="lead-empty">הסט עדיין ריק. כדאי להזין את השירים כבר עכשיו, כדי שהצוות יוכל להתכונן 🙏</p>`;
     const add = mine ? `
       <label class="field lead-add">הוספת שיר
@@ -94,7 +94,7 @@ function renderLeadHits() {
   const inSet = new Set(itemsFor(lead.date).map((i) => i.song_id));
   const hits = q && songsState.loaded ? songsState.list.filter((s) => s.title.includes(q) && !inSet.has(s.id)).slice(0, 8) : [];
   box.innerHTML = !q ? "" : hits.length
-    ? `<ul class="lead-hits">${hits.map((s) => `<li><button class="link-btn" data-lead-add="${s.id}">➕ ${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(s.song_key)}</small>` : ""}</button></li>`).join("")}</ul>`
+    ? `<ul class="lead-hits">${hits.map((s) => `<li><button class="link-btn" data-lead-add="${s.id}">➕ ${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(keyName(s.song_key))}</small>` : ""}</button></li>`).join("")}</ul>`
     : `<p class="hint">לא נמצא שיר בשם הזה. שירים חדשים מוסיפים בלשונית "שירים" באתר המלא.</p>`;
 }
 

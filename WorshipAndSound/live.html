@@ -34,7 +34,7 @@
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   </script>
   <script src="repairs.js?v=2"></script>
-  <script src="chords.js?v=16"></script>
+  <script src="chords.js?v=17"></script>
   <script>
     // Guest view of a live set: no account, sees only this set, follows the leader (songs come from the leader's phone).
     const sb = window.supabase.createClient(SB, KEY, { db: { schema: "or_hasharon_worship" } });
@@ -70,7 +70,7 @@
           <div class="live-row">
             <span class="live-pos">${g.idx + 1}/${g.songs.length}</span>
             <strong class="live-title">${esc(showTitle(s.title))}</strong>
-            <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${g.myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}${g.shifts[s.id] && base ? `<small class="live-shifted"> · מקורי <b dir="ltr">${esc(base)}</b></small>` : ""}</span>
+            <span class="live-key">סולם <b dir="ltr">${esc(keyName(key))}</b>${shapes ? `<small> · קאפו ${g.myCapo}: <b dir="ltr">${esc(keyName(shapes))}</b></small>` : ""}${g.shifts[s.id] && base ? `<small class="live-shifted"> · מקורי <b dir="ltr">${esc(keyName(base))}</b></small>` : ""}</span>
           </div>
           ${s.notes ? `<div class="live-note">📝 ${esc(s.notes)}</div>` : ""}
           <div class="live-row live-quick">

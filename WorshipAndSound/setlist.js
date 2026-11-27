@@ -55,7 +55,7 @@ function renderSetlistDialog() {
         <div class="sl-row">
           <span class="sl-num">${k + 1}</span>
           <button class="sl-title" data-open-song="${it.song_id}">${esc(it.songs?.title || "שיר שנמחק")}</button>
-          ${it.songs?.song_key ? `<small dir="ltr">${esc(it.songs.song_key)}</small>` : ""}
+          ${it.songs?.song_key ? `<small dir="ltr">${esc(keyName(it.songs.song_key))}</small>` : ""}
           <span class="sl-tools">
             <button data-sl-move="${it.id}" data-dir="-1" ${k === 0 ? "disabled" : ""} title="למעלה">▲</button>
             <button data-sl-move="${it.id}" data-dir="1" ${k === items.length - 1 ? "disabled" : ""} title="למטה">▼</button>
@@ -100,7 +100,7 @@ function renderSlHits() {
   const inSet = new Set(itemsFor(setlist.openDate).map((i) => i.song_id));
   const hits = songsState.list.filter((s) => !inSet.has(s.id) && plainTitle(s.title).includes(q)).slice(0, 8);
   box.innerHTML = hits.length
-    ? `<ul class="sl-hits">${hits.map((s) => `<li><button class="link-btn" data-sl-quickadd="${s.id}">➕ ${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(s.song_key)}</small>` : ""}</button></li>`).join("")}</ul>`
+    ? `<ul class="sl-hits">${hits.map((s) => `<li><button class="link-btn" data-sl-quickadd="${s.id}">➕ ${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(keyName(s.song_key))}</small>` : ""}</button></li>`).join("")}</ul>`
     : `<p class="hint">לא נמצא שיר בשם הזה. שיר חדש מוסיפים בלשונית "שירים" ← "+ שיר חדש".</p>`;
 }
 document.addEventListener("input", (e) => {
@@ -521,7 +521,7 @@ function printSongs(iso) {
   book.innerHTML = items.map((it, k) => {
     const s = it.songs, meta = songMeta(s.content);
     const key = s.song_key || firstChord(s.content);
-    const info = [key && `סולם <b dir="ltr">${esc(key)}</b>`, Number(meta.capo) && `קאפו ${Number(meta.capo)}`].filter(Boolean).join(" · ");
+    const info = [key && `סולם <b dir="ltr">${esc(keyName(key))}</b>`, Number(meta.capo) && `קאפו ${Number(meta.capo)}`].filter(Boolean).join(" · ");
     return `<section class="pb-song">
       <div class="pb-head"><span class="pb-num">${k + 1}</span><h2 class="song-title">${esc(showTitle(s.title))}</h2></div>
       ${meta.artist ? `<p class="song-artist">${esc(meta.artist)}</p>` : ""}
@@ -601,7 +601,7 @@ function renderLive() {
       <div class="live-row">
         <span class="live-pos">${live.idx + 1}/${items.length}</span>
         <strong class="live-title">${esc(showTitle(song.title))}</strong>
-        <span class="live-key">סולם <b dir="ltr">${esc(key)}</b>${shapes ? `<small> · קאפו ${myCapo}: <b dir="ltr">${esc(shapes)}</b></small>` : ""}${live.shift[it.id] && base ? `<small class="live-shifted"> · מקורי <b dir="ltr">${esc(base)}</b></small>` : ""}</span>
+        <span class="live-key">סולם <b dir="ltr">${esc(keyName(key))}</b>${shapes ? `<small> · קאפו ${myCapo}: <b dir="ltr">${esc(keyName(shapes))}</b></small>` : ""}${live.shift[it.id] && base ? `<small class="live-shifted"> · מקורי <b dir="ltr">${esc(keyName(base))}</b></small>` : ""}</span>
         <button class="tool live-exit" data-live="exit" aria-label="יציאה ממצב הלל" title="יציאה">✕</button>
       </div>
       ${it.notes ? `<div class="live-note">📝 ${esc(it.notes)}</div>` : ""}
@@ -635,7 +635,7 @@ function shiftWarnHtml(items) {
   if (!live.shiftWarn || !moved.length || syncLocksKey()) return "";
   const list = moved.map((i) => {
     const base = i.songs.song_key || firstChord(i.songs.content || ""), n = live.shift[i.id];
-    return `${esc(i.songs.title)}: ${base ? `<b dir="ltr">${esc(transposeChord(base, n, prefersFlats(base, n)))}</b> במקום <b dir="ltr">${esc(base)}</b>` : `${n > 0 ? "+" : "−"}${n * n === 1 ? "½" : Math.abs(n) / 2} טון`}`;
+    return `${esc(i.songs.title)}: ${base ? `<b dir="ltr">${esc(keyName(transposeChord(base, n, prefersFlats(base, n))))}</b> במקום <b dir="ltr">${esc(keyName(base))}</b>` : `${n > 0 ? "+" : "−"}${n * n === 1 ? "½" : Math.abs(n) / 2} טון`}`;
   }).join(" · ");
   return `<div class="live-away live-shift-warn">⚠ לא בסולם המקורי (נשמר מפתיחה קודמת): ${list}
     <button class="tool" data-live="shiftreset">הכל לסולם המקורי</button><button class="tool" data-live="shiftkeep">להשאיר</button></div>`;

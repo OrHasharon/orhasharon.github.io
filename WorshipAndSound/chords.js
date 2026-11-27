@@ -107,6 +107,12 @@ function songMeta(content) {
   return meta;
 }
 
+// A key is shown as its major (Uriya: "there are no such keys" — Em is G, Dm is F, F#m is A, C#m is E): a minor key is
+// named after its relative major, three semitones up. Only the label changes; the chords stay as they are.
+const RELATIVE_MAJOR = { Am: "C", Em: "G", Bm: "D", "F#m": "A", "Gbm": "A", "C#m": "E", "Dbm": "E", "G#m": "B", "Abm": "B", "D#m": "F#", "Ebm": "Gb",
+  "A#m": "C#", "Bbm": "Db", Dm: "F", Gm: "Bb", Cm: "Eb", Fm: "Ab" };
+const keyName = (k) => { if (!k) return k; const m = String(k).trim().match(/^([A-G][#b]?m)(?!aj)/); return m && RELATIVE_MAJOR[m[1]] ? RELATIVE_MAJOR[m[1]] : k; };
+
 // A song saved broken by an old import is SHOWN in its clean form (repairs.js), on every page and for everyone,
 // whatever the database holds; the same for the chorus marks. Matched by the words + chords, so an edited song is shown
 // as it is.

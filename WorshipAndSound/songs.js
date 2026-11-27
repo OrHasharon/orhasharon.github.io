@@ -1222,7 +1222,7 @@ function renderSongView(el) {
     </div>
     <div class="song-toolbar no-print">
       <div class="tool-group" title="גודל טקסט"><button class="tool" data-scale="1">א+</button><button class="tool" data-scale="-1">א−</button></div>
-      <div class="tool-group" title="סולם">${key ? `<span class="tool-label">סולם <b dir="ltr">${esc(key)}</b></span>` : `<span class="tool-label">סולם</span>`}
+      <div class="tool-group" title="סולם">${key ? `<span class="tool-label">סולם <b dir="ltr">${esc(keyName(key))}</b></span>` : `<span class="tool-label">סולם</span>`}
         <button class="tool" data-shift="-1" title="חצי טון למטה">−½</button><button class="tool" data-shift="1" title="חצי טון למעלה">+½</button>
         ${songsState.shift ? `<button class="tool link" data-shift="0">מקורי</button><button class="tool" data-save-key>שמירת הסולם</button>` : ""}</div>
       ${capo ? `<div class="tool-group"><span class="tool-label">קאפו ${capo}</span>
