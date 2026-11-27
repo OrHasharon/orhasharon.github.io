@@ -1038,7 +1038,7 @@ async function saveImported(drafts, fileName) {
   // older imports were saved as just the file name: match those by title, in order, so duplicates pair up 1:1
   const legacy = new Map();
   for (const x of [...songsState.list].sort((a, b) => a.id - b.id)) {
-    if (x.source && x.source.includes("#")) continue;
+    if (x.source !== fileName) continue; // only this file's own old rows (a file saved under a new name touches nothing)
     const t = x.title.trim();
     if (!legacy.has(t)) legacy.set(t, []);
     legacy.get(t).push(x);
@@ -1094,12 +1094,56 @@ function importReportHtml() {
   </div>`;
 }
 
+// A file with the same name as one already uploaded: overwrite it, or save it under another (editable) name.
+// Resolves to the name to save under, or null (skip this file).
+function freeName(name, taken) {
+  const m = name.match(/^(.*?)(\.[^.]+)?$/), base = m[1], ext = m[2] || "";
+  for (let n = 2; ; n++) { const c = `${base} (${n})${ext}`; if (!taken.has(c)) return c; }
+}
+function askSameName(name, taken) {
+  return new Promise((done) => {
+    let d = document.getElementById("same-name-dialog");
+    if (!d) { d = document.createElement("dialog"); d.id = "same-name-dialog"; d.className = "setlist-dialog"; document.body.append(d); }
+    d.innerHTML = `<form class="sl-box" method="dialog">
+      <h2>כבר יש קובץ בשם הזה</h2>
+      <p class="hint">הקובץ <b dir="auto">${esc(name)}</b> כבר הועלה. מה לעשות?</p>
+      <div class="sl-actions"><button class="btn" type="button" data-sn="over">לדרוס את הקובץ הקודם</button></div>
+      <p class="hint">שירים שנמצאים בסשן הלל לא משתנים גם אם דורסים.</p>
+      <label class="field">או להעלות כקובץ נפרד, בשם:
+        <input type="text" dir="auto" data-sn-name value="${esc(freeName(name, taken))}"></label>
+      <p class="hint sn-err" hidden></p>
+      <div class="sl-actions"><button class="btn ghost" type="button" data-sn="new">להעלות בשם הזה</button>
+        <button class="btn ghost" type="button" data-sn="skip">ביטול (לא להעלות)</button></div></form>`;
+    const finish = (v) => { d.onclick = null; d.oncancel = null; d.close(); done(v); };
+    d.oncancel = (e) => { e.preventDefault(); finish(null); };
+    d.onclick = (e) => {
+      const b = e.target.closest("[data-sn]"); if (!b) return;
+      if (b.dataset.sn === "over") return finish(name);
+      if (b.dataset.sn === "skip") return finish(null);
+      const v = d.querySelector("[data-sn-name]").value.trim(), err = d.querySelector(".sn-err");
+      if (!v) { err.textContent = "צריך לכתוב שם"; err.hidden = false; return; }
+      if (taken.has(v)) { err.textContent = v === name ? "זה אותו שם: כדי להחליף את הקובץ הקודם לחצו על 'לדרוס'" : "גם השם הזה כבר קיים, בחרו שם אחר"; err.hidden = false; return; }
+      finish(v);
+    };
+    d.showModal(); d.querySelector("[data-sn-name]").select();
+  });
+}
+
 async function importFiles(files) {
   if (!window.pdfjsLib) { toast("קורא ה-PDF לא נטען, נסו לרענן"); return; }
+  // same names first, before anything is read or saved
+  const taken = new Set(songsState.list.filter((s) => s.source).map((s) => s.source.split("#")[0]));
+  const named = [];
+  for (const file of files) {
+    const name = taken.has(file.name) ? await askSameName(file.name, taken) : file.name;
+    if (name === null) continue;
+    taken.add(name); named.push([file, name]);
+  }
+  if (!named.length) return;
   songsState.importing = true; songsState.report = []; renderSongs();
   // a big batch: one file at a time, the report grows as it goes
-  for (const file of files) {
-    const entry = { name: file.name, warnings: [], saved: [] };
+  for (const [file, saveAs] of named) {
+    const entry = { name: saveAs, warnings: [], saved: [] };
     songsState.report.push(entry);
     // files that can't hold songs we can read: say so, with what to do instead
     const unsupported = /\.(xlsx?|csv)$/i.test(file.name) ? "קובץ אקסל — אין בו שירים לקריאה (אם זו רשימת שירים / תוכן עניינים, האתר בונה רשימה משלו)"
@@ -1114,7 +1158,7 @@ async function importFiles(files) {
       else {
         entry.warnings = importChecks(drafts, pdfToSongs.pages || 1, pdfToSongs.book);
         if (pdfToSongs.ocr) entry.warnings.unshift("נקרא מתמונה בזיהוי טקסט: כדאי לעבור על המילים והאקורדים ולתקן בעריכה.");
-        Object.assign(entry, await saveImported(drafts, file.name));
+        Object.assign(entry, await saveImported(drafts, saveAs));
         if (entry.failed) entry.warnings.push("חלק מהשירים לא נשמרו (אין הרשאה, או בעיה בחיבור).");
         if (entry.kept) entry.warnings.push(`${entry.kept === 1 ? "שיר אחד שנמצא בסשן הלל נשאר" : entry.kept + " שירים שנמצאים בסשני הלל נשארו"} שם בגרסה הקודמת. כדי לקבל בסשן את הגרסה החדשה: להסיר את השיר מהסשן ולהוסיף אותו שוב.`);
       }
