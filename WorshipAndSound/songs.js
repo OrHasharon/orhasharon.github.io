@@ -404,14 +404,24 @@ async function docxPages(file) {
     for (const sec of (sections.length ? sections : [box])) {
       const pr = sec.getBoundingClientRect(), items = [];
       const walk = document.createTreeWalker(sec, NodeFilter.SHOW_TEXT);
+      let last = null, lastEnd = null; // the previous word and where it ended (node + offset), in the text's own order
       for (let n = walk.nextNode(); n; n = walk.nextNode()) {
         const size = parseFloat(getComputedStyle(n.parentElement).fontSize) || 12;
         for (const m of n.data.matchAll(/\S+/g)) {
-          const r = document.createRange(); r.setStart(n, m.index); r.setEnd(n, m.index + m[0].length);
+          // Word often keeps a vowel mark in a run of its own, right after its letter: those marks belong to the word
+          // before them (in the text's order), not to whatever letter is nearest on the page ("הַבָאּ")
+          const lead = (m[0].match(/^[֑-ׇ]+/) || [""])[0];
+          const touching = last && m.index === 0 && lastEnd && lastEnd.n !== n && lastEnd.end === lastEnd.n.data.length;
+          if (lead && touching) { last.str += lead; if (lead === m[0]) continue; }
+          const word = lead && touching ? m[0].slice(lead.length) : m[0], off = lead && touching ? lead.length : 0;
+          const r = document.createRange(); r.setStart(n, m.index + off); r.setEnd(n, m.index + m[0].length);
           const rect = r.getBoundingClientRect();
           if (!rect.width) continue;
-          items.push({ str: cleanStr(m[0]), x: rect.left - pr.left, y: pr.bottom - rect.bottom + size * 0.2, w: rect.width, h: size });
+          last = { str: cleanStr(word), x: rect.left - pr.left, y: pr.bottom - rect.bottom + size * 0.2, w: rect.width, h: size };
+          items.push(last);
+          lastEnd = { n, end: m.index + m[0].length };
         }
+        if (/\s$/.test(n.data)) lastEnd = null; // a space ends the word
       }
       pages.push({ items, width: pr.width || 1000 });
     }
@@ -458,6 +468,7 @@ async function pdfToSongs(file) {
   const songs = [];
   let totalText = 0;
   pdfToSongs.ocr = src.some((pg) => pg.ocr);
+  pdfToSongs.word = isDocxFile(file); // a Word file keeps each letter's marks in order (toLine)
   const all = []; // every line of the document, in reading order
   for (let p = 1; p <= src.length; p++) {
     const { items, width } = src[p - 1];
@@ -775,7 +786,12 @@ function toLine(l) {
     chars.forEach((ch) => {
       if (IS_MARK.test(ch)) {
         const prev = kept[kept.length - 1];
-        if (prev && !IS_MARK.test(prev) && prev !== " ") kept += ch; // a proper mark after its letter
+        // a mark after its letter, or after another mark of the same letter (בָּ = ב + kamatz + dagesh: the second mark
+        // used to float off and land on the next letter, "הַבָאּ")
+        // (in a Word file only: there the text keeps each letter's marks in order. In a PDF the marks come in the
+        // order they sit on the page, so a mark after a mark may belong to another letter — the old rule stays there)
+        const base = kept.replace(/[֑-ׇ]+$/, "").slice(-1);
+        if (prev && (pdfToSongs.word ? base && base !== " " : !IS_MARK.test(prev) && prev !== " ")) kept += ch;
         else floating.push({ ch, x: rtl ? it.x + it.w - (seen + 0.5) * lw : it.x + (seen + 0.5) * lw });
       } else { kept += ch; seen++; }
     });
@@ -824,11 +840,16 @@ function toLine(l) {
     pos.splice(best, 0, ...ins.map(() => pos[Math.max(0, best - 1)] ?? tl.x));
   }
   // hang the floating marks on the nearest letter (after any marks it already has)
+  // a vowel never lands on a letter that already has one (a letter takes one vowel): it goes to the nearest letter
+  // that is still free — the second vowel on one letter is what made words like "בּרָ וְּך"
+  const VOWEL = /[ְ-ׇֻ]/;
+  const hasVowel = (i) => { for (let j = i + 1; j < text.length && IS_MARK.test(text[j]); j++) if (VOWEL.test(text[j])) return true; return false; };
   for (const m of floating.sort((a, b) => b.x - a.x)) {
     let best = -1, bestD = Infinity;
+    const vowel = VOWEL.test(m.ch);
     for (let i = 0; i < text.length; i++) {
       if (IS_MARK.test(text[i]) || text[i] === " ") continue;
-      const d = Math.abs(pos[i] - m.x);
+      const d = Math.abs(pos[i] - m.x) + (vowel && hasVowel(i) ? 1e6 : 0);
       if (d < bestD) { bestD = d; best = i; }
     }
     if (best < 0) continue;
