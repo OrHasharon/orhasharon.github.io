@@ -370,7 +370,7 @@ async function loadDbTexts() {
       S.dbPassages = ps.length ? ps : null;
     }
     await loadParashaDeck(own?.parasha_file_path || "");
-    const c = data.find((r) => (r.communion_verse || "").trim());
+    const c = own && (own.communion_verse || "").trim() ? own : null; // this meeting's own verse only (no carry-over)
     S.dbCommunion = c ? { verse: c.communion_verse, ref: c.communion_ref || "" } : null;
     buildDeck(); show();
   } catch {}

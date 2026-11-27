@@ -148,10 +148,11 @@ function ptPrayersHtml(iso, can, open) {
 }
 
 // ---------- the week's parasha + the Lord's Supper verse (table meeting_texts, meeting_texts.sql) ----------
-// The parasha belongs to its own meeting; the Supper verse carries on to later meetings until someone changes it.
+// Both belong to their own meeting (Uriya, 27.11: after the Shabbat meeting the next one starts empty; the Supper verse
+// used to carry on to later meetings, and deleting it there didn't remove it).
 const TEXT_FIELDS = ["parasha", "parasha_refs", "reading_ref", "reading", "communion_verse", "communion_ref"];
 const textsRow = (iso) => PT.texts.find((r) => r.meeting_date === iso) || null;
-const communionRow = (iso) => [...PT.texts].reverse().find((r) => r.meeting_date <= iso && (r.communion_verse || "").trim()) || null;
+const communionRow = (iso) => { const r = textsRow(iso); return r && (r.communion_verse || "").trim() ? r : null; };
 async function meetingTextsFor(iso) {
   if (!PT.loaded) await ptLoad().catch(() => {});
   const r = textsRow(iso) || {}, c = communionRow(iso) || {};
