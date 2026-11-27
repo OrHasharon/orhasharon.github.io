@@ -1,7 +1,17 @@
 // Songs tab: chord-sheet library (ChordPro-style "[Am]lyrics"), PDF import, transpose. Uses sb/esc/toast/$ from ws.js and the chord helpers from chords.js.
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-const songsState = { loaded: false, list: [], query: "", view: "list", current: null, shift: 0, noCapo: false, present: false, presentChords: false, drafts: [], importing: false };
+// A song that sits in a hallel session is never changed or deleted by a re-upload / file delete: the session keeps
+// its copy (source marked SESSION_COPY, hidden from the library) and the library gets the new version.
+// To get the new version into a session: remove the song from the session and add it again.
+const SESSION_COPY = "session-copy:";
+const isSessionCopy = (s) => (s.source || "").startsWith(SESSION_COPY);
+async function songsInSessions() {
+  const { data, error } = await sb.from("setlist_items").select("song_id");
+  if (error) throw error;
+  return new Set(data.map((r) => r.song_id));
+}
+const songsState = { loaded: false, list: [], all: [], query: "", view: "list", current: null, shift: 0, noCapo: false, present: false, presentChords: false, drafts: [], importing: false };
 let songScale = 1;
 try { songScale = Number(localStorage.getItem("ws-song-scale")) || 1; } catch {}
 
@@ -1011,10 +1021,11 @@ async function loadSongs() {
   if (error) {
     songsState.missing = error.code === "PGRST205" || error.code === "42P01";
     if (!songsState.missing) toast("טעינת השירים נכשלה");
-    songsState.loaded = true; songsState.list = [];
+    songsState.loaded = true; songsState.list = []; songsState.all = [];
     return;
   }
-  songsState.list = data;
+  songsState.all = data;
+  songsState.list = data.filter((s) => !isSessionCopy(s));
   songsState.loaded = true;
 }
 
@@ -1032,17 +1043,27 @@ async function saveImported(drafts, fileName) {
     if (!legacy.has(t)) legacy.set(t, []);
     legacy.get(t).push(x);
   }
-  const fresh = [], updates = [];
+  const used = await songsInSessions(); // can't tell which songs are in sessions -> throws, nothing is touched
+  // session copies that no session uses any more: clean up (best effort)
+  const orphans = songsState.all.filter((s) => isSessionCopy(s) && !used.has(s.id)).map((s) => s.id);
+  if (orphans.length) await sb.from("songs").delete().in("id", orphans);
+  const fresh = [], updates = [], freeze = [];
   for (const d of drafts) {
     const row = { title: d.title.trim(), content: d.content, song_key: firstChord(d.content), source: key(d) || fileName, updated_at: new Date().toISOString() };
     if (!row.title || !row.content.trim()) continue;
     const old = (key(d) && bySource.get(key(d))) || legacy.get(row.title)?.shift() || legacy.get((d.baseTitle || "").trim())?.shift();
-    if (old) updates.push(sb.from("songs").update(row).eq("id", old.id)); else fresh.push(row);
+    if (!old) fresh.push(row);
+    else if (used.has(old.id) && (old.content !== row.content || old.title.trim() !== row.title)) freeze.push([old, row]);
+    else updates.push(sb.from("songs").update(row).eq("id", old.id));
   }
+  // in a session and changed: the session keeps the old row (marked as its copy), the library gets a new row
+  const frozen = await Promise.all(freeze.map(([old]) => sb.from("songs").update({ source: SESSION_COPY + (old.source || fileName) }).eq("id", old.id).select("id")));
+  let failed = 0, kept = 0;
+  frozen.forEach((r, n) => { if (r.error || !r.data?.length) failed++; else { kept++; fresh.push(freeze[n][1]); } });
   const results = await Promise.all([fresh.length ? sb.from("songs").insert(fresh).select("id, title") : { error: null, data: [] }, ...updates]);
-  const failed = results.filter((r) => r.error).length;
+  failed += results.filter((r) => r.error).length;
   const saved = [...(results[0].data || []), ...results.slice(1).flatMap((r) => r.data || [])];
-  return { added: fresh.length, updated: updates.length, failed, saved };
+  return { added: fresh.length - kept, updated: updates.length + kept, failed, saved, kept };
 }
 
 // ---------- import report: what came in from each file, and anything that looks wrong ----------
@@ -1095,6 +1116,7 @@ async function importFiles(files) {
         if (pdfToSongs.ocr) entry.warnings.unshift("נקרא מתמונה בזיהוי טקסט: כדאי לעבור על המילים והאקורדים ולתקן בעריכה.");
         Object.assign(entry, await saveImported(drafts, file.name));
         if (entry.failed) entry.warnings.push("חלק מהשירים לא נשמרו (אין הרשאה, או בעיה בחיבור).");
+        if (entry.kept) entry.warnings.push(`${entry.kept === 1 ? "שיר אחד שנמצא בסשן הלל נשאר" : entry.kept + " שירים שנמצאים בסשני הלל נשארו"} שם בגרסה הקודמת. כדי לקבל בסשן את הגרסה החדשה: להסיר את השיר מהסשן ולהוסיף אותו שוב.`);
       }
     } catch (err) { console.error(err); entry.error = "קריאת הקובץ נכשלה (הקובץ פגום, או שזה לא PDF / Word / תמונה)"; }
     renderSongs(); // the report grows file by file
@@ -1155,7 +1177,7 @@ function stripCapoLines(s) {
 }
 
 // the file a song was imported from ("Wb.pdf#267" → "Wb.pdf · 267"); typed-in songs show nothing
-const sourceOf = (s) => { if (!s.source) return ""; const [f, n] = s.source.split("#"); return n ? `${f} · ${n}` : f; };
+const sourceOf = (s) => { if (!s.source) return ""; const [f, n] = s.source.replace(SESSION_COPY, "").split("#"); return n ? `${f} · ${n}` : f; };
 const sourceHtml = (s) => s.source ? `<small class="song-src" dir="auto">📄 ${esc(sourceOf(s))}</small>` : "";
 const sameName = (s) => songsState.list.filter((x) => x.title.trim() === s.title.trim()).length > 1;
 const firstLine = (s) => (s.content.split("\n").map((l) => l.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").trim()).find((l) => /[\u05D0-\u05EAa-zA-Z]{2}/.test(l.replace(/[\u0591-\u05C7]/g, ""))) || "").split(/[,.;:!?]/)[0].trim().slice(0, 40);
@@ -1315,13 +1337,25 @@ document.addEventListener("click", async (e) => {
     const btn = t.closest("[data-del-file]"), name = btn.dataset.delFile, by = (btn.dataset.delBy || "").toLowerCase();
     const mine = songsState.list.filter((s) => (s.source || "").split("#")[0] === name && (s.added_by || "").toLowerCase() === by && canDelete(s));
     if (!confirm(`למחוק את הקובץ "${name}" ואת ${mine.length} השירים שלו?`)) return;
-    const { data, error } = await sb.from("songs").delete().in("id", mine.map((s) => s.id)).select("id");
-    if (error) { toast("המחיקה נכשלה"); return; }
-    if (!data?.length) { toast("אין הרשאה למחוק את הקובץ הזה (צריך להריץ את songs_admin_delete.sql)", { error: true }); return; }
-    toast("הקובץ נמחק"); await loadSongs(); renderSongs(); return;
+    let used; try { used = await songsInSessions(); } catch { toast("המחיקה נכשלה (לא הצלחתי לבדוק אילו שירים בסשנים)"); return; }
+    const keep = mine.filter((s) => used.has(s.id)), gone = mine.filter((s) => !used.has(s.id));
+    const [del, ...kept] = await Promise.all([
+      gone.length ? sb.from("songs").delete().in("id", gone.map((s) => s.id)).select("id") : { data: [], error: null },
+      ...keep.map((s) => sb.from("songs").update({ source: SESSION_COPY + s.source }).eq("id", s.id).select("id"))]);
+    if (del.error || kept.some((r) => r.error)) { toast("המחיקה נכשלה"); await loadSongs(); renderSongs(); return; }
+    if (gone.length && !del.data?.length) { toast("אין הרשאה למחוק את הקובץ הזה (צריך להריץ את songs_admin_delete.sql)", { error: true }); return; }
+    toast(keep.length ? `הקובץ נמחק. ${keep.length === 1 ? "שיר אחד שנמצא בסשן הלל נשאר" : keep.length + " שירים שנמצאים בסשני הלל נשארו"} בסשן.` : "הקובץ נמחק");
+    await loadSongs(); renderSongs(); return;
   }
   if (t.closest("[data-song-delete]")) {
     if (!confirm(`למחוק את "${songsState.current.title}"?`)) return;
+    let used; try { used = await songsInSessions(); } catch { toast("המחיקה נכשלה"); return; }
+    if (used.has(songsState.current.id)) { // in a session: hide it from the library, the session keeps it
+      const cur = songsState.current;
+      const { data, error } = isSessionCopy(cur) ? { data: [1] } : await sb.from("songs").update({ source: SESSION_COPY + (cur.source || "") }).eq("id", cur.id).select("id");
+      if (error || !data?.length) { toast("המחיקה נכשלה"); return; }
+      toast("השיר הוסר מרשימת השירים, ונשאר בסשן ההלל שבו הוא נמצא"); songsState.current = null; songsState.view = "list"; await loadSongs(); renderSongs(); return;
+    }
     const { data, error } = await sb.from("songs").delete().eq("id", songsState.current.id).select("id");
     if (error) { toast("המחיקה נכשלה"); return; }
     if (!data?.length) { toast("אין הרשאה למחוק את השיר הזה", { error: true }); return; }
