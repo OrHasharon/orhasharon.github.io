@@ -100,7 +100,7 @@ function fixNiqqud(text) {
 // ---------- render ChordPro ----------
 // directives: {capo: 2} {artist: ...}; a line that is only {…} is a section label, e.g. {פזמון}
 // {screen: quiet} — on the projection screen this item is its title alone, on a quiet dark background (סעודת האדון)
-const META_RE = /^\{\s*(capo|artist|key|screen)\s*:\s*(.*?)\s*\}$/i;
+const META_RE = /^\{\s*(capo|artist|key|screen|order)\s*:\s*(.*?)\s*\}$/i;
 function songMeta(content) {
   const meta = {};
   for (const line of content.split("\n")) { const m = line.trim().match(META_RE); if (m) meta[m[1].toLowerCase()] = m[2]; }
@@ -122,10 +122,13 @@ function repaired(content) {
   if (repairing || typeof SONG_REPAIRS === "undefined" || !content || content.indexOf("\n") < 0) return content;
   if (!repairMap) {
     repairMap = new Map(SONG_REPAIRS.map((f) => [repairSig(f.content), f.content]));
-    repairMap.marks = new Map((typeof CHORUS_SIGS !== "undefined" ? CHORUS_SIGS : []).map((m) => [m.sig, m.k]));
+    repairMap.marks = new Map((typeof CHORUS_SIGS !== "undefined" ? CHORUS_SIGS : []).filter((m) => m.k != null).map((m) => [m.sig, m.k]));
+    repairMap.orders = new Map((typeof CHORUS_SIGS !== "undefined" ? CHORUS_SIGS : []).filter((m) => m.order).map((m) => [m.sig, m.order]));
   }
   const s = repairSig(content);
   let out = repairMap.get(s) || content;
+  const order = repairMap.orders.get(s);
+  if (order && !/^\s*\{\s*order\s*:/im.test(out)) out = `{order: ${order}}\n` + out;
   const k = repairMap.marks.get(s);
   if (k != null && !/^\s*\{\s*(פזמון|chorus|refrain)/im.test(out)) {
     repairing = true;
@@ -227,7 +230,7 @@ function lyricStanzas(content) {
   for (const raw0 of content.split("\n")) {
     const raw = /^\s*\{.*\}\s*$/.test(raw0) ? raw0 : withVav(raw0);
     const t = raw.trim();
-    if (/^\{\s*(capo|artist|key|screen|c|comment)\s*:/i.test(t)) continue; // settings and notes are not on the slides
+    if (/^\{\s*(capo|artist|key|screen|order|c|comment)\s*:/i.test(t)) continue; // settings and notes are not on the slides
     const label = t.match(/^\{(.+)\}$/);
     if (label) { if (stanzas[stanzas.length - 1].lines.length) stanzas.push({ label: "", lines: [] }); stanzas[stanzas.length - 1].label = label[1]; continue; }
     // repeat marks ("X2", "2X", "(x3)", "\u00D72") are for the band, not for the screen
@@ -263,6 +266,13 @@ function slideStanzas(content, title = "") {
   }
   // on the slides a line never ends with a comma (Uriya) — an ellipsis stays
   for (const st of out) st.lines = st.lines.map((l) => l.replace(/(?<!\.)[,;.،]\s*$/, ""));
+  // {order: 1 2 3 2 4} — the song's exact running order by section number (a song no rule gets right)
+  const om = repaired(content).match(/^\s*\{\s*order\s*:\s*([\d\s,]+)\}\s*$/im);
+  if (om) {
+    const seen = new Set();
+    return om[1].split(/[\s,]+/).filter(Boolean).map((n) => out[Number(n) - 1]).filter(Boolean)
+      .map((st) => { const again = seen.has(st); seen.add(st); return again ? { ...st, lines: [...st.lines], again: true } : st; });
+  }
   return withChorus(out, title);
 }
 
