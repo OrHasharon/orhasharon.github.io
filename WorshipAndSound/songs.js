@@ -1206,6 +1206,10 @@ function renderSongView(el) {
         <button class="tool" data-print title="הדפסה">🖨️</button>
         <button class="tool" data-present title="מצגת">📽️ מצגת</button>
         <button class="tool" data-song-edit>עריכה</button></div>
+      ${(() => { const secs = songSections(s.content); if (secs.length < 2) return "";
+        const cur = secs.findIndex((x) => x.chorus);
+        return `<div class="tool-group" title="איזה חלק הוא הפזמון: הוא חוזר במצגת אחרי כל חלק שבא אחריו"><label class="tool-label">🔁 פזמון
+          <select data-chorus-pick><option value="-1"${cur < 0 ? " selected" : ""}>אוטומטי</option>${secs.map((x, i) => `<option value="${i}"${i === cur ? " selected" : ""}>${esc(x.first.replace(/[\u0591-\u05C7]/g, "").slice(0, 32))}</option>`).join("")}</select></label></div>`; })()}
     </div>
     ${songsState.present ? `<div class="present-bar"><button class="tool" data-present-chords>${songsState.presentChords ? "הסתרת אקורדים" : "הצגת אקורדים"}</button>
       <button class="tool" data-scale="1">א+</button><button class="tool" data-scale="-1">א−</button><button class="tool" data-present>יציאה</button></div>` : ""}
@@ -1314,6 +1318,17 @@ document.addEventListener("click", async (e) => {
 });
 
 document.addEventListener("change", async (e) => {
+  const cp = e.target.closest?.("[data-chorus-pick]");
+  if (cp && songsState.current) {
+    const cur = songsState.current, content = setChorus(cur.content, Number(cp.value));
+    if (content === cur.content) return;
+    const { error } = await sb.from("songs").update({ content, updated_at: new Date().toISOString() }).eq("id", cur.id);
+    if (error) { toast("השמירה נכשלה", { error: true }); renderSongs(); return; }
+    cur.content = content;
+    const row = songsState.list.find((x) => x.id === cur.id); if (row) row.content = content;
+    toast(Number(cp.value) < 0 ? "הפזמון: אוטומטי" : "הפזמון נשמר · הוא יחזור במצגת אחרי כל חלק שבא אחריו");
+    renderSongs(); return;
+  }
   const t = e.target;
   if (t.id === "pdf-file" && t.files.length) { const files = [...t.files]; t.value = ""; await importFiles(files); return; }
   if (t.matches("[data-draft-inc]")) { songsState.drafts[t.dataset.draftInc].include = t.checked; const b = document.querySelector("[data-import-save]"); if (b) b.textContent = `שמירת ${songsState.drafts.filter((s) => s.include).length} שירים`; }

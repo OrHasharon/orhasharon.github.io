@@ -260,6 +260,28 @@ function chorusIndex(st, title) {
   }
   return st[0]?.repeat && st.length >= 3 ? 0 : -1;
 }
+// The song's sections as the song page lists them, each with the line index where it starts in the text.
+function songSections(content) {
+  const raw = content.split("\n"), st = lyricStanzas(content), out = [];
+  let j = 0;
+  for (const s of st) {
+    while (j < raw.length && (lyricStanzas(raw[j])[0]?.lines[0] || null) !== s.lines[0]) j++;
+    if (j >= raw.length) break;
+    out.push({ first: s.lines[0], line: j, chorus: CHORUS_LABEL.test((s.label || "").trim()) });
+    j++;
+  }
+  return out;
+}
+function setChorus(content, k) {
+  const keep = content.split("\n").filter((l) => !/^\s*\{\s*(פזמון|chorus|refrain)[^}]*\}\s*$/i.test(l)).join("\n");
+  if (k < 0) return keep;
+  const sec = songSections(keep)[k];
+  if (!sec) return keep;
+  const lines = keep.split("\n");
+  lines.splice(sec.line, 0, "{פזמון}");
+  return lines.join("\n");
+}
+
 function withChorus(st, title) {
   if (st.length < 2) return st;
   const c = chorusIndex(st, title);
@@ -275,7 +297,8 @@ function withChorus(st, title) {
   st.forEach((x, i) => {
     out.push(x);
     const nextContinues = tail[i] && i + 1 < st.length && tail[i + 1] && !(st[i + 1].label || "").trim();
-    if (i !== c && i + 1 !== c && !nextContinues) out.push({ ...st[c], lines: [...st[c].lines], again: true });
+    // after the chorus's first place only: what comes before it is sung as written (Uriya: "מה אשיב", "בואו ונשוב")
+    if (i > c && !nextContinues) out.push({ ...st[c], lines: [...st[c].lines], again: true });
   });
   return out;
 }
