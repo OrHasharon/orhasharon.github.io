@@ -973,6 +973,32 @@ function mergeChordLines(lines) {
 }
 
 // ---------- data ----------
+// the one-time repairs of repairs.js, run once per page by a signed-in admin (ws.js)
+async function applyRepairs() {
+  if (applyRepairs.done || typeof SONG_REPAIRS === "undefined") return;
+  applyRepairs.done = true;
+  const sig = (t) => t.replace(/\[[^\]]*\]/g, "").replace(/[\s\u0591-\u05C7]/g, "") + "|" + [...t.matchAll(/\[([^\]]*)\]/g)].map((m) => m[1]).join(" ");
+  const heb = (t) => (t || "").replace(/[^א-ת]/g, "");
+  const ids = [...new Set([...SONG_REPAIRS.map((r) => r.id), ...CHORUS_MARKS.map((r) => r.id)])];
+  const { data, error } = await sb.from("songs").select("id, title, content").in("id", ids);
+  if (error || !data) return;
+  let n = 0;
+  for (const row of data) {
+    let { content, title } = row;
+    const fix = SONG_REPAIRS.find((f) => f.id === row.id);
+    if (fix && content !== fix.content && sig(content) === sig(fix.content)) {
+      content = fix.content;
+      if (fix.title && heb(fix.title) === heb(title)) title = fix.title;
+    }
+    const mark = CHORUS_MARKS.find((m) => m.id === row.id);
+    if (mark && !songSections(content).some((s) => s.chorus)) content = setChorus(content, mark.k);
+    if (content === row.content && title === row.title) continue;
+    const { error: e } = await sb.from("songs").update({ content, title, updated_at: new Date().toISOString() }).eq("id", row.id);
+    if (!e) n++;
+  }
+  if (n) { toast(`תוקנו ${n} שירים`); if (songsState.loaded) { await loadSongs(); if (state.tab === "songs") renderSongs(); } }
+}
+
 async function loadSongs() {
   // the server returns at most 1000 rows per request: read page by page
   let data = [], error = null;
