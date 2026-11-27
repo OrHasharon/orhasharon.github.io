@@ -55,7 +55,7 @@ function renderSetlistDialog() {
         <div class="sl-row">
           <span class="sl-num">${k + 1}</span>
           <button class="sl-title" data-open-song="${it.song_id}">${esc(it.songs?.title || "שיר שנמחק")}</button>
-          ${it.songs?.song_key ? `<small dir="ltr">${esc(keyName(it.songs.song_key))}</small>` : ""}
+          ${it.songs && songKeyOf(it.songs) ? `<small dir="ltr">${esc(keyName(songKeyOf(it.songs)))}</small>` : ""}
           <span class="sl-tools">
             <button data-sl-move="${it.id}" data-dir="-1" ${k === 0 ? "disabled" : ""} title="למעלה">▲</button>
             <button data-sl-move="${it.id}" data-dir="1" ${k === items.length - 1 ? "disabled" : ""} title="למטה">▼</button>
@@ -100,7 +100,7 @@ function renderSlHits() {
   const inSet = new Set(itemsFor(setlist.openDate).map((i) => i.song_id));
   const hits = songsState.list.filter((s) => !inSet.has(s.id) && plainTitle(s.title).includes(q)).slice(0, 8);
   box.innerHTML = hits.length
-    ? `<ul class="sl-hits">${hits.map((s) => `<li><button class="link-btn" data-sl-quickadd="${s.id}">➕ ${esc(s.title)}${s.song_key ? ` <small dir="ltr">${esc(keyName(s.song_key))}</small>` : ""}</button></li>`).join("")}</ul>`
+    ? `<ul class="sl-hits">${hits.map((s) => `<li><button class="link-btn" data-sl-quickadd="${s.id}">➕ ${esc(s.title)}${songKeyOf(s) ? ` <small dir="ltr">${esc(keyName(songKeyOf(s)))}</small>` : ""}</button></li>`).join("")}</ul>`
     : `<p class="hint">לא נמצא שיר בשם הזה. שיר חדש מוסיפים בלשונית "שירים" ← "+ שיר חדש".</p>`;
 }
 document.addEventListener("input", (e) => {
@@ -520,7 +520,7 @@ function printSongs(iso) {
   book.id = "print-book";
   book.innerHTML = items.map((it, k) => {
     const s = it.songs, meta = songMeta(s.content);
-    const key = s.song_key || firstChord(s.content);
+    const key = songKeyOf(s);
     const info = [key && `סולם <b dir="ltr">${esc(keyName(key))}</b>`, Number(meta.capo) && `קאפו ${Number(meta.capo)}`].filter(Boolean).join(" · ");
     return `<section class="pb-song">
       <div class="pb-head"><span class="pb-num">${k + 1}</span><h2 class="song-title">${esc(showTitle(s.title))}</h2></div>
@@ -586,7 +586,7 @@ function renderLive() {
   const capo = Number(meta.capo) || 0;
   const myCapo = syncActive() ? live.myCapo || 0 : 0;
   const shift = (live.shift[it.id] || 0) + (live.noCapo[it.id] ? capo : 0) - myCapo;
-  const base = song.song_key || firstChord(song.content);
+  const base = songKeyOf(song);
   const key = base ? transposeChord(base, shift + myCapo, prefersFlats(base, shift + myCapo)) : "";          // the key everyone plays in
   const shapes = base && myCapo ? transposeChord(base, shift, prefersFlats(base, shift)) : "";       // what my fingers play with my capo
   const next = items[live.idx + 1];
@@ -634,7 +634,7 @@ function shiftWarnHtml(items) {
   const moved = items.filter((i) => live.shift[i.id]);
   if (!live.shiftWarn || !moved.length || syncLocksKey()) return "";
   const list = moved.map((i) => {
-    const base = i.songs.song_key || firstChord(i.songs.content || ""), n = live.shift[i.id];
+    const base = songKeyOf(i.songs), n = live.shift[i.id];
     return `${esc(i.songs.title)}: ${base ? `<b dir="ltr">${esc(keyName(transposeChord(base, n, prefersFlats(base, n))))}</b> במקום <b dir="ltr">${esc(keyName(base))}</b>` : `${n > 0 ? "+" : "−"}${n * n === 1 ? "½" : Math.abs(n) / 2} טון`}`;
   }).join(" · ");
   return `<div class="live-away live-shift-warn">⚠ לא בסולם המקורי (נשמר מפתיחה קודמת): ${list}

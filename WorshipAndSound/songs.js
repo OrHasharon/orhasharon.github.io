@@ -1212,7 +1212,7 @@ function renderSongView(el) {
   const meta = songMeta(s.content);
   const capo = Number(meta.capo) || 0;
   const shift = songsState.shift + (songsState.noCapo ? capo : 0); // without capo: sounding chords = shapes + capo
-  const baseKey = s.song_key || firstChord(s.content);
+  const baseKey = songKeyOf(s);
   const key = baseKey ? transposeChord(baseKey, shift, prefersFlats(baseKey, shift)) : null;
   el.innerHTML = `<div class="song-view${songsState.present ? " present" : ""}" style="--song-scale:${songScale}">
     <div class="song-top">

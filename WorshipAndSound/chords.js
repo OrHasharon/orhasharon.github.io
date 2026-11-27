@@ -107,6 +107,26 @@ function songMeta(content) {
   return meta;
 }
 
+// The song's key from ALL its chords (the stored key was just the first chord the import met): the major key whose
+// chords cover most of the song (I ii iii IV V vi, and III major — the dominant of the relative minor); ties go to
+// the key whose I / vi are used most, then to the one the song ends on. Named as a major (Uriya: Em is G).
+function detectKey(content) {
+  const chords = [...(content || "").matchAll(/\[([A-G][#b]?)(m(?!aj))?[^\]/]*(?:\/[^\]]*)?\]/g)].map((m) => ({ r: noteIndex(m[1]), minor: !!m[2] })).filter((c) => c.r >= 0);
+  if (!chords.length) return null;
+  const fits = (k, c) => { const d = (c.r - k + 12) % 12; return c.minor ? [2, 4, 9].includes(d) : [0, 5, 7, 4].includes(d); };
+  const last = chords[chords.length - 1];
+  let best = null;
+  for (let k = 0; k < 12; k++) {
+    const cover = chords.filter((c) => fits(k, c)).length;
+    const home = chords.filter((c) => (!c.minor && c.r === k) || (c.minor && c.r === (k + 9) % 12)).length;
+    const end = (!last.minor && last.r === k) || (last.minor && last.r === (k + 9) % 12) ? 1 : 0;
+    const score = cover * 1000 + home * 10 + end;
+    if (!best || score > best.score) best = { k, score };
+  }
+  return [5, 10, 3, 8, 1, 6].includes(best.k) ? FLATS[best.k] : SHARPS[best.k];
+}
+const songKeyOf = (s) => detectKey(s?.content || "") || s?.song_key || s?.key || firstChord(s?.content || "") || "";
+
 // A key is shown as its major (Uriya: "there are no such keys" — Em is G, Dm is F, F#m is A, C#m is E): a minor key is
 // named after its relative major, three semitones up. Only the label changes; the chords stay as they are.
 const RELATIVE_MAJOR = { Am: "C", Em: "G", Bm: "D", "F#m": "A", "Gbm": "A", "C#m": "E", "Dbm": "E", "G#m": "B", "Abm": "B", "D#m": "F#", "Ebm": "Gb",
@@ -266,6 +286,18 @@ function slideStanzas(content, title = "") {
   }
   // on the slides a line never ends with a comma (Uriya) — an ellipsis stays
   for (const st of out) st.lines = st.lines.map((l) => l.replace(/(?<!\.)[,;.،]\s*$/, ""));
+  // the audience sings the words, not the chords: a line that repeats an earlier line of the same section (or is the
+  // end of one — "אתהלך, לפני יהוה בארצות החיים") is shown once (the chords file writes it twice for the chords)
+  const wordsKey = (l) => l.replace(/[֑-ׇ]/g, "").replace(/[^א-תa-zA-Z0-9]+/g, "");
+  for (const st of out) {
+    const kept = [];
+    for (const l of st.lines) {
+      const k = wordsKey(l);
+      if (k && kept.some((x) => x.k === k || (k.length >= 8 && x.k.endsWith(k)))) continue;
+      kept.push({ l, k });
+    }
+    if (kept.length) st.lines = kept.map((x) => x.l);
+  }
   // {order: 1 2 3 2 4} — the song's exact running order by section number (a song no rule gets right)
   const om = repaired(content).match(/^\s*\{\s*order\s*:\s*([\d\s,]+)\}\s*$/im);
   if (om) {
