@@ -436,7 +436,7 @@ function renderUsers() {
     <div class="duty-table users-table"><table><thead><tr><th>מייל</th>${state.invitesReady ? "<th>טלפון</th><th>איש/אשת צוות</th>" : ""}<th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
     ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td>
       ${state.invitesReady ? `<td><input class="u-phone" type="tel" dir="ltr" data-u-phone="${esc(u.email)}" value="${esc(u.phone || "")}" placeholder="050-0000000"></td>
-      <td><select class="u-member" data-u-member="${esc(u.email)}"><option value="">—</option>${[...state.members].sort((a, b) => a.name.localeCompare(b.name, "he")).map((m) => `<option value="${m.id}"${m.id === u.member_id ? " selected" : ""}>${esc(m.name)}${isOutside(m) ? " (לא בצוות ההלל)" : ""}</option>`).join("")}<option value="__new">➕ שם חדש…</option></select></td>` : ""}
+      <td><select class="u-member" data-u-member="${esc(u.email)}"><option value="">—</option>${[...state.members].sort((a, b) => a.name.localeCompare(b.name, "he")).map((m) => `<option value="${m.id}"${m.id === u.member_id ? " selected" : ""}>${esc(m.name)}</option>`).join("")}<option value="__new">➕ שם חדש…</option></select></td>` : ""}
       <td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
       <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
     </tbody></table></div>
