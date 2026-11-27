@@ -107,7 +107,29 @@ function songMeta(content) {
   return meta;
 }
 
+// A song saved broken by an old import is SHOWN in its clean form (repairs.js), on every page and for everyone,
+// whatever the database holds; the same for the chorus marks. Matched by the words + chords, so an edited song is shown
+// as it is.
+const repairSig = (t) => t.replace(/\[[^\]]*\]|\{[^}]*\}/g, "").replace(/[\s\u0591-\u05C7]/g, "") + "|" + [...t.matchAll(/\[([^\]]*)\]/g)].map((m) => m[1]).join(" ");
+let repairMap = null, repairing = false;
+function repaired(content) {
+  if (repairing || typeof SONG_REPAIRS === "undefined" || !content || content.indexOf("\n") < 0) return content;
+  if (!repairMap) {
+    repairMap = new Map(SONG_REPAIRS.map((f) => [repairSig(f.content), f.content]));
+    repairMap.marks = new Map((typeof CHORUS_SIGS !== "undefined" ? CHORUS_SIGS : []).map((m) => [m.sig, m.k]));
+  }
+  const s = repairSig(content);
+  let out = repairMap.get(s) || content;
+  const k = repairMap.marks.get(s);
+  if (k != null && !/^\s*\{\s*(פזמון|chorus|refrain)/im.test(out)) {
+    repairing = true;
+    try { out = setChorus(out, k); } finally { repairing = false; }
+  }
+  return out;
+}
+
 function renderChordPro(content, shift = 0, { chords = true, key } = {}) {
+  content = repaired(content);
   const flats = shift ? prefersFlats(key || songMeta(content).key || firstChord(content), shift) : undefined;
   const songDir = HEB.test(content) ? "rtl" : "ltr";
   return content.split("\n").map((raw) => {
@@ -194,6 +216,7 @@ function isSlideLine(line) {
 
 // stanzas of clean lyric lines, each tagged with its section label ({פזמון}) if any
 function lyricStanzas(content) {
+  content = repaired(content);
   const stanzas = [{ label: "", lines: [] }];
   for (const raw0 of content.split("\n")) {
     const raw = /^\s*\{.*\}\s*$/.test(raw0) ? raw0 : withVav(raw0);
