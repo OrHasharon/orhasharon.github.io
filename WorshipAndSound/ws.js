@@ -8,6 +8,10 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 const GROUP = "קבוצה";
 const isGroup = (m) => !!m && m.notes === GROUP;
+// a name that isn't on the worship team (a speaker for the parasha / the sermon, added from the users tab): it can be
+// linked to a user, but it isn't in the team table and can't be put on a worship slot
+const OUTSIDE = "לא בצוות ההלל";
+const isOutside = (m) => !!m && m.notes === OUTSIDE;
 const GROUPS = ["נוער"];
 const SLOTS = [
   { role: "leader", label: "מוביל/ת הלל", max: 1, eligible: (m) => isGroup(m) || (m.can_lead ?? !!m.lead_frequency), why: "לא מסומן/ת להנחייה" },
@@ -134,7 +138,7 @@ function slotCell(mt, slot) {
   if (picking) {
     action = `<select class="assign inst-pick" data-date="${mt.iso}" data-member="${picking.id}"><option value="">${esc(picking.name)}: על מה?</option>${freeInstruments(picking, mt.iso).map((o) => `<option value="${esc(o)}">${icon(o)} ${esc(instLabel(o))}</option>`).join("")}</select>`;
   } else if (taken.length < slot.max) {
-    const free = state.members.filter((m) => slot.eligible(m) && (slot.role === "musician" ? freeInstruments(m, mt.iso).length : !taken.some((s) => s.member_id === m.id)));
+    const free = state.members.filter((m) => !isOutside(m) && slot.eligible(m) && (slot.role === "musician" ? freeInstruments(m, mt.iso).length : !taken.some((s) => s.member_id === m.id)));
     if (free.length) action = `<select class="assign" data-role="${slot.role}" data-date="${mt.iso}"><option value="">+ שיבוץ</option>${free.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select>`;
   }
   const missing = !taken.length && slot.role !== "musician";
@@ -337,7 +341,7 @@ function renderTeam() {
     <div class="matrix-wrap"><table class="matrix">
       <thead><tr><th class="name">שם</th><th>הנחייה</th>${INSTRUMENTS.map((x) => `<th>${icon(x)}<br>${esc(instLabel(x))}</th>`).join("")}<th><button class="link-btn add-inst" data-add-instrument title="הוספת כלי">+ כלי</button></th>
         <th>תכיפות הדרכה</th><th>תכיפות השתתפות</th><th class="sep">🎚️<br>סאונד</th><th>🔌<br>הקמה</th><th></th></tr></thead>
-      <tbody>${state.members.map((m) => `<tr>
+      <tbody>${state.members.filter((m) => !isOutside(m)).map((m) => `<tr>
         <td class="name"><button class="link-btn rename" data-rename="${m.id}" title="שינוי שם">${esc(m.name)}</button></td>
         ${box(m, "lead", m.can_lead ?? !!m.lead_frequency, !ready)}
         ${INSTRUMENTS.map((x) => box(m, "inst:" + x, has(m, x))).join("")}<td></td>
@@ -432,7 +436,7 @@ function renderUsers() {
     <div class="duty-table users-table"><table><thead><tr><th>מייל</th>${state.invitesReady ? "<th>טלפון</th><th>איש/אשת צוות</th>" : ""}<th>תפקיד</th><th>נוסף ע״י</th><th></th></tr></thead><tbody>
     ${allowed.map((u) => `<tr><td dir="ltr">${esc(u.email)}</td>
       ${state.invitesReady ? `<td><input class="u-phone" type="tel" dir="ltr" data-u-phone="${esc(u.email)}" value="${esc(u.phone || "")}" placeholder="050-0000000"></td>
-      <td><select class="u-member" data-u-member="${esc(u.email)}"><option value="">—</option>${[...state.members].sort((a, b) => a.name.localeCompare(b.name, "he")).map((m) => `<option value="${m.id}"${m.id === u.member_id ? " selected" : ""}>${esc(m.name)}</option>`).join("")}</select></td>` : ""}
+      <td><select class="u-member" data-u-member="${esc(u.email)}"><option value="">—</option>${[...state.members].sort((a, b) => a.name.localeCompare(b.name, "he")).map((m) => `<option value="${m.id}"${m.id === u.member_id ? " selected" : ""}>${esc(m.name)}${isOutside(m) ? " (לא בצוות ההלל)" : ""}</option>`).join("")}<option value="__new">➕ שם חדש…</option></select></td>` : ""}
       <td>${u.is_admin ? "מנהל/ת" : "משתמש/ת"}</td><td dir="ltr">${esc(u.added_by || "")}</td>
       <td>${self(u) ? "" : `<button class="link-btn" data-toggle-admin="${esc(u.email)}">${u.is_admin ? "הסרת ניהול" : "הפיכה למנהל/ת"}</button> · <button class="link-btn" data-del-user="${esc(u.email)}">הסרה</button>`}</td></tr>`).join("")}
     </tbody></table></div>
@@ -467,11 +471,25 @@ document.addEventListener("change", async (e) => {
   const ph = e.target.closest("[data-u-phone]"), mm = e.target.closest("[data-u-member]");
   if (!ph && !mm) return;
   const email = (ph || mm).dataset[ph ? "uPhone" : "uMember"];
-  const patch = ph ? { phone: ph.value.trim() || null } : { member_id: mm.value ? Number(mm.value) : null };
+  // a new name (not necessarily on the worship team — e.g. someone who brings the parasha or the sermon)
+  if (mm && mm.value === "__new") {
+    const name = (prompt("השם החדש (שם מלא):") || "").trim();
+    if (!name) { await loadUsers(); return; }
+    let m = state.members.find((x) => x.name.trim() === name);
+    if (!m) {
+      const { data, error } = await sb.from("members").insert({ name, notes: OUTSIDE, active: true }).select().single();
+      if (error || !data) { toast("לא הצלחתי להוסיף את השם", { error: true }); await loadUsers(); return; }
+      m = data; state.members.push(m); state.members.sort((a, b) => a.name.localeCompare(b.name, "he"));
+    }
+    mm.dataset.newId = m.id; // (the select doesn't have this option yet)
+  }
+  const pick = mm?.dataset.newId ? Number(mm.dataset.newId) : mm?.value ? Number(mm.value) : null;
+  const patch = ph ? { phone: ph.value.trim() || null } : { member_id: pick };
   if (ph && patch.phone && waNumber(patch.phone).length < 11) { toast("מספר טלפון לא תקין"); return; }
   const { error } = await sb.from("allowed_users").update(patch).eq("email", email);
   toast(error ? "השמירה נכשלה" : "נשמר");
   await loadUsers();
+  if (mm) render(); // the list shows the new name
 });
 
 // ---------- shell ----------
