@@ -1,7 +1,17 @@
 {
- "updated": "2026-11-21T14:16:33+00:00",
+ "updated": "2026-11-28T15:05:47+00:00",
  "source": "yt-dlp",
  "videos": [
+  {
+   "id": "MZLFwgy4YuE",
+   "title": "אִם מַתֶּם עִם הַמָּשִׁיחַ לְגַבֵּי עִקְּרֵי הָעוֹלָם | הקולוסים ב 13-23",
+   "rawTitle": "28/11/2026 אִם מַתֶּם עִם הַמָּשִׁיחַ לְגַבֵּי עִקְּרֵי הָעוֹלָם | הקולוסים ב 13-23",
+   "date": "2026-11-28",
+   "type": "sermon",
+   "duration": 2413,
+   "series": [],
+   "thumb": "maxresdefault"
+  },
   {
    "id": "dQn5OZX0Lu0",
    "title": "מלוא האלוהות במשיח, ובו נמלאתם | אל הקולוסים ב 1-15",
@@ -2560,6 +2570,16 @@
    "series": [
     "זכריה"
    ],
+   "thumb": "maxresdefault"
+  },
+  {
+   "id": "biEjl8AzUZ4",
+   "title": "הלל",
+   "rawTitle": "28/11/2926 הלל",
+   "date": null,
+   "type": "hallel",
+   "duration": 1382,
+   "series": [],
    "thumb": "maxresdefault"
   }
  ],
